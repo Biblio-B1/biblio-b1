@@ -14,85 +14,111 @@ export type Subject = typeof subjects.$inferSelect;
 
 type DefaultSubject = { name: string; slug: string; color: string; rules: SubjectRules };
 
+const subject = (name: string, color: string, rules: SubjectRules): DefaultSubject => ({
+  name,
+  slug: slugify(name),
+  color,
+  rules,
+});
+
+/**
+ * Matières par défaut : exactement les dossiers de cours de l'utilisateur (même nom).
+ * Les règles servent aux fichiers sans dossier de matière (upload, fichiers en vrac).
+ */
 export const DEFAULT_SUBJECTS: DefaultSubject[] = [
-  {
-    name: "Programmation C",
-    slug: "prog-c",
-    color: "#2563eb",
-    rules: {
-      pathPatterns: [
-        // Locutions fixes : un "C" nu dans un nom de fichier ne compte pas.
-        "\\balgo(rithmique)?\\s+et\\s+c(?![a-z0-9'’])",
-        "\\bprog(rammation)?[\\s_-]*c(?![a-z0-9'’])",
-        "\\blangage\\s+c(?![a-z0-9'’])",
-        "\\ben\\s+c(?![a-z0-9'’])",
-        "\\bc\\s+language\\b",
-        // Dossier entier nommé C (ou Cours C, Prog C, Langage C...), suivi d'un séparateur.
-        "(^|[\\\\/])((cours|prog|programmation|langage)[\\s_-]*)?c[\\\\/]",
-        "\\.[ch]$",
-      ],
-      keywords: {
-        malloc: 3, calloc: 3, printf: 2, scanf: 2, "#include": 3, "#define": 2,
-        struct: 2, "int main": 3, pointeur: 3, pointeurs: 3, pointer: 3, pointers: 3,
-        "stdio.h": 3, "stdlib.h": 3, sizeof: 2, typedef: 2, "char *": 2, "void *": 2,
-        "segmentation fault": 3, gcc: 2,
-      },
+  subject("Algorithmique et Prog C", "#2563eb", {
+    pathPatterns: [
+      // Locutions fixes : un "C" nu dans un nom de fichier ne compte pas.
+      "\\balgo(rithmique)?\\s+et\\s+(prog(rammation)?\\s+)?c(?![a-z0-9'’])",
+      "\\bprog(rammation)?[\\s_-]*c(?![a-z0-9'’])",
+      "\\blangage\\s+c(?![a-z0-9'’])",
+      "\\ben\\s+c(?![a-z0-9'’])",
+      "\\bc\\s+language\\b",
+      // Dossier entier nommé C (ou Cours C, Prog C, Langage C...), suivi d'un séparateur.
+      "(^|[\\\\/])((cours|prog|programmation|langage)[\\s_-]*)?c[\\\\/]",
+      "\\.[ch]$",
+    ],
+    keywords: {
+      malloc: 3, calloc: 3, printf: 2, scanf: 2, "#include": 3, "#define": 2,
+      struct: 2, "int main": 3, pointeur: 3, pointeurs: 3, pointer: 3, pointers: 3,
+      "stdio.h": 3, "stdlib.h": 3, sizeof: 2, typedef: 2, "char *": 2, "void *": 2,
+      "segmentation fault": 3, gcc: 2,
     },
-  },
-  {
-    name: "Systèmes Linux",
-    slug: "linux",
-    color: "#16a34a",
-    rules: {
-      pathPatterns: ["\\blinux\\b", "\\bunix\\b", "\\bshell\\b", "\\bsystemes?\\s+d.exploitation\\b"],
-      keywords: {
-        bash: 3, grep: 3, chmod: 3, chown: 3, shell: 2, terminal: 2, sudo: 3, ls: 1,
-        "man page": 2, "/etc": 2, "/usr": 2, ssh: 2, systemd: 3,
-        "script shell": 3, awk: 2, sed: 2, kernel: 2, noyau: 2,
-      },
+  }),
+  subject("Anglais professionnel & technique avancé", "#ea580c", {
+    pathPatterns: ["\\banglais\\b", "\\benglish\\b", "\\btoeic\\b", "\\btoefl\\b"],
+    keywords: {
+      grammar: 3, vocabulary: 3, essay: 2, tense: 2, tenses: 2, "present perfect": 3,
+      "past simple": 3, grammaire: 2, vocabulaire: 2, "phrasal verb": 3, "phrasal verbs": 3,
+      adjective: 2, adverb: 2, "reading comprehension": 3, conjugation: 2, "irregular verbs": 3,
+      "comprehension questions": 3, rubric: 1,
     },
-  },
-  {
-    name: "Mathématiques",
-    slug: "maths",
-    color: "#dc2626",
-    rules: {
-      pathPatterns: ["\\bmaths?\\b", "\\bmathematiques?\\b", "\\balgebre\\b", "\\banalyse\\b", "\\bprobabilites?\\b"],
-      keywords: {
-        integrale: 3, integrales: 3, derivee: 3, derivees: 3, matrice: 3, matrices: 3,
-        theoreme: 3, equation: 2, equations: 2, limite: 2, "suite numerique": 3, vecteur: 2,
-        determinant: 3, polynome: 3, integral: 3, derivative: 3, matrix: 3,
-        theorem: 3, "espace vectoriel": 3, demonstration: 2,
-      },
+  }),
+  subject("comm-posture professionnelle", "#db2777", {
+    pathPatterns: ["\\bposture\\b", "\\bprise\\s+de\\s+parole\\b"],
+    keywords: { "prise de parole": 2, "langage corporel": 2, "posture professionnelle": 3, gestuelle: 1 },
+  }),
+  subject("data-analysis", "#0891b2", {
+    pathPatterns: ["\\bdata[\\s_-]+analy(sis|se|tics)\\b", "\\banalyse\\s+de\\s+donnees\\b"],
+    keywords: {
+      pandas: 3, dataframe: 3, dataframes: 3, numpy: 2, matplotlib: 3, seaborn: 3,
+      "power bi": 2, "tableau croise": 2, "tableaux croises": 2, groupby: 2,
+      "data visualisation": 2, "data visualization": 2, dataviz: 2, jupyter: 1,
     },
-  },
-  {
-    name: "Architecture des ordinateurs",
-    slug: "archi",
-    color: "#9333ea",
-    rules: {
-      pathPatterns: ["\\barchi(tecture)?\\b", "\\bordinateurs?\\b", "\\bassembleur\\b", "\\bmicroprocesseur\\b"],
-      keywords: {
-        processeur: 3, registre: 2, registres: 2, "memoire cache": 3, binaire: 2,
-        hexadecimal: 2, assembleur: 3, alu: 3, cpu: 3, "bus de donnees": 3, pipeline: 2,
-        "porte logique": 3, "portes logiques": 3, bascule: 2, ram: 2, "jeu d'instructions": 3,
-        "complement a 2": 3, opcode: 3, mips: 3, risc: 3,
-      },
+  }),
+  subject("Développement web Front-End", "#7c3aed", {
+    pathPatterns: [
+      "\\bhtml5?\\b", "\\bcss3?\\b", "\\bjavascript\\b", "\\bfront[\\s_-]*end\\b",
+      "\\bflexbox\\b", "\\breact\\b", "\\bdeveloppement\\s+web\\b",
+    ],
+    keywords: {
+      html: 2, css: 2, javascript: 3, dom: 2, flexbox: 3, "box model": 3, "<div": 2,
+      "<html": 3, react: 2, queryselector: 3, addeventlistener: 3, selecteur: 2, selecteurs: 2,
+      "media query": 3, "media queries": 3, "grid-template": 3, "font-size": 2,
     },
-  },
-  {
-    name: "Anglais",
-    slug: "anglais",
-    color: "#ea580c",
-    rules: {
-      pathPatterns: ["\\banglais\\b", "\\benglish\\b", "\\btoeic\\b", "\\btoefl\\b"],
-      keywords: {
-        grammar: 3, vocabulary: 3, essay: 2, tense: 2, tenses: 2, "present perfect": 3,
-        "past simple": 3, grammaire: 2, vocabulaire: 2, "phrasal verb": 3, "phrasal verbs": 3,
-        adjective: 2, adverb: 2, "reading comprehension": 3, conjugation: 2, "irregular verbs": 3,
-      },
+  }),
+  subject("infra-data", "#0d9488", {
+    pathPatterns: ["\\binfra[\\s_-]*data\\b", "\\bdata\\s*lake(house)?\\b", "\\bdatabricks\\b"],
+    keywords: {
+      databricks: 3, lakehouse: 3, "data lake": 3, "data warehouse": 3, etl: 2, elt: 1,
+      nosql: 3, sql: 1, parquet: 3, hadoop: 3, spark: 2, "base de donnees": 1,
+      "bases de donnees": 1, datacenter: 2, gpu: 1, stockage: 1,
     },
-  },
+  }),
+  subject("Linux & environnement IA", "#16a34a", {
+    pathPatterns: ["\\blinux\\b", "\\bunix\\b", "\\bshell\\b", "\\bsystemes?\\s+d.exploitation\\b", "\\bgit(hub)?\\b"],
+    keywords: {
+      bash: 3, grep: 3, chmod: 3, chown: 3, shell: 2, terminal: 2, sudo: 3, ls: 1,
+      "man page": 2, "/etc": 2, "/usr": 2, ssh: 2, systemd: 3,
+      "script shell": 3, awk: 2, sed: 2, kernel: 2, noyau: 2,
+      "git commit": 3, "git push": 3, vscode: 2,
+    },
+  }),
+  subject("Mathématiques pour Info", "#dc2626", {
+    pathPatterns: [
+      "\\bmaths?\\b", "\\bmathematiques?\\b", "\\balgebre\\b", "\\banalyse\\b", "\\bprobabilites?\\b",
+      "\\bboole(enne)?\\b", "\\blogique\\s+propositionnelle\\b", "\\bnumeration\\b",
+    ],
+    keywords: {
+      integrale: 3, integrales: 3, derivee: 3, derivees: 3, matrice: 3, matrices: 3,
+      theoreme: 3, equation: 2, equations: 2, limite: 2, "suite numerique": 3, vecteur: 2,
+      determinant: 3, polynome: 3, integral: 3, derivative: 3, matrix: 3,
+      theorem: 3, "espace vectoriel": 3, demonstration: 2,
+      "table de verite": 3, "tables de verite": 3, "algebre de boole": 3, booleenne: 2,
+    },
+  }),
+  subject("Présentations B1", "#64748b", {
+    pathPatterns: ["\\bpresentation\\s+cursus\\b"],
+    keywords: {},
+  }),
+  subject("Shift(s) 1 - Décoder pour agir", "#ca8a04", {
+    pathPatterns: ["\\bshift\\(s\\)", "\\bshifts?\\s+1\\b"],
+    keywords: {},
+  }),
+  subject("Techaway dataanalysis", "#4f46e5", {
+    pathPatterns: ["\\btechaway\\b"],
+    keywords: { techaway: 3 },
+  }),
 ];
 
 /** Insère les matières par défaut ; idempotent (clé unique `slug`). */

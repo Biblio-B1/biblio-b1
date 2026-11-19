@@ -87,7 +87,7 @@ describe("guessType", () => {
 describe("prepareUpload / confirmDraft", () => {
   it("propose une matière d'après le nom de fichier", async () => {
     const d = await prepareUpload(db, Buffer.from("%PDF"), "ECE - Algo et C - TP6.pdf", owner, root);
-    const progC = listSubjects(db).find((s) => s.slug === "prog-c")!;
+    const progC = listSubjects(db).find((s) => s.slug === "algorithmique-et-prog-c")!;
     expect(d.suggestedSubjectId).toBe(progC.id);
     expect(d.suggestedType).toBe("exercise");
     expect(d.title).toBe("ECE - Algo et C - TP6");
@@ -101,7 +101,7 @@ describe("prepareUpload / confirmDraft", () => {
 
   it("confirme : crée le document, déplace le fichier sous uploads/, supprime le brouillon", async () => {
     const d = await prepareUpload(db, Buffer.from("hello"), "notes linux.md", owner, root);
-    const linux = listSubjects(db).find((s) => s.slug === "linux")!;
+    const linux = listSubjects(db).find((s) => s.slug === "linux-environnement-ia")!;
     const doc = confirmDraft(db, { tmpId: d.tmpId, subjectId: linux.id, title: "Mes notes", type: "note" }, owner, root);
     expect(doc.subjectId).toBe(linux.id);
     expect(doc.subjectConfirmed).toBe(true);
@@ -115,7 +115,7 @@ describe("prepareUpload / confirmDraft", () => {
   it("extrait le texte à l'upload, l'utilise pour la matière et le stocke à la confirmation", async () => {
     const body = ["#include <stdio.h>", "int main(void) { char *p = malloc(4); free(p); return 0; }", ""].join("\n");
     const d = await prepareUpload(db, Buffer.from(body), "cours.txt", owner, root);
-    const progC = listSubjects(db).find((s) => s.slug === "prog-c")!;
+    const progC = listSubjects(db).find((s) => s.slug === "algorithmique-et-prog-c")!;
     expect(d.suggestedSubjectId).toBe(progC.id);
     const doc = confirmDraft(db, { tmpId: d.tmpId, subjectId: progC.id, title: "C", type: "course" }, owner, root);
     expect(doc.text).toContain("malloc");

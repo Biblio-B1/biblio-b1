@@ -18,13 +18,25 @@ describe("classify", () => {
     seedSubjects(db);
     expect(listSubjects(db)).toHaveLength(DEFAULT_SUBJECTS.length);
     expect(listSubjects(db).map((s) => s.slug).sort()).toEqual(
-      ["anglais", "archi", "linux", "maths", "prog-c"],
+      [
+        "algorithmique-et-prog-c",
+        "anglais-professionnel-technique-avance",
+        "comm-posture-professionnelle",
+        "data-analysis",
+        "developpement-web-front-end",
+        "infra-data",
+        "linux-environnement-ia",
+        "mathematiques-pour-info",
+        "presentations-b1",
+        "shift-s-1-decoder-pour-agir",
+        "techaway-dataanalysis",
+      ],
     );
   });
 
   it("reconnaît prog-c par le nom de fichier", () => {
     const r = classify({ fileName: "ECE - Algo et C - TP6 - Pointeurs.pdf" }, subjects);
-    expect(slugOf(r.subjectId)).toBe("prog-c");
+    expect(slugOf(r.subjectId)).toBe("algorithmique-et-prog-c");
   });
 
   it("reconnaît prog-c par le texte", () => {
@@ -32,23 +44,23 @@ describe("classify", () => {
       { fileName: "notes.txt", text: "#include <stdio.h>\nint *p = malloc(4);\nprintf(\"x\");" },
       subjects,
     );
-    expect(slugOf(r.subjectId)).toBe("prog-c");
+    expect(slugOf(r.subjectId)).toBe("algorithmique-et-prog-c");
   });
 
   it("reconnaît prog-c par l'extension .c", () => {
-    expect(slugOf(classify({ fileName: "tp1.c" }, subjects).subjectId)).toBe("prog-c");
+    expect(slugOf(classify({ fileName: "tp1.c" }, subjects).subjectId)).toBe("algorithmique-et-prog-c");
   });
 
   it("reconnaît linux", () => {
     const r = classify({ fileName: "memo.txt", text: "grep, chmod, bash" }, subjects);
-    expect(slugOf(r.subjectId)).toBe("linux");
+    expect(slugOf(r.subjectId)).toBe("linux-environnement-ia");
   });
 
   it("reconnaît maths, sans tenir compte des accents ni de la casse", () => {
     const r = classify({ fileName: "x.txt", text: "INTEGRALE, derivee, Matrice" }, subjects);
-    expect(slugOf(r.subjectId)).toBe("maths");
+    expect(slugOf(r.subjectId)).toBe("mathematiques-pour-info");
     const r2 = classify({ fileName: "x.txt", text: "intégrale, dérivée, matrice" }, subjects);
-    expect(slugOf(r2.subjectId)).toBe("maths");
+    expect(slugOf(r2.subjectId)).toBe("mathematiques-pour-info");
   });
 
   it("photo.jpg sans texte -> null", () => {
@@ -69,17 +81,17 @@ describe("classify", () => {
 
   it("fichiers ECE réels et dossier C", () => {
     const slug = (i: Parameters<typeof classify>[0]) => slugOf(classify(i, subjects).subjectId);
-    expect(slug({ fileName: "ECE - Algo et C - TD1 - Algorithmes et Logigrammes.pdf" })).toBe("prog-c");
-    expect(slug({ fileName: "PROG-C_Exam_Bachelor1_2025-12-10-v1_EN.pdf" })).toBe("prog-c");
-    expect(slug({ fileName: "Memory_List_FR.pdf", path: "ARCHIVE/2026/C/Memory_List_FR.pdf" })).toBe("prog-c");
-    expect(slug({ fileName: "Memory_List_FR.pdf", path: "Cours C\\Memory_List_FR.pdf" })).toBe("prog-c");
-    expect(slug({ fileName: "x.pdf", path: "C/x.pdf" })).toBe("prog-c");
-    expect(slug({ fileName: "x.pdf", path: "dossier\\C\\x.pdf" })).toBe("prog-c");
+    expect(slug({ fileName: "ECE - Algo et C - TD1 - Algorithmes et Logigrammes.pdf" })).toBe("algorithmique-et-prog-c");
+    expect(slug({ fileName: "PROG-C_Exam_Bachelor1_2025-12-10-v1_EN.pdf" })).toBe("algorithmique-et-prog-c");
+    expect(slug({ fileName: "Memory_List_FR.pdf", path: "ARCHIVE/2026/C/Memory_List_FR.pdf" })).toBe("algorithmique-et-prog-c");
+    expect(slug({ fileName: "Memory_List_FR.pdf", path: "Cours C\\Memory_List_FR.pdf" })).toBe("algorithmique-et-prog-c");
+    expect(slug({ fileName: "x.pdf", path: "C/x.pdf" })).toBe("algorithmique-et-prog-c");
+    expect(slug({ fileName: "x.pdf", path: "dossier\\C\\x.pdf" })).toBe("algorithmique-et-prog-c");
   });
 
   it("keywords finissant par * (char *p)", () => {
     const r = classify({ fileName: "a.txt", text: "char *p; void *q;" }, subjects);
-    expect(slugOf(r.subjectId)).toBe("prog-c");
+    expect(slugOf(r.subjectId)).toBe("algorithmique-et-prog-c");
   });
 
   it("plafonne les occurrences à 5", () => {
@@ -90,5 +102,44 @@ describe("classify", () => {
 
   it("seuil minimal : un mot-clé faible ne suffit pas", () => {
     expect(classify({ fileName: "a.txt", text: "essay" }, subjects).subjectId).toBeNull();
+  });
+
+  it("les 11 matières portent exactement les noms des dossiers de cours", () => {
+    expect(DEFAULT_SUBJECTS.map((s) => s.name)).toEqual([
+      "Algorithmique et Prog C",
+      "Anglais professionnel & technique avancé",
+      "comm-posture professionnelle",
+      "data-analysis",
+      "Développement web Front-End",
+      "infra-data",
+      "Linux & environnement IA",
+      "Mathématiques pour Info",
+      "Présentations B1",
+      "Shift(s) 1 - Décoder pour agir",
+      "Techaway dataanalysis",
+    ]);
+  });
+
+  it("bonus fort quand un segment du chemin est le nom ou le slug d'une matière", () => {
+    const slug = (i: Parameters<typeof classify>[0]) => slugOf(classify(i, subjects).subjectId);
+    expect(slug({ fileName: "Seance 1.pdf", path: "cours/Présentations B1/Seance 1.pdf" })).toBe("presentations-b1");
+    expect(slug({ fileName: "x.pdf", path: "COMM-POSTURE PROFESSIONNELLE\\x.pdf" })).toBe("comm-posture-professionnelle");
+    expect(slug({ fileName: "x.pdf", path: "a/shift-s-1-decoder-pour-agir/x.pdf" })).toBe("shift-s-1-decoder-pour-agir");
+    // Le bonus de dossier l'emporte sur des mots-clés d'une autre matière.
+    const r = classify({ fileName: "m.txt", path: "infra-data/m.txt", text: "grep chmod bash" }, subjects);
+    expect(slugOf(r.subjectId)).toBe("infra-data");
+    // Un segment qui contient seulement le nom ne compte pas.
+    const r2 = classify({ fileName: "x.pdf", path: "pas-infra-data-du-tout/x.pdf" }, subjects);
+    expect(r2.scores[subjects.find((s) => s.slug === "infra-data")!.id] ?? 0).toBeLessThan(20);
+  });
+
+  it("nouvelles matières : front-end, données, anglais", () => {
+    const slug = (i: Parameters<typeof classify>[0]) => slugOf(classify(i, subjects).subjectId);
+    expect(slug({ fileName: "2_CSS_Flexbox.pdf" })).toBe("developpement-web-front-end");
+    expect(slug({ fileName: "notes.txt", text: "document.querySelector et addEventListener sur le DOM" })).toBe("developpement-web-front-end");
+    expect(slug({ fileName: "notes.txt", text: "Databricks, lakehouse, ETL et parquet" })).toBe("infra-data");
+    expect(slug({ fileName: "notes.txt", text: "import pandas ; dataframe.groupby ; matplotlib" })).toBe("data-analysis");
+    expect(slug({ fileName: "Syllabus_TECHAWAY_Data Analysis N1.pdf" })).toBe("techaway-dataanalysis");
+    expect(slug({ fileName: "grammar.txt", text: "present perfect, irregular verbs" })).toBe("anglais-professionnel-technique-avance");
   });
 });

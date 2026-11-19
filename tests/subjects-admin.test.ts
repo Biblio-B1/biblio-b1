@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
 import {
   createSubject,
+  DEFAULT_SUBJECTS,
   formatKeywordLines,
   listSubjects,
   parseKeywordLines,
@@ -68,6 +69,6 @@ describe("createSubject", () => {
     expect(a.slug).toBe("reseaux-telecoms");
     const b = createSubject(db, { name: "Réseaux  Télécoms", color: "#0ea5e9", pathPatterns: [], keywords: {} });
     expect(b.slug).toBe("reseaux-telecoms-2");
-    expect(listSubjects(db)).toHaveLength(7);
+    expect(listSubjects(db)).toHaveLength(DEFAULT_SUBJECTS.length + 2);
   });
 });

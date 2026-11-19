@@ -73,3 +73,27 @@ export function resolveStoragePath(filePath: string, root: string = env.STORAGE_
   if (!abs.startsWith(rootAbs + path.sep)) throw new Error("Chemin hors du stockage");
   return abs;
 }
+
+/**
+ * Enregistre un fichier importé sous `<root>/uploads/imported/<sha256><ext>` (nom déterministe :
+ * un ré-import du même contenu réutilise le même fichier). Extension vérifiée (liste autorisée).
+ */
+export function saveImported(
+  buf: Buffer,
+  ext: string,
+  root: string = env.STORAGE_PATH,
+): { filePath: string; sha256: string; mime: string } {
+  const e = ext.toLowerCase();
+  const mime = mimeFromExtension(e);
+  if (!mime) throw new Error(`Extension non autorisée : ${e || "(aucune)"}`);
+  if (buf.length === 0) throw new Error("Fichier vide");
+  if (buf.length > MAX_UPLOAD_BYTES) throw new Error("Fichier trop volumineux (50 Mo maximum)");
+  const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
+  const filePath = `uploads/imported/${sha256}${e}`;
+  const abs = resolveStoragePath(filePath, root);
+  if (!fs.existsSync(abs)) {
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, buf);
+  }
+  return { filePath, sha256, mime };
+}

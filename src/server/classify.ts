@@ -1,9 +1,11 @@
-import type { Subject, SubjectRules } from "./subjects";
+import { slugify, type Subject, type SubjectRules } from "./subjects";
 
 export type ClassifyInput = { fileName: string; path?: string; text?: string };
 export type ClassifyResult = { subjectId: string | null; scores: Record<string, number> };
 
 const PATH_PATTERN_SCORE = 10;
+/** Un segment du chemin égal au nom (ou au slug) d'une matière : indice très fort. */
+export const FOLDER_MATCH_SCORE = 20;
 const MAX_OCCURRENCES = 5;
 export const MIN_SCORE = 3;
 
@@ -30,13 +32,22 @@ function isRules(r: unknown): r is SubjectRules {
   return !!r && typeof r === "object" && "pathPatterns" in r && "keywords" in r;
 }
 
+/** Dossiers du chemin (sans le nom de fichier), normalisés. */
+function folderSegments(p: string | undefined): string[] {
+  if (!p) return [];
+  return p.split(/[\\/]+/).slice(0, -1).map((s) => normalize(s).trim()).filter(Boolean);
+}
+
 /**
- * Score par matière : motif de chemin/nom = +10 chacun ; mot-clé = poids ×
- * min(occurrences, 5) ; en dessous de MIN_SCORE -> aucune matière (null).
+ * Score par matière : dossier du chemin égal au nom/slug = +20 ; motif de chemin/nom = +10
+ * chacun ; mot-clé = poids × min(occurrences, 5) ; en dessous de MIN_SCORE -> aucune matière (null).
+ * Dans les noms, « _ » compte comme un espace (« 2_CSS_Flexbox » -> « 2 css flexbox »).
  */
 export function classify(input: ClassifyInput, subjects: Subject[]): ClassifyResult {
-  const names = [input.fileName, input.path ?? ""].map(normalize);
-  const body = normalize(`${input.fileName}\n${input.text ?? ""}`);
+  const asWords = (s: string) => normalize(s).replace(/_/g, " ");
+  const names = [input.fileName, input.path ?? ""].map(asWords);
+  const body = `${asWords(input.fileName)}\n${normalize(input.text ?? "")}`;
+  const segments = folderSegments(input.path);
   const scores: Record<string, number> = {};
   let best: string | null = null;
   let bestScore = 0;
@@ -44,6 +55,10 @@ export function classify(input: ClassifyInput, subjects: Subject[]): ClassifyRes
   for (const subject of subjects) {
     if (!isRules(subject.rules)) continue;
     let score = 0;
+    const subjectName = normalize(subject.name).trim();
+    if (segments.some((seg) => seg === subjectName || seg === subject.slug || slugify(seg) === subject.slug)) {
+      score += FOLDER_MATCH_SCORE;
+    }
     for (const p of subject.rules.pathPatterns) {
       let re: RegExp;
       try {
