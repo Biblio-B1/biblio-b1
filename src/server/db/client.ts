@@ -33,16 +33,18 @@ function open(sqlite: Database.Database): Db {
   return db;
 }
 
-let instance: Db | undefined;
+// Mis en cache sur globalThis : le HMR de `next dev` recharge les modules
+// et ouvrirait sinon une connexion SQLite supplémentaire à chaque rechargement.
+const globalForDb = globalThis as unknown as { __bb1Db?: Db };
 
 /** Base applicative (fichier `data.db` sous STORAGE_PATH), migrée au premier appel. */
 export function getDb(): Db {
-  if (!instance) {
+  if (!globalForDb.__bb1Db) {
     const storage = path.resolve(env.STORAGE_PATH);
     fs.mkdirSync(storage, { recursive: true });
-    instance = open(new Database(path.join(storage, "data.db")));
+    globalForDb.__bb1Db = open(new Database(path.join(storage, "data.db")));
   }
-  return instance;
+  return globalForDb.__bb1Db;
 }
 
 /** Base `:memory:` migrée, pour les tests. */
