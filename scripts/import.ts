@@ -45,4 +45,6 @@ console.log(`  ${"(sans matière)".padEnd(45)} ${String(unclassified.n).padStart
 
 for (const e of r.errors) console.error(`\nErreur : ${e}`);
 console.log(`\nDurée : ${((Date.now() - started) / 1000).toFixed(1)} s`);
-process.exit(r.errors.length ? 1 : 0);
+const failed = r.github.failed + r.local.failed;
+if (failed) console.error(`\n${failed} fichier(s) en échec (voir les avertissements [import] ci-dessus).`);
+process.exit(r.errors.length || failed ? 1 : 0);

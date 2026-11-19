@@ -37,18 +37,74 @@ export type ImportTreeOptions = {
 
 const zero = (): ImportStats => ({ added: 0, skipped: 0, exercises: 0, failed: 0 });
 
-/** Matière existante de même nom ou slug (accents/casse ignorés), sinon créée. */
+/** Longueur max d'un nom de matière (cf. subjectInputSchema). */
+const MAX_SUBJECT_NAME = 60;
+
+/**
+ * Matière existante de même nom ou slug (accents/casse ignorés ; le nom tronqué à 60 caractères
+ * compte aussi, pour retrouver une matière créée depuis un dossier au nom trop long), sinon créée.
+ */
 export function findOrCreateSubject(db: Db, name: string): Subject {
-  const n = normalize(name).trim();
-  const slug = slugify(name);
-  const found = listSubjects(db).find((s) => normalize(s.name).trim() === n || s.slug === slug);
+  const full = name.trim();
+  const short = full.slice(0, MAX_SUBJECT_NAME).trim();
+  const names = new Set([normalize(full).trim(), normalize(short).trim()]);
+  const slugs = new Set([slugify(full), slugify(short)]);
+  const found = listSubjects(db).find((s) => names.has(normalize(s.name).trim()) || slugs.has(s.slug));
   if (found) return found;
-  return createSubject(db, { name: name.trim().slice(0, 60), color: "#6b7280", pathPatterns: [], keywords: {} });
+  return createSubject(db, { name: short, color: "#6b7280", pathPatterns: [], keywords: {} });
 }
 
-type Rec = { doc: Document; relPath: string; isNew: boolean };
+type Rec = { doc: Document; relPath: string };
 
-/** Importe une arborescence (lecture seule) ; idempotent grâce au sha256 unique. */
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Énoncé dont on extrait les exercices : type exercice/annale, pas un corrigé. */
+function wantsExercises(doc: Document, relPath: string): boolean {
+  return (doc.type === "exercise" || doc.type === "exam") && !isCorrection(relPath);
+}
+
+function hasExercises(db: Db, documentId: string): boolean {
+  return !!db.select({ id: exercises.id }).from(exercises).where(eq(exercises.documentId, documentId)).limit(1).get();
+}
+
+/** Insère les exercices découpés dans le texte du document ; renvoie leur nombre. */
+function createExercises(db: Db, doc: Document, relPath: string): number {
+  const parts = splitExercises(doc.text);
+  if (!parts.length) return 0;
+  const lang = detectLang(path.posix.basename(relPath), doc.text);
+  const base = groupKey(relPath);
+  const seen = new Map<number, number>();
+  for (const ex of parts) {
+    const k = (seen.get(ex.number) ?? 0) + 1;
+    seen.set(ex.number, k);
+    const row = db
+      .insert(exercises)
+      .values({
+        documentId: doc.id,
+        number: ex.number,
+        title: ex.title.slice(0, 300),
+        statement: ex.body || ex.title,
+        lang,
+        groupKey: `${base}#${ex.number}${k > 1 ? `-${k}` : ""}`,
+        subjectId: doc.subjectId,
+      })
+      .returning()
+      .get();
+    indexExercise(db, row);
+  }
+  return parts.length;
+}
+
+/** Exécute `fn` dans une transaction SQLite (better-sqlite3 : synchrone, annulée si `fn` lève). */
+function inTransaction<T>(db: Db, fn: () => T): T {
+  return db.$client.transaction(fn)();
+}
+
+/**
+ * Importe une arborescence (lecture seule) ; idempotent grâce au sha256 unique.
+ * Chaque nouveau document est créé avec ses exercices dans une même transaction ; un document
+ * déjà présent sans exercices (import interrompu) les reçoit au passage suivant.
+ */
 export async function importTree(db: Db, opts: ImportTreeOptions): Promise<ImportStats> {
   const stats = zero();
   if (!fs.existsSync(opts.root)) return stats;
@@ -70,9 +126,16 @@ export async function importTree(db: Db, opts: ImportTreeOptions): Promise<Impor
         const existing = db.select().from(documents).where(eq(documents.sha256, sha256)).get();
         if (existing) {
           stats.skipped++;
-          if (!recs.has(existing.id)) recs.set(existing.id, { doc: existing, relPath: f.relPath, isNew: false });
+          if (!recs.has(existing.id)) {
+            recs.set(existing.id, { doc: existing, relPath: f.relPath });
+            // Rattrapage : énoncé importé lors d'un passage interrompu, resté sans exercices.
+            if (wantsExercises(existing, f.relPath) && !hasExercises(db, existing.id)) {
+              stats.exercises += inTransaction(db, () => createExercises(db, existing, f.relPath));
+            }
+          }
           continue;
         }
+        // Copie du fichier et extraction hors transaction (I/O, asynchrone).
         const saved = saveImported(buf, f.ext, opts.storage);
         const text = await extractText(resolveStoragePath(saved.filePath, opts.storage), saved.mime);
         const fileName = path.posix.basename(f.relPath);
@@ -90,77 +153,58 @@ export async function importTree(db: Db, opts: ImportTreeOptions): Promise<Impor
         } else {
           subjectId = classify({ fileName, path: f.relPath, text }, listSubjects(db)).subjectId;
         }
-        const doc = createDocument(db, {
-          title: titleFromFileName(fileName),
-          type: inferType(f.relPath),
-          subjectId,
-          subjectConfirmed,
-          filePath: saved.filePath,
-          mime: saved.mime,
-          sha256: saved.sha256,
-          text,
-          source: opts.source,
-          sourcePath: f.relPath,
-          tags: inferTags(f.relPath),
+        const { doc, count } = inTransaction(db, () => {
+          const created = createDocument(db, {
+            title: titleFromFileName(fileName),
+            type: inferType(f.relPath),
+            subjectId,
+            subjectConfirmed,
+            filePath: saved.filePath,
+            mime: saved.mime,
+            sha256: saved.sha256,
+            text,
+            source: opts.source,
+            sourcePath: f.relPath,
+            tags: inferTags(f.relPath),
+          });
+          return {
+            doc: created,
+            count: wantsExercises(created, f.relPath) ? createExercises(db, created, f.relPath) : 0,
+          };
         });
         stats.added++;
-        recs.set(doc.id, { doc, relPath: f.relPath, isNew: true });
+        stats.exercises += count;
+        recs.set(doc.id, { doc, relPath: f.relPath });
       } catch (e) {
         stats.failed++;
-        console.warn(`[import] échec (${f.relPath}) :`, e instanceof Error ? e.message : e);
+        console.warn(`[import] échec (${f.relPath}) :`, errMsg(e));
       }
     }
 
-    // Corrigés -> énoncés (re-calculé à chaque passage : les liens restent cohérents).
-    const all = [...recs.values()];
-    const pairs = pairCorrections(all.map((r) => ({ id: r.doc.id, relPath: r.relPath })));
+    // Corrigés -> énoncés (re-calculé à chaque passage : les liens restent cohérents),
+    // puis solutions : exercice de même numéro du corrigé apparié (seulement si encore vide).
+    const pairs = pairCorrections([...recs.values()].map((r) => ({ id: r.doc.id, relPath: r.relPath })));
     for (const [statementId, correctionId] of pairs) {
-      const corr = recs.get(correctionId)!.doc;
-      if (corr.correctionOfId !== statementId) {
-        db.update(documents).set({ correctionOfId: statementId }).where(eq(documents.id, correctionId)).run();
-      }
-    }
-
-    // Exercices des nouveaux énoncés (les corrigés n'en créent pas : ils fournissent les solutions).
-    for (const r of all) {
-      if (!r.isNew || (r.doc.type !== "exercise" && r.doc.type !== "exam") || isCorrection(r.relPath)) continue;
-      const parts = splitExercises(r.doc.text);
-      if (!parts.length) continue;
-      const lang = detectLang(path.posix.basename(r.relPath), r.doc.text);
-      const base = groupKey(r.relPath);
-      const seen = new Map<number, number>();
-      for (const ex of parts) {
-        const k = (seen.get(ex.number) ?? 0) + 1;
-        seen.set(ex.number, k);
-        const row = db
-          .insert(exercises)
-          .values({
-            documentId: r.doc.id,
-            number: ex.number,
-            title: ex.title.slice(0, 300),
-            statement: ex.body || ex.title,
-            lang,
-            groupKey: `${base}#${ex.number}${k > 1 ? `-${k}` : ""}`,
-            subjectId: r.doc.subjectId,
-          })
-          .returning()
-          .get();
-        indexExercise(db, row);
-        stats.exercises++;
-      }
-    }
-
-    // Solutions : exercice de même numéro du corrigé apparié (seulement si encore vide).
-    for (const [statementId, correctionId] of pairs) {
-      const solutions = new Map<number, string>();
-      for (const ex of splitExercises(recs.get(correctionId)!.doc.text)) {
-        if (ex.body && !solutions.has(ex.number)) solutions.set(ex.number, ex.body);
-      }
-      for (const [number, solution] of solutions) {
-        db.update(exercises)
-          .set({ solution })
-          .where(and(eq(exercises.documentId, statementId), eq(exercises.number, number), isNull(exercises.solution)))
-          .run();
+      const corr = recs.get(correctionId)!;
+      try {
+        inTransaction(db, () => {
+          if (corr.doc.correctionOfId !== statementId) {
+            db.update(documents).set({ correctionOfId: statementId }).where(eq(documents.id, correctionId)).run();
+          }
+          const solutions = new Map<number, string>();
+          for (const ex of splitExercises(corr.doc.text)) {
+            if (ex.body && !solutions.has(ex.number)) solutions.set(ex.number, ex.body);
+          }
+          for (const [number, solution] of solutions) {
+            db.update(exercises)
+              .set({ solution })
+              .where(and(eq(exercises.documentId, statementId), eq(exercises.number, number), isNull(exercises.solution)))
+              .run();
+          }
+        });
+      } catch (e) {
+        stats.failed++;
+        console.warn(`[import] échec de l'appariement (${corr.relPath}) :`, errMsg(e));
       }
     }
     return stats;

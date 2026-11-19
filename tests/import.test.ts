@@ -301,4 +301,81 @@ describe("runImport (dépôt prof + dossier local)", () => {
     expect(d.subjectConfirmed).toBe(false);
     expect(db3.select().from(subjects).where(eq(subjects.id, d.subjectId!)).get()!.slug).toBe("algorithmique-et-prog-c");
   });
+
+  it("import interrompu : un énoncé déjà présent sans exercices les reçoit au passage suivant, sans doublon", async () => {
+    const db4 = createTestDb();
+    seedSubjects(db4);
+    const root = path.join(tmp, "interrupted");
+    put(root, "Algorithmique et Prog C/TD1.pdf", await makePdf([
+      "Exercice 1 : Somme", "Ecrire un programme qui calcule la somme des entiers.",
+      "Exercice 2 : Produit", "Ecrire un programme qui calcule le produit des entiers.",
+    ]));
+    put(root, "Algorithmique et Prog C/TD1 (corrigé).pdf", await makePdf([
+      "Exercice 1 : Somme", "int s = 0; for (int i = 1; i <= n; i++) s += i;",
+      "Exercice 2 : Produit", "int p = 1; for (int i = 1; i <= n; i++) p *= i;",
+    ]));
+    const opts = { root, source: "local" as const, storage: path.join(tmp, "storage4"), mode: "folders" as const };
+    const first = await importTree(db4, opts);
+    expect(first.exercises).toBe(2);
+    const td1 = db4.select().from(documents).all().find((d) => d.sourcePath?.endsWith("TD1.pdf"))!;
+    // Simule un passage interrompu après la création du document, avant ses exercices.
+    db4.delete(exercises).where(eq(exercises.documentId, td1.id)).run();
+
+    const second = await importTree(db4, opts);
+    expect(second.added).toBe(0);
+    expect(second.failed).toBe(0);
+    expect(second.exercises).toBe(2);
+    const rows = db4.select().from(exercises).where(eq(exercises.documentId, td1.id)).all();
+    expect(rows.map((e) => e.number).sort()).toEqual([1, 2]);
+    expect(rows.find((e) => e.number === 1)!.solution).toContain("s += i");
+
+    const third = await importTree(db4, opts);
+    expect(third.exercises).toBe(0);
+    expect(db4.select().from(exercises).all()).toHaveLength(2);
+  });
+
+  it("dossier au nom de plus de 60 caractères : une seule matière, même après plusieurs imports", async () => {
+    const db5 = createTestDb();
+    seedSubjects(db5);
+    const root = path.join(tmp, "longname");
+    // Ponctuation au milieu : le slug du nom complet (« un-dossier-de-cours-ia ») diffère de
+    // celui du nom tronqué à 60 caractères (« un-dossier-de-cours »).
+    const longName = `Un dossier de cours ${"-".repeat(50)} IA`;
+    expect(longName.length).toBeGreaterThan(60);
+    put(root, `${longName}/a.md`, "# a");
+    const opts = { root, source: "local" as const, storage: path.join(tmp, "storage5"), mode: "folders" as const };
+    await importTree(db5, opts);
+    put(root, `${longName}/b.md`, "# b");
+    await importTree(db5, opts);
+    const created = db5.select().from(subjects).all().filter((s) => s.name.startsWith("Un dossier de cours"));
+    expect(created).toHaveLength(1);
+    expect(created[0].name.length).toBeLessThanOrEqual(60);
+    expect(db5.select().from(documents).all().every((d) => d.subjectId === created[0].id)).toBe(true);
+  });
+});
+
+describe("expandZips : garde-fous", () => {
+  function zipWith(n: number, size: number): string {
+    const zip = new AdmZip();
+    for (let i = 0; i < n; i++) zip.addFile(`f${i}.txt`, Buffer.alloc(size, 97));
+    const p = path.join(tmp, `bomb-${n}-${size}.zip`);
+    fs.writeFileSync(p, zip.toBuffer());
+    return p;
+  }
+  const limits = { maxEntries: 5000, maxBytesPerZip: 500 * 1024 * 1024, maxBytesTotal: 2 * 1024 * 1024 * 1024 };
+
+  it("zip au-delà du nombre max d'entrées : ignoré", () => {
+    const abs = zipWith(10, 1);
+    const out = expandZips([{ absPath: abs, relPath: "z.zip", ext: ".zip" }], path.join(tmp, "bomb1"), { ...limits, maxEntries: 5 });
+    expect(out).toEqual([]);
+  });
+
+  it("plafond d'octets par zip et total : le reste est ignoré", () => {
+    const abs = zipWith(10, 1000);
+    const f = { absPath: abs, relPath: "z.zip", ext: ".zip" };
+    expect(expandZips([f], path.join(tmp, "bomb2"), { ...limits, maxBytesPerZip: 3500 })).toHaveLength(3);
+    const two = [f, { ...f, relPath: "y.zip" }];
+    expect(expandZips(two, path.join(tmp, "bomb3"), { ...limits, maxBytesPerZip: 3500, maxBytesTotal: 5000 })).toHaveLength(5);
+    expect(expandZips([f], path.join(tmp, "bomb4"))).toHaveLength(10);
+  });
 });

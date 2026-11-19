@@ -65,36 +65,77 @@ function safeEntryParts(name: string): string[] | null {
   return parts;
 }
 
+/** Garde-fous contre les bombes zip. */
+export type ZipLimits = {
+  /** Entrées max par zip (au-delà : zip ignoré entièrement). */
+  maxEntries: number;
+  /** Octets extraits max par zip de premier niveau (zips imbriqués compris). */
+  maxBytesPerZip: number;
+  /** Octets extraits max pour tout l'appel. */
+  maxBytesTotal: number;
+};
+
+export const DEFAULT_ZIP_LIMITS: ZipLimits = {
+  maxEntries: 5000,
+  maxBytesPerZip: 500 * 1024 * 1024,
+  maxBytesTotal: 2 * 1024 * 1024 * 1024,
+};
+
 /**
  * Remplace chaque .zip par ses entrées importables, extraites sous `tmpDir` (zips imbriqués
  * développés jusqu'à 3 niveaux). Entrées avec `..`, absolues, dans un dossier exclu ou
- * d'extension non autorisée : ignorées. Zip illisible : ignoré (avertissement).
+ * d'extension non autorisée : ignorées. Zip illisible ou trop d'entrées : ignoré. Entrée
+ * > 50 Mo (taille déclarée ou réelle) : ignorée. Au-delà des plafonds d'octets : reste ignoré.
  */
-export function expandZips(files: ScannedFile[], tmpDir: string): ScannedFile[] {
+export function expandZips(
+  files: ScannedFile[],
+  tmpDir: string,
+  limits: ZipLimits = DEFAULT_ZIP_LIMITS,
+): ScannedFile[] {
   const out: ScannedFile[] = [];
   let counter = 0;
+  let totalBytes = 0;
+  let zipBytes = 0;
   const expand = (zipFile: ScannedFile, depth: number) => {
     let zip: AdmZip;
+    let entries: AdmZip.IZipEntry[];
     try {
       zip = new AdmZip(zipFile.absPath);
+      entries = zip.getEntries();
     } catch (e) {
       console.warn(`[import] zip illisible ignoré (${zipFile.relPath}) :`, e instanceof Error ? e.message : e);
       return;
     }
+    if (entries.length > limits.maxEntries) {
+      console.warn(`[import] zip ignoré (${zipFile.relPath}) : ${entries.length} entrées (max ${limits.maxEntries})`);
+      return;
+    }
     const dest = path.resolve(tmpDir, String(++counter));
-    for (const entry of zip.getEntries()) {
+    for (const entry of entries) {
       if (entry.isDirectory) continue;
       const parts = safeEntryParts(entry.entryName);
       if (!parts) continue;
       if (entry.header.size > MAX_UPLOAD_BYTES) continue;
       const abs = path.resolve(dest, ...parts);
       if (!abs.startsWith(dest + path.sep)) continue;
+      if (zipBytes + entry.header.size > limits.maxBytesPerZip || totalBytes + entry.header.size > limits.maxBytesTotal) {
+        console.warn(`[import] plafond d'extraction atteint, reste du zip ignoré (${zipFile.relPath})`);
+        return;
+      }
       let data: Buffer;
       try {
         data = entry.getData();
       } catch {
         continue;
       }
+      // Taille réelle : la taille déclarée dans l'en-tête peut mentir.
+      if (data.length > MAX_UPLOAD_BYTES) continue;
+      if (zipBytes + data.length > limits.maxBytesPerZip || totalBytes + data.length > limits.maxBytesTotal) {
+        console.warn(`[import] plafond d'extraction atteint, reste du zip ignoré (${zipFile.relPath})`);
+        return;
+      }
+      zipBytes += data.length;
+      totalBytes += data.length;
       fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, data);
       const f: ScannedFile = {
@@ -108,8 +149,10 @@ export function expandZips(files: ScannedFile[], tmpDir: string): ScannedFile[] 
     }
   };
   for (const f of files) {
-    if (f.ext === ".zip") expand(f, 1);
-    else out.push(f);
+    if (f.ext === ".zip") {
+      zipBytes = 0;
+      expand(f, 1);
+    } else out.push(f);
   }
   return out;
 }
