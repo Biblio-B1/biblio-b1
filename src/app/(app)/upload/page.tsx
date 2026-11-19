@@ -1,10 +1,12 @@
+import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { listSubjects } from "@/server/subjects";
 import { UploadFlow } from "./UploadFlow";
 
 export const metadata = { title: "Déposer des fichiers" };
 
-export default function UploadPage() {
+export default async function UploadPage() {
+  await requireUser();
   const subjects = listSubjects(getDb()).map((s) => ({ id: s.id, name: s.name, color: s.color }));
   return (
     <div className="flex flex-col gap-6">

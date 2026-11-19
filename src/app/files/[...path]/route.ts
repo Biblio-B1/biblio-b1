@@ -44,7 +44,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
       "Content-Length": String(body.length),
       "Content-Disposition": contentDisposition(inline ? "inline" : "attachment", downloadName),
       "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "private, max-age=3600",
+      "Cache-Control": "private, no-cache",
       // Le lecteur PDF intégré du navigateur ne supporte pas une CSP stricte.
       ...(mime === "application/pdf"
         ? {}

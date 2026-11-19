@@ -1,6 +1,7 @@
 "use server";
 
 import { createHash } from "node:crypto";
+import fs from "node:fs";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -9,7 +10,7 @@ import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { documents, subjects } from "@/server/db/schema";
 import { createDocument } from "@/server/documents";
-import { saveUpload } from "@/server/storage";
+import { resolveStoragePath, saveUpload } from "@/server/storage";
 
 export type NoteState = { error?: string } | null;
 
@@ -40,18 +41,24 @@ export async function createNoteAction(_prev: NoteState, fd: FormData): Promise<
     return { error: "Une fiche identique existe déjà." };
   }
   const saved = saveUpload(buf, "fiche.md");
-  const doc = createDocument(db, {
-    title: parsed.data.title,
-    type: "note",
-    subjectId,
-    subjectConfirmed: true,
-    filePath: saved.filePath,
-    mime: saved.mime,
-    sha256: saved.sha256,
-    text: body,
-    source: "upload",
-    authorId: user.id,
-  });
+  let doc;
+  try {
+    doc = createDocument(db, {
+      title: parsed.data.title,
+      type: "note",
+      subjectId,
+      subjectConfirmed: true,
+      filePath: saved.filePath,
+      mime: saved.mime,
+      sha256: saved.sha256,
+      text: body,
+      source: "upload",
+      authorId: user.id,
+    });
+  } catch {
+    fs.rmSync(resolveStoragePath(saved.filePath), { force: true });
+    return { error: "Enregistrement impossible. Réessayez." };
+  }
   revalidatePath("/", "layout");
   redirect(`/doc/${doc.id}`);
 }

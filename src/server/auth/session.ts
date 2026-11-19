@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { env } from "../env";
 import { getDb, type Db } from "../db/client";
@@ -55,11 +56,12 @@ export async function clearSessionCookie(): Promise<void> {
   (await cookies()).delete(SESSION_COOKIE);
 }
 
-export async function getCurrentUser(): Promise<User | null> {
+/** Utilisateur de la requête courante (mémorisé par rendu via React cache). */
+export const getCurrentUser = cache(async (): Promise<User | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   return getUserBySessionToken(getDb(), token);
-}
+});
 
 export async function requireUser(role?: "admin"): Promise<User> {
   const user = await getCurrentUser();

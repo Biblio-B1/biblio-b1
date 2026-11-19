@@ -9,6 +9,7 @@ import { ImageGallery } from "@/components/viewers/ImageGallery";
 import { MarkdownView } from "@/components/viewers/MarkdownView";
 import { PdfViewer } from "@/components/viewers/PdfViewer";
 import { DOC_TYPE_LABELS, fileUrl, formatDate } from "@/lib/labels";
+import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { documents, users } from "@/server/db/schema";
 import { getDocument, type Document } from "@/server/documents";
@@ -26,6 +27,7 @@ const CODE_LANG: Record<string, string> = { ".c": "c", ".h": "c", ".py": "python
 const isUuid = (s: string) => /^[0-9a-f-]{36}$/i.test(s);
 
 export async function generateMetadata({ params }: { params: Params }) {
+  await requireUser();
   const { id } = await params;
   return { title: (isUuid(id) && getDocument(getDb(), id)?.title) || "Document" };
 }
@@ -119,6 +121,7 @@ async function Viewer({ doc }: { doc: Document }) {
 }
 
 export default async function DocPage({ params }: { params: Params }) {
+  await requireUser();
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const db = getDb();

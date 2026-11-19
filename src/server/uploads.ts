@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -7,7 +8,7 @@ import { classify } from "./classify";
 import { createDocument, type Document } from "./documents";
 import { createDraft, deleteDraft, readDraft } from "./drafts";
 import { env } from "./env";
-import { saveUpload } from "./storage";
+import { resolveStoragePath, saveUpload } from "./storage";
 import { listSubjects } from "./subjects";
 
 export type DocType = (typeof DOC_TYPES)[number];
@@ -98,17 +99,24 @@ export function confirmDraft(
   }
   const saved = saveUpload(found.buf, found.draft.fileName, root);
   // Task 5 : extraction de texte (documents.text) branchée ici.
-  const doc = createDocument(db, {
-    title: item.title,
-    type: item.type,
-    subjectId: item.subjectId,
-    subjectConfirmed: true,
-    filePath: saved.filePath,
-    mime: saved.mime,
-    sha256: saved.sha256,
-    source: "upload",
-    authorId: ownerId,
-  });
+  let doc: Document;
+  try {
+    doc = createDocument(db, {
+      title: item.title,
+      type: item.type,
+      subjectId: item.subjectId,
+      subjectConfirmed: true,
+      filePath: saved.filePath,
+      mime: saved.mime,
+      sha256: saved.sha256,
+      source: "upload",
+      authorId: ownerId,
+    });
+  } catch (e) {
+    // Pas de fichier orphelin ; le brouillon reste pour une nouvelle tentative.
+    fs.rmSync(resolveStoragePath(saved.filePath, root), { force: true });
+    throw e;
+  }
   deleteDraft(item.tmpId, root);
   return doc;
 }

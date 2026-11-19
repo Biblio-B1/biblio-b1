@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DocumentList, TypeFilter } from "@/components/library/DocumentList";
 import { parseType } from "@/lib/labels";
+import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { listDocuments } from "@/server/documents";
 import { filterByTitle } from "@/server/library";
@@ -11,6 +12,7 @@ export const metadata = { title: "Bibliothèque" };
 type SP = Promise<{ type?: string; q?: string }>;
 
 export default async function LibraryPage({ searchParams }: { searchParams: SP }) {
+  await requireUser();
   const { type: rawType, q: rawQ } = await searchParams;
   const type = parseType(rawType);
   const q = typeof rawQ === "string" ? rawQ.slice(0, 200) : undefined;

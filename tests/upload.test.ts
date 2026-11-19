@@ -128,6 +128,16 @@ describe("prepareUpload / confirmDraft", () => {
     expect(listDocuments(db)).toHaveLength(1);
   });
 
+  it("échec de createDocument : fichier sauvegardé supprimé, brouillon conservé", () => {
+    const d = prepareUpload(db, Buffer.from("boom"), "a.md", owner, root);
+    db.$client.exec("CREATE TRIGGER fail_insert BEFORE INSERT ON documents BEGIN SELECT RAISE(ABORT, 'boom'); END");
+    expect(() => confirmDraft(db, { tmpId: d.tmpId, subjectId: null, title: "t", type: "note" }, owner, root)).toThrow(/boom/);
+    const uploads = path.join(root, "uploads");
+    const files = fs.existsSync(uploads) ? fs.readdirSync(uploads, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()) : [];
+    expect(files).toHaveLength(0);
+    expect(readDraft(d.tmpId, owner, root)).not.toBeNull();
+  });
+
   it("confirmItemSchema valide les entrées", () => {
     const ok = { tmpId: "00000000-0000-4000-8000-000000000000", subjectId: null, title: " T ", type: "course" };
     expect(confirmItemSchema.parse(ok).title).toBe("T");

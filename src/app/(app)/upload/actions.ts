@@ -24,7 +24,7 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Erreur inatten
  */
 export async function uploadFiles(formData: FormData): Promise<UploadResult> {
   const user = await requireUser();
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size >= 0);
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File);
   const result: UploadResult = { drafts: [], errors: [] };
   if (files.length === 0) return { ...result, errors: [{ fileName: "", error: "Aucun fichier reçu." }] };
   if (files.length > MAX_FILES) {
