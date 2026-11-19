@@ -15,7 +15,8 @@ export const registrationSchema = z.object({
     .string()
     .trim()
     .min(2, "Le pseudo doit contenir au moins 2 caractères.")
-    .max(40, "Le pseudo est trop long (40 caractères max)."),
+    .max(40, "Le pseudo est trop long (40 caractères max).")
+    .refine((v) => !v.includes("@"), "Le pseudo ne peut pas contenir « @ »."),
   password: z
     .string()
     .min(8, "Le mot de passe doit contenir au moins 8 caractères.")
@@ -66,7 +67,38 @@ export function listInvites(db: Db) {
   return db.select().from(invites).orderBy(sql`${invites.createdAt} desc`).all();
 }
 
-export type InviteError = "invalid" | "expired" | "exhausted" | "revoked" | "email_taken";
+export type InviteError =
+  | "invalid"
+  | "expired"
+  | "exhausted"
+  | "revoked"
+  | "email_taken"
+  | "name_taken";
+
+export const INVITE_ERRORS: Record<InviteError, string> = {
+  invalid: "Ce lien d'invitation n'est pas valide.",
+  expired: "Ce lien d'invitation a expiré.",
+  exhausted: "Ce lien d'invitation a déjà été utilisé.",
+  revoked: "Ce lien d'invitation a été révoqué.",
+  email_taken: "Un compte existe déjà avec cette adresse e-mail.",
+  name_taken: "Ce pseudo est déjà pris.",
+};
+
+const nameTaken = (tx: Pick<Db, "select">, name: string) =>
+  !!tx
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`lower(${users.name}) = lower(${name})`)
+    .get();
+
+/** E-mail d'abord ; le pseudo n'est essayé que s'il n'y a aucun compte avec cet e-mail. */
+export function findUserByIdentifier(db: Db, identifier: string): User | null {
+  const id = identifier.trim();
+  const byEmail = db.select().from(users).where(eq(users.email, id.toLowerCase())).get();
+  if (byEmail) return byEmail;
+  if (id.includes("@")) return null;
+  return db.select().from(users).where(sql`lower(${users.name}) = lower(${id})`).get() ?? null;
+}
 
 /** Lève une ZodError si les données sont invalides (à valider en amont pour un message propre). */
 export async function consumeInvite(
@@ -85,6 +117,7 @@ export async function consumeInvite(
     if (tx.select({ id: users.id }).from(users).where(eq(users.email, data.email)).get()) {
       return { ok: false, error: "email_taken" };
     }
+    if (nameTaken(tx, data.pseudo)) return { ok: false, error: "name_taken" };
     // Incrément conditionnel : garde-fou contre une double consommation concurrente.
     const upd = tx
       .update(invites)
@@ -101,7 +134,7 @@ export async function consumeInvite(
   });
 }
 
-export type BootstrapError = "bad_code" | "already_setup" | "email_taken";
+export type BootstrapError = "bad_code" | "already_setup" | "email_taken" | "name_taken";
 
 export function setupAvailable(db: Db): boolean {
   return !db.select({ id: users.id }).from(users).where(eq(users.role, "admin")).get();
@@ -130,6 +163,7 @@ export async function bootstrapAdmin(
     if (tx.select({ id: users.id }).from(users).where(eq(users.email, data.email)).get()) {
       return { ok: false, error: "email_taken" };
     }
+    if (nameTaken(tx, data.pseudo)) return { ok: false, error: "name_taken" };
     const user = tx
       .insert(users)
       .values({ name: data.pseudo, email: data.email, passwordHash, role: "admin" })

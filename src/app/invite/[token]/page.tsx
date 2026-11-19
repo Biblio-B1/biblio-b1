@@ -1,16 +1,9 @@
 import { ActionForm, Field } from "@/components/ActionForm";
 import { getDb } from "@/server/db/client";
-import { getInviteStatus } from "@/server/auth/invites";
+import { INVITE_ERRORS, getInviteStatus } from "@/server/auth/invites";
 import { registerAction } from "../../(auth)/actions";
 
 export const metadata = { title: "Invitation — Biblio B1" };
-
-const MESSAGES = {
-  invalid: "Ce lien d'invitation n'est pas valide.",
-  expired: "Ce lien d'invitation a expiré.",
-  exhausted: "Ce lien d'invitation a déjà été utilisé.",
-  revoked: "Ce lien d'invitation a été révoqué.",
-} as const;
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -26,7 +19,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         </ActionForm>
       ) : (
         <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-800">
-          {MESSAGES[status]}
+          {INVITE_ERRORS[status]}
         </p>
       )}
     </main>

@@ -7,6 +7,7 @@ import { createSession, getUserBySessionToken } from "@/server/auth/session";
 import {
   bootstrapAdmin,
   consumeInvite,
+  findUserByIdentifier,
   createInvite,
   registrationSchema,
   revokeInvite,
@@ -131,5 +132,39 @@ describe("bootstrapAdmin", () => {
       ok: false,
       error: "already_setup",
     });
+  });
+});
+
+describe("identité et pseudos", () => {
+  it("pseudo avec @ refusé", () => {
+    expect(registrationSchema.safeParse({ ...data(), pseudo: "a@b.fr" }).success).toBe(false);
+  });
+  it("pseudo en doublon (casse différente) refusé", async () => {
+    const db = createTestDb();
+    const { token } = createInvite(db, { createdBy: null, maxUses: 3 });
+    await consumeInvite(db, token, { ...data(1), pseudo: "Alice" });
+    const r = await consumeInvite(db, token, { ...data(2), pseudo: "aLICE" });
+    expect(r).toEqual({ ok: false, error: "name_taken" });
+    expect(db.select().from(invites).all()[0].uses).toBe(1);
+    expect(await bootstrapAdmin(db, "code-secret", { ...data(3), pseudo: "ALICE" })).toEqual({
+      ok: false,
+      error: "name_taken",
+    });
+  });
+  it("l'e-mail est préféré au pseudo", async () => {
+    const db = createTestDb();
+    const admin = await adminOf(db); // admin: user0@example.com / user0
+    expect(findUserByIdentifier(db, admin.email)?.id).toBe(admin.id);
+    expect(findUserByIdentifier(db, "USER0")?.id).toBe(admin.id);
+    expect(findUserByIdentifier(db, "inconnu@example.com")).toBeNull();
+  });
+  it("un pseudo ne peut plus usurper l'e-mail d'un autre", async () => {
+    const db = createTestDb();
+    const admin = await adminOf(db);
+    const { token } = createInvite(db, { createdBy: admin.id });
+    await expect(
+      consumeInvite(db, token, { ...data(1), pseudo: admin.email }),
+    ).rejects.toThrow();
+    expect(findUserByIdentifier(db, admin.email)?.id).toBe(admin.id);
   });
 });

@@ -5,6 +5,7 @@ import {
   primaryKey,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 const id = () =>
@@ -31,7 +32,7 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ROLES }).notNull().default("member"),
   createdAt: createdAt(),
-});
+}, (t) => [uniqueIndex("users_name_lower_idx").on(sql`lower(${t.name})`)]);
 
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(), // jeton de session haché

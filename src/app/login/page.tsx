@@ -1,9 +1,14 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ActionForm, Field } from "@/components/ActionForm";
+import { getDb } from "@/server/db/client";
+import { setupAvailable } from "@/server/auth/invites";
 import { getCurrentUser } from "@/server/auth/session";
 import { loginAction } from "../(auth)/actions";
 
 export const metadata = { title: "Connexion — Biblio B1" };
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   if (await getCurrentUser()) redirect("/");
@@ -17,6 +22,14 @@ export default async function LoginPage() {
       <p className="text-sm text-neutral-500">
         L&apos;inscription se fait uniquement sur invitation.
       </p>
+      {setupAvailable(getDb()) && (
+        <p className="text-sm">
+          Aucun administrateur n&apos;existe encore :{" "}
+          <Link href="/setup" className="underline">
+            terminer l&apos;installation
+          </Link>
+        </p>
+      )}
     </main>
   );
 }

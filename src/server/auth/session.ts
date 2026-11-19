@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { env } from "../env";
 import { getDb, type Db } from "../db/client";
 import { sessions, users } from "../db/schema";
 
@@ -44,7 +45,7 @@ export async function setSessionCookie(token: string, expiresAt: Date): Promise<
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: env.COOKIE_SECURE === "true",
     path: "/",
     expires: expiresAt,
   });

@@ -8,6 +8,7 @@ const schema = z.object({
     .default("https://github.com/S-L-A-K-E-R/C_courses"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   STORAGE_PATH: z.string().min(1).default("./storage"),
+  COOKIE_SECURE: z.enum(["true", "false"]).default("false"),
   SESSION_SECRET: z.string().default("dev-insecure-secret-change-me"),
 });
 

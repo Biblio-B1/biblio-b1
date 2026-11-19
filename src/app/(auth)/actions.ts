@@ -1,12 +1,10 @@
 "use server";
 
-import { eq, or } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
-import { users } from "@/server/db/schema";
 import { verifyPassword, hashPassword } from "@/server/auth/password";
 import {
   SESSION_COOKIE,
@@ -18,21 +16,15 @@ import {
 } from "@/server/auth/session";
 import {
   bootstrapAdmin,
+  INVITE_ERRORS,
   consumeInvite,
+  findUserByIdentifier,
   createInvite,
   registrationSchema,
   revokeInvite,
 } from "@/server/auth/invites";
 
 type State = { error?: string; message?: string; link?: string } | null;
-
-const INVITE_ERRORS = {
-  invalid: "Ce lien d'invitation n'est pas valide.",
-  expired: "Ce lien d'invitation a expiré.",
-  exhausted: "Ce lien d'invitation a déjà été utilisé.",
-  revoked: "Ce lien d'invitation a été révoqué.",
-  email_taken: "Un compte existe déjà avec cette adresse e-mail.",
-} as const;
 
 const firstIssue = (e: z.ZodError) => e.issues[0]?.message ?? "Données invalides.";
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "");
@@ -42,7 +34,7 @@ let dummyHash: Promise<string> | undefined;
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(1, "Saisissez votre e-mail ou pseudo."),
-  password: z.string().min(1, "Saisissez votre mot de passe."),
+  password: z.string().min(1, "Saisissez votre mot de passe.").max(200, "Mot de passe trop long."),
 });
 
 export async function loginAction(_prev: State, fd: FormData): Promise<State> {
@@ -53,12 +45,7 @@ export async function loginAction(_prev: State, fd: FormData): Promise<State> {
   if (!parsed.success) return { error: firstIssue(parsed.error) };
   const { identifier, password } = parsed.data;
   const db = getDb();
-  const user = db
-    .select()
-    .from(users)
-    .where(or(eq(users.email, identifier.toLowerCase()), eq(users.name, identifier)))
-    .limit(1)
-    .get();
+  const user = findUserByIdentifier(db, identifier);
   const hash = user?.passwordHash ?? (await (dummyHash ??= hashPassword("dummy-password")));
   const ok = await verifyPassword(hash, password);
   if (!user || !ok) return { error: "Identifiants incorrects." };
@@ -104,6 +91,7 @@ export async function setupAction(_prev: State, fd: FormData): Promise<State> {
         bad_code: "Code d'administration incorrect.",
         already_setup: "L'installation est déjà terminée.",
         email_taken: INVITE_ERRORS.email_taken,
+        name_taken: INVITE_ERRORS.name_taken,
       }[res.error],
     };
   }
