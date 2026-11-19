@@ -29,6 +29,10 @@ describe("saveUpload", () => {
     expect(() => saveUpload(Buffer.from("x"), "noext", root)).toThrow();
   });
 
+  it("refuse un fichier vide", () => {
+    expect(() => saveUpload(Buffer.alloc(0), "a.pdf", root)).toThrow(/vide/);
+  });
+
   it("refuse les fichiers trop gros", () => {
     expect(() => saveUpload(Buffer.alloc(50 * 1024 * 1024 + 1), "a.pdf", root)).toThrow();
   });

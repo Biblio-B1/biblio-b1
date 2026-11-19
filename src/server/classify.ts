@@ -17,10 +17,13 @@ function escapeRegExp(s: string): string {
 }
 
 function countOccurrences(haystack: string, keyword: string): number {
-  const kw = escapeRegExp(normalize(keyword)).replace(/\s+/g, "\\s+");
-  // Frontières de mot explicites (valables aussi pour "#include" ou "char *").
-  const re = new RegExp(`(?<![a-z0-9_])${kw}(?![a-z0-9_])`, "g");
-  return haystack.match(re)?.length ?? 0;
+  const norm = normalize(keyword);
+  const kw = escapeRegExp(norm).replace(/\s+/g, "\\s+");
+  // Frontière de mot seulement côté mot : "#include" / "char *" finissent ou
+  // commencent par un caractère non-mot, où un lookaround \w serait faux.
+  const before = /^[a-z0-9_#]/.test(norm) ? "(?<![a-z0-9_])" : "";
+  const after = /[a-z0-9_]$/.test(norm) ? "(?![a-z0-9_])" : "";
+  return haystack.match(new RegExp(`${before}${kw}${after}`, "g"))?.length ?? 0;
 }
 
 function isRules(r: unknown): r is SubjectRules {

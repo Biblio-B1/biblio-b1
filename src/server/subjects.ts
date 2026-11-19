@@ -20,9 +20,14 @@ export const DEFAULT_SUBJECTS: DefaultSubject[] = [
     color: "#2563eb",
     rules: {
       pathPatterns: [
-        "\\balgo(rithmique)?\\s+et\\s+c\\b",
-        "\\bprog(rammation)?[\\s_-]*c\\b",
-        "(^|[\\s/\\\\_-])c([\\s_.-]|$)",
+        // Locutions fixes : un "C" nu dans un nom de fichier ne compte pas.
+        "\\balgo(rithmique)?\\s+et\\s+c(?![a-z0-9'’])",
+        "\\bprog(rammation)?[\\s_-]*c(?![a-z0-9'’])",
+        "\\blangage\\s+c(?![a-z0-9'’])",
+        "\\ben\\s+c(?![a-z0-9'’])",
+        "\\bc\\s+language\\b",
+        // Dossier entier nommé C (ou Cours C, Prog C, Langage C...), suivi d'un séparateur.
+        "(^|[\\\\/])((cours|prog|programmation|langage)[\\s_-]*)?c[\\\\/]",
         "\\.[ch]$",
       ],
       keywords: {

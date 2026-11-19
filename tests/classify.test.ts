@@ -60,6 +60,28 @@ describe("classify", () => {
     expect(r.subjectId).toBeNull();
   });
 
+  it.each(["Vitamine C.pdf", "Annexe C.pdf", "Option C - planning.pdf"])(
+    "un C nu dans le nom de fichier (%s) ne classe pas prog-c",
+    (fileName) => {
+      expect(classify({ fileName }, subjects).subjectId).toBeNull();
+    },
+  );
+
+  it("fichiers ECE réels et dossier C", () => {
+    const slug = (i: Parameters<typeof classify>[0]) => slugOf(classify(i, subjects).subjectId);
+    expect(slug({ fileName: "ECE - Algo et C - TD1 - Algorithmes et Logigrammes.pdf" })).toBe("prog-c");
+    expect(slug({ fileName: "PROG-C_Exam_Bachelor1_2025-12-10-v1_EN.pdf" })).toBe("prog-c");
+    expect(slug({ fileName: "Memory_List_FR.pdf", path: "ARCHIVE/2026/C/Memory_List_FR.pdf" })).toBe("prog-c");
+    expect(slug({ fileName: "Memory_List_FR.pdf", path: "Cours C\\Memory_List_FR.pdf" })).toBe("prog-c");
+    expect(slug({ fileName: "x.pdf", path: "C/x.pdf" })).toBe("prog-c");
+    expect(slug({ fileName: "x.pdf", path: "dossier\\C\\x.pdf" })).toBe("prog-c");
+  });
+
+  it("keywords finissant par * (char *p)", () => {
+    const r = classify({ fileName: "a.txt", text: "char *p; void *q;" }, subjects);
+    expect(slugOf(r.subjectId)).toBe("prog-c");
+  });
+
   it("plafonne les occurrences à 5", () => {
     const one = classify({ fileName: "a.txt", text: "malloc ".repeat(5) }, subjects);
     const many = classify({ fileName: "a.txt", text: "malloc ".repeat(50) }, subjects);

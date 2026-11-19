@@ -43,6 +43,9 @@ export function saveUpload(
   if (!mime) {
     throw new Error(`Extension non autorisée : ${ext || "(aucune)"}`);
   }
+  if (buf.length === 0) {
+    throw new Error("Fichier vide");
+  }
   if (buf.length > MAX_UPLOAD_BYTES) {
     throw new Error("Fichier trop volumineux (50 Mo maximum)");
   }
