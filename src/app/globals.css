@@ -1,26 +1,258 @@
 @import "tailwindcss";
 
+/* Thème : classe `dark` sur <html> (cookie bb1_theme), pas de media query. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #fafaf8;
+  --surface: #ffffff;
+  --sunken: #f1f1ed;
+  --ink: #1c1d20;
+  --ink-2: #565961;
+  --ink-3: #868990;
+  --line: #e7e6e1;
+  --line-strong: #d5d4ce;
+  --primary: #1c1d20;
+  --on-primary: #fafaf8;
+  --focus: #3b63d9;
+  --danger: #b42318;
+  --danger-bg: #fdf0ee;
+  --ok: #1f7a46;
+  --mark: #fff1b8;
+  color-scheme: light;
+}
+
+:root.dark {
+  --bg: #0e0f11;
+  --surface: #16171a;
+  --sunken: #1e2024;
+  --ink: #ecedef;
+  --ink-2: #a8abb2;
+  --ink-3: #777a81;
+  --line: #25272c;
+  --line-strong: #353840;
+  --primary: #ecedef;
+  --on-primary: #0e0f11;
+  --focus: #7b9cff;
+  --danger: #ff8a80;
+  --danger-bg: #2a1614;
+  --ok: #6fd39b;
+  --mark: #4a3f10;
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-focus: var(--focus);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-ok: var(--ok);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  font-feature-settings: "cv11", "ss01";
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--focus) 25%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* --- Composants de base ------------------------------------------------ */
+@layer components {
+  .btn {
+    @apply inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line-strong bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-sunken disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-transparent bg-primary text-on-primary hover:bg-primary hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-sunken;
+  }
+  .btn-icon {
+    @apply w-9 px-0;
+  }
+  .input {
+    @apply h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-[15px] text-ink placeholder:text-ink-3;
+  }
+  .label {
+    @apply flex flex-col gap-1.5 text-sm font-medium text-ink-2;
+  }
+  .page-title {
+    @apply text-[1.65rem] leading-tight font-semibold tracking-[-0.015em] text-ink;
+  }
+  .muted {
+    @apply text-ink-2;
+  }
+}
+
+/* --- Shiki : thèmes clair / sombre (dual themes) ------------------------ */
+.shiki {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  overflow-x: auto;
+  tab-size: 4;
+}
+.dark .shiki,
+.dark .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+}
+.code-lines code {
+  counter-reset: line;
+}
+.code-lines code .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 2.5em;
+  margin-right: 1em;
+  text-align: right;
+  color: var(--ink-3);
+  user-select: none;
+}
+
+/* --- Prose (Markdown) ---------------------------------------------------- */
+.prose-bb {
+  max-width: 72ch;
+  font-size: 16px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.prose-bb > * + * {
+  margin-top: 0.9em;
+}
+.prose-bb h1 {
+  font-size: 1.6em;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  margin-top: 1.4em;
+}
+.prose-bb h2 {
+  font-size: 1.3em;
+  font-weight: 620;
+  line-height: 1.3;
+  margin-top: 1.5em;
+}
+.prose-bb h3 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin-top: 1.3em;
+}
+.prose-bb > :first-child {
+  margin-top: 0;
+}
+.prose-bb a {
+  color: var(--focus);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-bb ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.prose-bb ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+.prose-bb li + li {
+  margin-top: 0.25em;
+}
+.prose-bb blockquote {
+  border-left: 3px solid var(--line-strong);
+  padding-left: 1em;
+  color: var(--ink-2);
+}
+.prose-bb :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.prose-bb pre:not(.shiki) {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+.prose-bb table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.prose-bb th,
+.prose-bb td {
+  border: 1px solid var(--line);
+  padding: 0.4em 0.7em;
+  text-align: left;
+}
+.prose-bb th {
+  background: var(--sunken);
+  font-weight: 600;
+}
+.prose-bb hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.prose-bb img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+.prose-bb .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2em 0;
+}
+
+/* --- react-pdf ------------------------------------------------------------ */
+.dark .pdf-page {
+  /* Garde la page blanche (lisibilité) mais adoucit l'éblouissement. */
+  filter: brightness(0.92);
 }

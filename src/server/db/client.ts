@@ -5,6 +5,7 @@ import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { env } from "../env";
 import * as schema from "./schema";
+import { seedSubjects } from "../subjects";
 
 export type Db = BetterSQLite3Database<typeof schema> & {
   $client: Database.Database;
@@ -37,12 +38,14 @@ function open(sqlite: Database.Database): Db {
 // et ouvrirait sinon une connexion SQLite supplémentaire à chaque rechargement.
 const globalForDb = globalThis as unknown as { __bb1Db?: Db };
 
-/** Base applicative (fichier `data.db` sous STORAGE_PATH), migrée au premier appel. */
+/** Base applicative (fichier `data.db` sous STORAGE_PATH), migrée et amorcée (matières) au premier appel. */
 export function getDb(): Db {
   if (!globalForDb.__bb1Db) {
     const storage = path.resolve(env.STORAGE_PATH);
     fs.mkdirSync(storage, { recursive: true });
-    globalForDb.__bb1Db = open(new Database(path.join(storage, "data.db")));
+    const db = open(new Database(path.join(storage, "data.db")));
+    seedSubjects(db); // matières par défaut, idempotent (slug unique)
+    globalForDb.__bb1Db = db;
   }
   return globalForDb.__bb1Db;
 }
