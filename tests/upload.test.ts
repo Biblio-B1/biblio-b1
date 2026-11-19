@@ -32,7 +32,7 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe("drafts", () => {
-  it("stocke un brouillon hors de uploads/ sous un nom généré", () => {
+  it("stocke un brouillon hors de uploads/ sous un nom généré", async () => {
     const d = createDraft(Buffer.from("x"), "../../etc/TP1.pdf", owner, null, root);
     expect(d.tmpId).toMatch(/^[0-9a-f-]{36}$/);
     expect(d.fileName).toBe("TP1.pdf");
@@ -42,13 +42,13 @@ describe("drafts", () => {
     expect(fs.existsSync(path.join(root, "uploads"))).toBe(false);
   });
 
-  it("refuse extensions interdites, fichier vide, trop gros", () => {
+  it("refuse extensions interdites, fichier vide, trop gros", async () => {
     expect(() => createDraft(Buffer.from("x"), "a.exe", owner, null, root)).toThrow(/Extension/);
     expect(() => createDraft(Buffer.alloc(0), "a.pdf", owner, null, root)).toThrow(/vide/);
     expect(() => createDraft(Buffer.alloc(50 * 1024 * 1024 + 1), "a.pdf", owner, null, root)).toThrow(/50 Mo/);
   });
 
-  it("un brouillon n'est lisible que par son auteur, avec un identifiant valide", () => {
+  it("un brouillon n'est lisible que par son auteur, avec un identifiant valide", async () => {
     const d = createDraft(Buffer.from("abc"), "a.md", owner, null, root);
     expect(readDraft(d.tmpId, owner, root)?.buf.toString()).toBe("abc");
     expect(readDraft(d.tmpId, other, root)).toBeNull();
@@ -56,7 +56,7 @@ describe("drafts", () => {
     expect(readDraft("00000000-0000-4000-8000-000000000000", owner, root)).toBeNull();
   });
 
-  it("cleanupDrafts supprime les brouillons anciens seulement", () => {
+  it("cleanupDrafts supprime les brouillons anciens seulement", async () => {
     const old = createDraft(Buffer.from("a"), "a.md", owner, null, root);
     const now = Date.now() + 25 * 3600_000;
     const fresh = createDraft(Buffer.from("b"), "b.md", owner, null, root);
@@ -71,7 +71,7 @@ describe("drafts", () => {
 });
 
 describe("guessType", () => {
-  it("devine le type d'après le nom", () => {
+  it("devine le type d'après le nom", async () => {
     expect(guessType("IMG_2031.jpg")).toBe("photo");
     expect(guessType("photo.WEBP")).toBe("photo");
     expect(guessType("main.c")).toBe("exercise");
@@ -85,8 +85,8 @@ describe("guessType", () => {
 });
 
 describe("prepareUpload / confirmDraft", () => {
-  it("propose une matière d'après le nom de fichier", () => {
-    const d = prepareUpload(db, Buffer.from("%PDF"), "ECE - Algo et C - TP6.pdf", owner, root);
+  it("propose une matière d'après le nom de fichier", async () => {
+    const d = await prepareUpload(db, Buffer.from("%PDF"), "ECE - Algo et C - TP6.pdf", owner, root);
     const progC = listSubjects(db).find((s) => s.slug === "prog-c")!;
     expect(d.suggestedSubjectId).toBe(progC.id);
     expect(d.suggestedType).toBe("exercise");
@@ -94,13 +94,13 @@ describe("prepareUpload / confirmDraft", () => {
     expect(d.duplicateOfId).toBeNull();
   });
 
-  it("sans indice : aucune matière proposée", () => {
-    const d = prepareUpload(db, Buffer.from("zz"), "scan.jpg", owner, root);
+  it("sans indice : aucune matière proposée", async () => {
+    const d = await prepareUpload(db, Buffer.from("zz"), "scan.jpg", owner, root);
     expect(d.suggestedSubjectId).toBeNull();
   });
 
-  it("confirme : crée le document, déplace le fichier sous uploads/, supprime le brouillon", () => {
-    const d = prepareUpload(db, Buffer.from("hello"), "notes linux.md", owner, root);
+  it("confirme : crée le document, déplace le fichier sous uploads/, supprime le brouillon", async () => {
+    const d = await prepareUpload(db, Buffer.from("hello"), "notes linux.md", owner, root);
     const linux = listSubjects(db).find((s) => s.slug === "linux")!;
     const doc = confirmDraft(db, { tmpId: d.tmpId, subjectId: linux.id, title: "Mes notes", type: "note" }, owner, root);
     expect(doc.subjectId).toBe(linux.id);
@@ -112,24 +112,33 @@ describe("prepareUpload / confirmDraft", () => {
     expect(readDraft(d.tmpId, owner, root)).toBeNull();
   });
 
-  it("refuse le brouillon d'un autre utilisateur et une matière inconnue", () => {
-    const d = prepareUpload(db, Buffer.from("x1"), "a.md", owner, root);
+  it("extrait le texte à l'upload, l'utilise pour la matière et le stocke à la confirmation", async () => {
+    const body = ["#include <stdio.h>", "int main(void) { char *p = malloc(4); free(p); return 0; }", ""].join("\n");
+    const d = await prepareUpload(db, Buffer.from(body), "cours.txt", owner, root);
+    const progC = listSubjects(db).find((s) => s.slug === "prog-c")!;
+    expect(d.suggestedSubjectId).toBe(progC.id);
+    const doc = confirmDraft(db, { tmpId: d.tmpId, subjectId: progC.id, title: "C", type: "course" }, owner, root);
+    expect(doc.text).toContain("malloc");
+  });
+
+  it("refuse le brouillon d'un autre utilisateur et une matière inconnue", async () => {
+    const d = await prepareUpload(db, Buffer.from("x1"), "a.md", owner, root);
     expect(() => confirmDraft(db, { tmpId: d.tmpId, subjectId: null, title: "t", type: "note" }, other, root)).toThrow(/introuvable/);
     expect(() => confirmDraft(db, { tmpId: d.tmpId, subjectId: "nope", title: "t", type: "note" }, owner, root)).toThrow(/Matière/);
     expect(listDocuments(db)).toHaveLength(0);
   });
 
-  it("signale un doublon (même sha256) à l'upload et au moment de confirmer", () => {
-    const a = prepareUpload(db, Buffer.from("same"), "a.md", owner, root);
-    const b = prepareUpload(db, Buffer.from("same"), "b.md", owner, root);
+  it("signale un doublon (même sha256) à l'upload et au moment de confirmer", async () => {
+    const a = await prepareUpload(db, Buffer.from("same"), "a.md", owner, root);
+    const b = await prepareUpload(db, Buffer.from("same"), "b.md", owner, root);
     const doc = confirmDraft(db, { tmpId: a.tmpId, subjectId: null, title: "A", type: "note" }, owner, root);
-    expect(prepareUpload(db, Buffer.from("same"), "c.md", owner, root).duplicateOfId).toBe(doc.id);
+    expect((await prepareUpload(db, Buffer.from("same"), "c.md", owner, root)).duplicateOfId).toBe(doc.id);
     expect(() => confirmDraft(db, { tmpId: b.tmpId, subjectId: null, title: "B", type: "note" }, owner, root)).toThrow(/déjà/);
     expect(listDocuments(db)).toHaveLength(1);
   });
 
-  it("échec de createDocument : fichier sauvegardé supprimé, brouillon conservé", () => {
-    const d = prepareUpload(db, Buffer.from("boom"), "a.md", owner, root);
+  it("échec de createDocument : fichier sauvegardé supprimé, brouillon conservé", async () => {
+    const d = await prepareUpload(db, Buffer.from("boom"), "a.md", owner, root);
     db.$client.exec("CREATE TRIGGER fail_insert BEFORE INSERT ON documents BEGIN SELECT RAISE(ABORT, 'boom'); END");
     expect(() => confirmDraft(db, { tmpId: d.tmpId, subjectId: null, title: "t", type: "note" }, owner, root)).toThrow(/boom/);
     const uploads = path.join(root, "uploads");
@@ -138,7 +147,7 @@ describe("prepareUpload / confirmDraft", () => {
     expect(readDraft(d.tmpId, owner, root)).not.toBeNull();
   });
 
-  it("confirmItemSchema valide les entrées", () => {
+  it("confirmItemSchema valide les entrées", async () => {
     const ok = { tmpId: "00000000-0000-4000-8000-000000000000", subjectId: null, title: " T ", type: "course" };
     expect(confirmItemSchema.parse(ok).title).toBe("T");
     expect(confirmItemSchema.safeParse({ ...ok, type: "video" }).success).toBe(false);

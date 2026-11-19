@@ -22,6 +22,8 @@ export type Draft = {
   sha256: string;
   size: number;
   suggestedSubjectId: string | null;
+  /** Texte extrait à l'upload (réutilisé à la confirmation). */
+  text?: string;
   createdAt: number;
 };
 
@@ -63,6 +65,22 @@ export function createDraft(
   fs.writeFileSync(path.join(dir(root), `${draft.tmpId}${ext}`), buf);
   fs.writeFileSync(path.join(dir(root), `${draft.tmpId}.json`), JSON.stringify(draft));
   return draft;
+}
+
+/** Chemin absolu du fichier d'un brouillon (pour l'extraction de texte). */
+export function draftFilePath(draft: Draft, root: string = env.STORAGE_PATH): string {
+  return path.join(dir(root), `${draft.tmpId}${draft.ext}`);
+}
+
+/** Met à jour matière suggérée et texte extrait d'un brouillon existant. */
+export function updateDraft(
+  draft: Draft,
+  patch: Pick<Draft, "suggestedSubjectId" | "text">,
+  root: string = env.STORAGE_PATH,
+): Draft {
+  const next = { ...draft, ...patch };
+  fs.writeFileSync(path.join(dir(root), `${draft.tmpId}.json`), JSON.stringify(next));
+  return next;
 }
 
 function readMeta(tmpId: string, root: string): Draft | null {

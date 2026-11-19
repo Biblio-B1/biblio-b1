@@ -1,3 +1,4 @@
+import { extractText } from "@/server/extract/text";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { and, desc, eq, like } from "drizzle-orm";

@@ -6,7 +6,8 @@ import type { Db } from "./db/client";
 import { DOC_TYPES, documents, subjects } from "./db/schema";
 import { classify } from "./classify";
 import { createDocument, type Document } from "./documents";
-import { createDraft, deleteDraft, readDraft } from "./drafts";
+import { createDraft, deleteDraft, draftFilePath, readDraft, updateDraft } from "./drafts";
+import { extractText } from "./extract/text";
 import { env } from "./env";
 import { resolveStoragePath, saveUpload } from "./storage";
 import { listSubjects } from "./subjects";
@@ -49,16 +50,21 @@ function findBySha(db: Db, sha256: string): string | null {
 }
 
 /** Étape 1 : stocke le fichier en brouillon et propose matière + type. */
-export function prepareUpload(
+export async function prepareUpload(
   db: Db,
   buf: Buffer,
   originalName: string,
   ownerId: string,
   root: string = env.STORAGE_PATH,
-): UploadDraft {
+): Promise<UploadDraft> {
   const name = originalName.split(/[\\/]/).pop() ?? originalName;
-  const { subjectId } = classify({ fileName: name }, listSubjects(db));
-  const d = createDraft(buf, originalName, ownerId, subjectId, root);
+  const subjects = listSubjects(db);
+  const first = classify({ fileName: name }, subjects).subjectId;
+  let d = createDraft(buf, originalName, ownerId, first, root);
+  // Le texte extrait affine la matière proposée et est conservé pour la confirmation.
+  const text = await extractText(draftFilePath(d, root), d.mime);
+  const subjectId = text ? classify({ fileName: name, text }, subjects).subjectId ?? first : first;
+  d = updateDraft(d, { suggestedSubjectId: subjectId, text }, root);
   return {
     tmpId: d.tmpId,
     fileName: d.fileName,
@@ -98,7 +104,6 @@ export function confirmDraft(
     throw new Error("Ce fichier est déjà dans la bibliothèque.");
   }
   const saved = saveUpload(found.buf, found.draft.fileName, root);
-  // Task 5 : extraction de texte (documents.text) branchée ici.
   let doc: Document;
   try {
     doc = createDocument(db, {
@@ -109,6 +114,7 @@ export function confirmDraft(
       filePath: saved.filePath,
       mime: saved.mime,
       sha256: saved.sha256,
+      text: found.draft.text ?? "",
       source: "upload",
       authorId: ownerId,
     });

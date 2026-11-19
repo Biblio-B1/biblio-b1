@@ -44,7 +44,7 @@ export async function uploadFiles(formData: FormData): Promise<UploadResult> {
     }
     try {
       const buf = Buffer.from(await file.arrayBuffer());
-      result.drafts.push(prepareUpload(db, buf, fileName.data, user.id));
+      result.drafts.push(await prepareUpload(db, buf, fileName.data, user.id));
     } catch (e) {
       result.errors.push({ fileName: fileName.data, error: errMsg(e) });
     }
