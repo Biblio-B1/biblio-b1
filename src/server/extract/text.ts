@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 export const MAX_PDF_PAGES = 200;
 export const MAX_TEXT_CHARS = 2_000_000;
 
+/** Taille max d'upload : au-delà, pas d'extraction. */
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 type PdfItem = { str?: string; hasEOL?: boolean; transform?: number[] };
@@ -13,8 +15,8 @@ async function pdfText(absPath: string): Promise<string> {
   const data = new Uint8Array(await fs.readFile(absPath));
   // Sans worker configuré, pdf.js charge lui-même son worker "fake" dans le thread courant (Node).
   const task = pdfjs.getDocument({ data, useSystemFonts: true, verbosity: 0 });
-  const doc = await task.promise;
   try {
+    const doc = await task.promise;
     let out = "";
     const pages = Math.min(doc.numPages, MAX_PDF_PAGES);
     for (let n = 1; n <= pages && out.length < MAX_TEXT_CHARS; n++) {
@@ -52,6 +54,7 @@ async function pdfText(absPath: string): Promise<string> {
  */
 export async function extractText(absPath: string, mime: string): Promise<string> {
   try {
+    if ((await fs.stat(absPath)).size > MAX_FILE_BYTES) return "";
     let text = "";
     if (mime === "application/pdf") text = await pdfText(absPath);
     else if (mime === DOCX) {

@@ -112,3 +112,55 @@ describe("splitExercises", () => {
     expect(splitExercises("Rien à voir, l'exercice est ici 1")).toEqual([]);
   });
 });
+
+describe("splitExercises : formats et robustesse", () => {
+  const nums = (t: string) => splitExercises(t).map((e) => e.number);
+  const body = "Écrire une fonction qui calcule la somme des éléments.";
+
+  it.each([
+    "Exercice n°3",
+    "Exercice N° 3",
+    "Exercice no 3",
+    "Ex 3",
+    "Ex. 3",
+    "Exo 3",
+    "EXERCICE 3 -",
+    "Exercice 3 :",
+    "Exercice 3.",
+    "Exercise 3:",
+    "Exercice 3 – Tableaux",
+  ])("reconnaît « %s »", (h) => {
+    const ex = splitExercises(`${h}\n${body}`);
+    expect(ex).toHaveLength(1);
+    expect(ex[0].number).toBe(3);
+    expect(ex[0].body).toBe(body);
+  });
+
+  it("ne coupe pas sur une phrase coupée ni sur « exemple »", () => {
+    const t = `Exercice 1 : A\n${body}\nexercice 1 pour calculer la somme\nExemple 2 de plus`;
+    const ex = splitExercises(t);
+    expect(ex).toHaveLength(1);
+    expect(ex[0].body).toContain("exercice 1 pour calculer");
+    expect(nums("Exercice 1 du TD précédent")).toEqual([]);
+  });
+
+  it("table des matières : une seule occurrence par numéro, celle au corps substantiel", () => {
+    const t = ["Sommaire", "Exercice 1 ........ 2", "Exercice 2 ........ 3", "Exercice 1", "Exercice 2", "Exercice 1 : Somme", body, "Exercice 2 : Produit", body + " bis"].join("\n");
+    const ex = splitExercises(t);
+    expect(ex.map((e) => e.title)).toEqual(["Exercice 1 : Somme", "Exercice 2 : Produit"]);
+    expect(ex[0].body).toBe(body);
+  });
+
+  it("même numéro répété sans points de conduite : garde le corps substantiel", () => {
+    const ex = splitExercises(["Exercice 1", "Exercice 2", "Exercice 1 : Somme", body, "Exercice 2 : Produit", body].join("\n"));
+    expect(ex.map((e) => e.number)).toEqual([1, 2]);
+    expect(ex[0].title).toBe("Exercice 1 : Somme");
+  });
+
+  it("numérotation qui repart sous une autre partie : les deux sont gardés, titres uniques", () => {
+    const ex = splitExercises(["Partie 1", "Exercice 1", body, "Partie 2", "Exercice 1", body + " autre"].join("\n"));
+    expect(ex).toHaveLength(2);
+    expect(ex.map((e) => e.title)).toEqual(["Partie 1 – Exercice 1", "Partie 2 – Exercice 1"]);
+    expect(ex[0].body).toBe(body);
+  });
+});

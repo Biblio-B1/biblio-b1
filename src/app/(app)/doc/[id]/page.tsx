@@ -1,5 +1,5 @@
-import { extractText } from "@/server/extract/text";
 import fs from "node:fs/promises";
+import { extractText } from "@/server/extract/text";
 import path from "node:path";
 import { and, desc, eq, like } from "drizzle-orm";
 import { notFound } from "next/navigation";
@@ -34,6 +34,7 @@ export async function generateMetadata({ params }: { params: Params }) {
 }
 
 async function readText(doc: Document): Promise<string | null> {
+  if (doc.text && doc.text.length < 2_000_000) return doc.text; // < plafond d'extraction : jamais tronqué
   try {
     const abs = resolveStoragePath(doc.filePath);
     const stat = await fs.stat(abs);
@@ -46,8 +47,8 @@ async function readText(doc: Document): Promise<string | null> {
 
 async function docxParagraphs(doc: Document): Promise<string[] | null> {
   try {
-    const mammoth = await import("mammoth");
-    const { value } = await mammoth.extractRawText({ path: resolveStoragePath(doc.filePath) });
+    // Texte stocké à l'import ; extraction à la volée seulement pour les anciens documents.
+    const value = doc.text || (await extractText(resolveStoragePath(doc.filePath), doc.mime));
     return value
       .split(/\n{2,}|\r?\n/)
       .map((p) => p.trim())
