@@ -125,7 +125,7 @@ export function timedEventsForDay(events: ScheduleEvent[], dayKey: string): Cale
     return [{
       event,
       startMinutes,
-      endMinutes: Math.max(endMinutes, startMinutes + 30),
+      endMinutes: Math.min(24 * 60, Math.max(endMinutes, startMinutes + 30)),
       lane: 0,
       laneCount: 1,
     }];
@@ -157,19 +157,15 @@ export function timedEventsForDay(events: ScheduleEvent[], dayKey: string): Cale
 }
 
 export function visibleHourRange(events: ScheduleEvent[], days: string[]): { start: number; end: number } {
-  let firstMinute = Number.POSITIVE_INFINITY;
-  let lastMinute = Number.NEGATIVE_INFINITY;
+  let start = 8;
+  let end = 18;
   for (const day of days) {
     for (const segment of timedEventsForDay(events, day)) {
-      firstMinute = Math.min(firstMinute, segment.startMinutes);
-      lastMinute = Math.max(lastMinute, segment.endMinutes);
+      start = Math.min(start, Math.floor(segment.startMinutes / 60) - 1);
+      end = Math.max(end, Math.ceil(segment.endMinutes / 60) + 1);
     }
   }
-  if (!Number.isFinite(firstMinute) || !Number.isFinite(lastMinute)) return { start: 8, end: 18 };
-  return {
-    start: Math.max(0, Math.floor(firstMinute / 60) - 1),
-    end: Math.min(24, Math.max(18, Math.ceil(lastMinute / 60) + 1)),
-  };
+  return { start: Math.max(0, start), end: Math.min(24, end) };
 }
 
 export function timeLabel(minutes: number): string {

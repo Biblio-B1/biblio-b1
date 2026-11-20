@@ -60,6 +60,6 @@ describe("calendar view helpers", () => {
     const late = event("late", "2026-11-23T21:00:00.000Z", "2026-11-23T22:00:00.000Z");
     expect(allDayEventsForDay([allDay], "2026-11-23")).toEqual([allDay]);
     expect(allDayEventsForDay([allDay], "2026-11-24")).toEqual([]);
-    expect(visibleHourRange([late], ["2026-11-23"])).toEqual({ start: 21, end: 24 });
+    expect(visibleHourRange([late], ["2026-11-23"])).toEqual({ start: 8, end: 24 });
   });
 });

@@ -22,75 +22,6 @@ function eventTime(start: string, end: string): string {
   return `${new Date(start).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })} – ${new Date(end).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}`;
 }
 
-function statusLabel(status: ScheduleEvent["status"]): string | undefined {
-  if (status === "cancelled") return "Annulé";
-  if (status === "tentative") return "À confirmer";
-  return undefined;
-}
-
-function EventDetails({ event, onClose }: { event: ScheduleEvent; onClose: () => void }) {
-  const date = new Date(event.start).toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "Europe/Paris",
-  });
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(e) => {
-      if (e.target === e.currentTarget) onClose();
-    }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="calendar-event-title" className="w-full max-w-lg rounded-xl border border-line bg-surface p-5 shadow-2xl">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            {statusLabel(event.status) && (
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-danger">{statusLabel(event.status)}</p>
-            )}
-            <h2 id="calendar-event-title" className={`text-lg font-semibold ${event.status === "cancelled" ? "line-through" : ""}`}>
-              {event.title}
-            </h2>
-          </div>
-          <button type="button" className="btn h-8 shrink-0" onClick={onClose}>Fermer</button>
-        </div>
-        <dl className="grid gap-3 text-sm sm:grid-cols-[7rem_1fr]">
-          <dt className="text-ink-3">Horaire</dt>
-          <dd>{date}{event.allDay ? " · Toute la journée" : ` · ${eventTime(event.start, event.end)}`}</dd>
-          {event.categories?.length ? (
-            <>
-              <dt className="text-ink-3">Matière</dt>
-              <dd>{event.categories.join(", ")}</dd>
-            </>
-          ) : null}
-          {event.location && (
-            <>
-              <dt className="text-ink-3">Salle</dt>
-              <dd>{event.location}</dd>
-            </>
-          )}
-          {event.organizer && (
-            <>
-              <dt className="text-ink-3">Intervenant / organisateur</dt>
-              <dd>{event.organizer}</dd>
-            </>
-          )}
-          {event.lastModified && (
-            <>
-              <dt className="text-ink-3">Dernière modification</dt>
-              <dd>{new Date(event.lastModified).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}</dd>
-            </>
-          )}
-          {event.description && (
-            <>
-              <dt className="text-ink-3">Description</dt>
-              <dd className="whitespace-pre-wrap">{event.description}</dd>
-            </>
-          )}
-        </dl>
-      </section>
-    </div>
-  );
-}
-
 function weekLabel(days: string[]): string {
   const first = days[0];
   const last = days[6];
@@ -108,8 +39,10 @@ function dayLabel(day: string): string {
   return labelDate(day, { weekday: "short" }).replace(".", "");
 }
 
-function headingDayLabel(day: string): string {
-  return labelDate(day, { day: "numeric", month: "short" });
+function eventStatus(event: ScheduleEvent): string {
+  if (event.status === "cancelled") return "Annulé";
+  if (event.status === "tentative") return "À confirmer";
+  return "Confirmé";
 }
 
 function DayAgenda({
@@ -143,16 +76,19 @@ function DayAgenda({
             type="button"
             className="flex w-full gap-4 px-4 py-3 text-left hover:bg-sunken"
             onClick={() => onSelect(event)}
-            aria-label={`${event.title}, ${time}${event.location ? `, salle ${event.location}` : ""}`}
           >
             <time dateTime={event.start} className="w-32 shrink-0 text-sm tabular-nums text-ink-2">{time}</time>
-            <span className="flex min-w-0 flex-col gap-1">
-              <span className={`font-medium ${event.status === "cancelled" ? "line-through text-danger" : ""}`}>{event.title}</span>
-              <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
-                {event.categories?.map((category) => <span key={category}>{category}</span>)}
-                {event.location && <span>{event.location}</span>}
-                {statusLabel(event.status) && <span className="font-semibold text-danger">{statusLabel(event.status)}</span>}
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2 font-medium">
+                {event.title}
+                {event.status === "cancelled" && <span className="text-xs text-danger">Annulé</span>}
+                {event.status === "tentative" && <span className="text-xs text-ink-3">À confirmer</span>}
               </span>
+              {(event.location || event.categories?.length) && (
+                <span className="mt-1 block truncate text-xs text-ink-2">
+                  {[event.categories?.join(", "), event.location].filter(Boolean).join(" · ")}
+                </span>
+              )}
             </span>
           </button>
         </li>
@@ -177,14 +113,12 @@ function EventBlock({
     <button
       type="button"
       title={`${start} · ${segment.event.title}${segment.event.location ? ` · ${segment.event.location}` : ""}`}
-      aria-label={`${segment.event.title}, ${start}${segment.event.location ? `, salle ${segment.event.location}` : ""}${statusLabel(segment.event.status) ? `, ${statusLabel(segment.event.status)}` : ""}`}
+      aria-label={`${start}, ${segment.event.title}, ${eventStatus(segment.event)}${segment.event.location ? `, ${segment.event.location}` : ""}`}
       onClick={() => onSelect(segment.event)}
       className={`absolute z-10 overflow-hidden rounded border-l-2 px-1.5 py-1 text-left text-[11px] leading-tight ${
         segment.event.status === "cancelled"
           ? "border-danger bg-danger-bg text-danger line-through"
-          : segment.event.status === "tentative"
-            ? "border-line-strong bg-sunken text-ink"
-            : "border-focus bg-focus/10 text-ink"
+          : "border-focus bg-focus/10 text-ink"
       }`}
       style={{
         top: `${top}px`,
@@ -194,7 +128,9 @@ function EventBlock({
       }}
     >
       <span className="block truncate font-semibold">{segment.event.title}</span>
-      <span className="block truncate">{start}{segment.event.location ? ` · ${segment.event.location}` : ""}</span>
+      <span className="block truncate text-ink-2">
+        {start}{segment.event.location ? ` · ${segment.event.location}` : ""}
+      </span>
     </button>
   );
 }
@@ -211,13 +147,17 @@ function CurrentTimeLine({ minute, startHour }: { minute: number; startHour: num
 
 export function CalendarView({ events }: { events: ScheduleEvent[] }) {
   const router = useRouter();
-  const [today, setToday] = useState(() => todayKeyInParis());
+  const [today, setToday] = useState<string>();
   const [now, setNow] = useState<Date>();
+  const [activeEvent, setActiveEvent] = useState<ScheduleEvent>();
   const [weekStart, setWeekStart] = useState(() => mondayOfWeek(todayKeyInParis()));
   const [selectedDay, setSelectedDay] = useState(() => todayKeyInParis());
-  const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent>();
   const days = useMemo(() => weekDateKeys(weekStart), [weekStart]);
   const hours = useMemo(() => visibleHourRange(events, days), [events, days]);
+  const hasWeekEvents = useMemo(
+    () => days.some((day) => allDayEventsForDay(events, day).length > 0 || timedEventsForDay(events, day).length > 0),
+    [events, days],
+  );
   const todayMinute = now ? (() => {
     const parts = new Intl.DateTimeFormat("en-GB", {
       timeZone: "Europe/Paris",
@@ -235,11 +175,15 @@ export function CalendarView({ events }: { events: ScheduleEvent[] }) {
       const day = dateKeyInParis(current);
       setToday(day);
       setNow(current);
+      if (mondayOfWeek(day) !== weekStart) {
+        setWeekStart(mondayOfWeek(day));
+        setSelectedDay(day);
+      }
     };
     update();
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [weekStart]);
 
   useEffect(() => {
     const timer = window.setInterval(() => router.refresh(), 60_000);
@@ -247,13 +191,13 @@ export function CalendarView({ events }: { events: ScheduleEvent[] }) {
   }, [router]);
 
   useEffect(() => {
-    if (!selectedEvent) return;
+    if (!activeEvent) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedEvent(undefined);
+      if (event.key === "Escape") setActiveEvent(undefined);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedEvent]);
+  }, [activeEvent]);
 
   const moveWeek = (delta: number) => {
     const next = shiftDateKey(weekStart, delta * 7);
@@ -280,10 +224,17 @@ export function CalendarView({ events }: { events: ScheduleEvent[] }) {
           </div>
           <button type="button" className="btn" onClick={goToday}>Aujourd’hui</button>
         </div>
-        <h2 aria-live="polite" className="text-sm font-semibold capitalize text-ink">
-          {weekLabel(days)}
-        </h2>
+        <div className="text-right">
+          <h2 aria-live="polite" className="text-sm font-semibold capitalize text-ink">{weekLabel(days)}</h2>
+          <p className="text-xs text-ink-3">Actualisation automatique · 1 min</p>
+        </div>
       </div>
+
+      {!hasWeekEvents && (
+        <p className="rounded-md border border-dashed border-line-strong px-3 py-2 text-sm text-ink-2">
+          Aucun événement dans cette semaine.
+        </p>
+      )}
 
       <div className="grid grid-cols-7 gap-1 md:hidden" aria-label="Choisir un jour">
         {days.map((day) => (
@@ -303,7 +254,7 @@ export function CalendarView({ events }: { events: ScheduleEvent[] }) {
       </div>
       <div className="md:hidden">
         <h3 className="mb-2 text-sm font-semibold capitalize">{labelDate(selectedDay, { weekday: "long", day: "numeric", month: "long" })}</h3>
-        <DayAgenda events={events} day={selectedDay} onSelect={setSelectedEvent} />
+        <DayAgenda events={events} day={selectedDay} onSelect={setActiveEvent} />
       </div>
 
       <div className="hidden overflow-x-auto rounded-lg border border-line bg-surface md:block">
@@ -334,10 +285,11 @@ export function CalendarView({ events }: { events: ScheduleEvent[] }) {
               <div key={day} className="min-h-9 border-r border-line p-1 last:border-r-0">
                 {allDayEventsForDay(events, day).map((event) => (
                   <button
-                    key={`${event.uid}-${event.start}`}
                     type="button"
-                    onClick={() => setSelectedEvent(event)}
-                    className={`block w-full truncate rounded px-1.5 py-1 text-left text-[11px] font-medium ${
+                    key={`${event.uid}-${event.start}`}
+                    title={event.title}
+                    onClick={() => setActiveEvent(event)}
+                    className={`mb-1 block w-full truncate rounded px-1.5 py-1 text-left text-[11px] font-medium ${
                       event.status === "cancelled" ? "bg-danger-bg text-danger line-through" : "bg-focus/10 text-ink"
                     }`}
                   >
@@ -384,7 +336,12 @@ export function CalendarView({ events }: { events: ScheduleEvent[] }) {
                   }}
                 >
                   {segments.map((segment) => (
-                    <EventBlock key={`${segment.event.uid}-${segment.event.start}`} segment={segment} startHour={hours.start} onSelect={setSelectedEvent} />
+                    <EventBlock
+                      key={`${segment.event.uid}-${segment.event.start}`}
+                      segment={segment}
+                      startHour={hours.start}
+                      onSelect={setActiveEvent}
+                    />
                   ))}
                   {showNow && <CurrentTimeLine minute={todayMinute} startHour={hours.start} />}
                 </div>
@@ -393,7 +350,76 @@ export function CalendarView({ events }: { events: ScheduleEvent[] }) {
           </div>
         </div>
       </div>
-      {selectedEvent && <EventDetails event={selectedEvent} onClose={() => setSelectedEvent(undefined)} />}
+      {activeEvent && <EventDetails event={activeEvent} onClose={() => setActiveEvent(undefined)} />}
     </section>
+  );
+}
+
+function EventDetails({ event, onClose }: { event: ScheduleEvent; onClose: () => void }) {
+  const start = new Date(event.start);
+  const date = start.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Europe/Paris",
+  });
+  const time = event.allDay ? "Toute la journée" : eventTime(event.start, event.end);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button type="button" className="absolute inset-0 bg-black/50" aria-label="Fermer les détails" onClick={onClose} />
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="calendar-event-title"
+        className="relative z-10 w-full max-w-lg rounded-xl border border-line bg-surface p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm capitalize text-ink-2">{date} · {time}</p>
+            <h3 id="calendar-event-title" className="mt-1 text-xl font-semibold">{event.title}</h3>
+          </div>
+          <button type="button" className="btn h-8 shrink-0 px-2 text-xs" onClick={onClose}>Fermer</button>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+            event.status === "cancelled" ? "bg-danger-bg text-danger" : "bg-sunken text-ink-2"
+          }`}>
+            {eventStatus(event)}
+          </span>
+          {event.lastModified && (
+            <span className="rounded-full bg-sunken px-2.5 py-1 text-xs text-ink-2">
+              Modifié le {new Date(event.lastModified).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}
+            </span>
+          )}
+        </div>
+        <dl className="mt-5 grid grid-cols-[7rem_1fr] gap-x-3 gap-y-3 text-sm">
+          {event.categories?.length ? (
+            <>
+              <dt className="text-ink-3">Matière</dt>
+              <dd>{event.categories.join(", ")}</dd>
+            </>
+          ) : null}
+          {event.location && (
+            <>
+              <dt className="text-ink-3">Salle</dt>
+              <dd>{event.location}</dd>
+            </>
+          )}
+          {event.organizer && (
+            <>
+              <dt className="text-ink-3">Intervenant</dt>
+              <dd>{event.organizer}</dd>
+            </>
+          )}
+          {event.description && (
+            <>
+              <dt className="text-ink-3">Description</dt>
+              <dd className="whitespace-pre-wrap">{event.description}</dd>
+            </>
+          )}
+        </dl>
+      </section>
+    </div>
   );
 }

@@ -18,7 +18,10 @@ export async function linkCalendarAction(_previous: FormState, formData: FormDat
     revalidatePath("/timetable");
     return { message: `Calendrier lié : ${events.length} événement${events.length === 1 ? "" : "s"} synchronisé${events.length === 1 ? "" : "s"}.` };
   } catch (error) {
-    if (error instanceof CalendarError) return { error: error.message };
+    if (error instanceof CalendarError) {
+      revalidatePath("/timetable");
+      return { error: error.message };
+    }
     throw error;
   }
 }
@@ -31,7 +34,10 @@ export async function syncCalendarAction(_previous: FormState, _formData: FormDa
     revalidatePath("/timetable");
     return { message: `${calendar.events.length} événement${calendar.events.length === 1 ? "" : "s"} synchronisé${calendar.events.length === 1 ? "" : "s"}.` };
   } catch (error) {
-    if (error instanceof CalendarError) return { error: error.message };
+    if (error instanceof CalendarError) {
+      revalidatePath("/timetable");
+      return { error: error.message };
+    }
     throw error;
   }
 }

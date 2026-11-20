@@ -1,9 +1,9 @@
 import { ActionForm, Field } from "@/components/ActionForm";
-import { CalendarView } from "@/components/calendar/CalendarView";
 import { requireUser } from "@/server/auth/session";
 import { env } from "@/server/env";
 import { getCalendar, getStoredCalendar, CalendarError } from "@/server/boostcamp/calendar";
 import { getDb } from "@/server/db/client";
+import { CalendarView } from "@/components/calendar/CalendarView";
 import { linkCalendarAction, syncCalendarAction, unlinkCalendarAction } from "./actions";
 
 export const metadata = { title: "Emploi du temps" };
@@ -14,7 +14,7 @@ export default async function TimetablePage() {
   const canLinkCalendar = Boolean(env.CALENDAR_ENCRYPTION_KEY);
   let calendar = getStoredCalendar(db, user.id);
   let syncError: string | undefined;
-  let reconnectRequired = false;
+  let reauthRequired = false;
 
   if (calendar) {
     try {
@@ -22,7 +22,7 @@ export default async function TimetablePage() {
     } catch (error) {
       if (!(error instanceof CalendarError)) throw error;
       syncError = error.message;
-      reconnectRequired = error.code === "reauth_required";
+      reauthRequired = error.code === "reauth_required";
     }
   }
 
@@ -62,21 +62,29 @@ export default async function TimetablePage() {
         </section>
       ) : (
         <>
-          {syncError && (
+          {reauthRequired ? (
+            <section role="alert" className="flex flex-col gap-3 rounded-lg border border-danger/30 bg-danger-bg p-4 text-danger">
+              <div>
+                <h2 className="font-semibold">Reconnexion nécessaire</h2>
+                <p className="mt-1 text-sm">
+                  Le proxy iCalendar a refusé l’accès ou son lien a expiré. Les événements affichés datent de la dernière synchronisation.
+                </p>
+              </div>
+              <a className="w-fit text-sm underline underline-offset-2" href="https://boostcamp.omneseducation.com/home" target="_blank" rel="noreferrer">
+                Ouvrir Boostcamp
+              </a>
+              {canLinkCalendar ? (
+                <ActionForm action={linkCalendarAction} submitLabel="Reconnecter le calendrier">
+                  <Field label="Nouveau lien du proxy iCalendar (.ical)" name="calendarUrl" type="url" autoComplete="off" />
+                </ActionForm>
+              ) : (
+                <p className="text-sm">L’administrateur doit configurer <code>CALENDAR_ENCRYPTION_KEY</code> sur le serveur.</p>
+              )}
+            </section>
+          ) : syncError && (
             <p role="alert" className="rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger">
               Synchronisation impossible : {syncError} Les événements affichés sont ceux de la dernière synchronisation.
             </p>
-          )}
-          {reconnectRequired && canLinkCalendar && (
-            <section className="flex flex-col gap-3 rounded-lg border border-danger/30 bg-danger-bg p-4">
-              <h2 className="font-semibold text-danger">Reconnectez le proxy iCalendar</h2>
-              <p className="text-sm text-ink-2">
-                Le lien .ical n’est plus autorisé. Générez-en un nouveau, puis remplacez l’ancien ici.
-              </p>
-              <ActionForm action={linkCalendarAction} submitLabel="Mettre à jour le lien">
-                <Field label="Nouveau lien du proxy iCalendar (.ical)" name="calendarUrl" type="url" autoComplete="off" />
-              </ActionForm>
-            </section>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-ink-2">
