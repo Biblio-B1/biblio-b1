@@ -1,0 +1,545 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
+import {
+  reportCheckAction,
+  retryCheckAction,
+  saveAttemptAction,
+  updateTestsAction,
+  verifyCheckAction,
+} from "@/app/(app)/training/check-actions";
+import {
+  checkMode,
+  computeVerdict,
+  diffLines,
+  initialCode,
+  LANGUAGE_LABELS,
+  STARTER_TEMPLATES,
+  type CheckTestData,
+  type TestOutcome,
+  type Verdict,
+} from "@/lib/code-check";
+import type { Language, RunResult } from "@/lib/runners/types";
+import { EngineError, RunnerLane, type EngineState } from "./runner-client";
+
+const CodeEditor = dynamic(() => import("./CodeEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-56 items-center justify-center rounded-lg border border-line-strong bg-surface text-[14px] text-ink-3">
+      Chargement de l&apos;éditeur…
+    </div>
+  ),
+});
+
+export type CodeExerciseCheck = {
+  status: string;
+  language: Language | null;
+  tests: CheckTestData[];
+  verified: boolean;
+};
+
+const LOADING_TEXT: Record<Language, string> = {
+  c: "Chargement du compilateur C (≈27 Mo, une seule fois)…",
+  python: "Chargement de Python…",
+  javascript: "Préparation de JavaScript…",
+};
+
+const RELOADING_TEXT: Record<Language, string> = {
+  c: "Rechargement du compilateur C…",
+  python: "Rechargement de Python…",
+  javascript: "Préparation de JavaScript…",
+};
+
+const TIMEOUT_TEXT = "Délai dépassé (boucle infinie ?)";
+
+const OUTCOME_TEXT: Record<TestOutcome["status"], string> = {
+  ok: "réussi",
+  wrong: "sortie différente",
+  timeout: "délai dépassé",
+  runtime: "erreur d'exécution",
+  compile: "erreur de compilation",
+  skipped: "non exécuté",
+};
+
+type Output = { kind: "run"; result: RunResult } | { kind: "verdict"; verdict: Verdict } | null;
+
+export function CodeExercise({
+  exerciseId,
+  check,
+  attempt,
+  isAdmin,
+  timeoutMs,
+}: {
+  exerciseId: string;
+  check: CodeExerciseCheck | null;
+  attempt: { language: string; code: string } | null;
+  isAdmin: boolean;
+  timeoutMs: number;
+}) {
+  const mode = checkMode(check);
+  const language = mode.language;
+  const uid = useId();
+  const router = useRouter();
+
+  const [code, setCode] = useState(() => (language ? initialCode(language, attempt) : ""));
+  const visibleTest = check?.tests.find((t) => t.visible);
+  const [stdin, setStdin] = useState(mode.kind === "ready" ? (visibleTest?.input ?? "") : "");
+  const [engine, setEngine] = useState<EngineState>("idle");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [output, setOutput] = useState<Output>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const lane = useRef<RunnerLane | null>(null);
+
+  useEffect(() => {
+    if (!language) return;
+    const l = new RunnerLane(language, timeoutMs);
+    lane.current = l;
+    const off = l.onState(setEngine);
+    void l.prepare(); // préchargement en arrière-plan
+    return () => {
+      off();
+      l.dispose();
+      lane.current = null;
+    };
+  }, [language, timeoutMs]);
+
+  if (!language) {
+    return (
+      <section aria-labelledby={`${uid}-t`} className="flex flex-col gap-3">
+        <h2 id={`${uid}-t`} className="sr-only">
+          Vérification automatique
+        </h2>
+        <p className="text-[14px] text-ink-3">
+          {mode.kind === "preparing"
+            ? "Vérification en préparation — revenez plus tard."
+            : "Pas de vérification automatique pour cet exercice."}
+        </p>
+        {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} canVerify={false} />}
+      </section>
+    );
+  }
+
+  const loading = engine === "loading";
+  const disabled = loading || busy !== null;
+
+  async function run() {
+    if (!lane.current || !language) return;
+    setBusy("Exécution…");
+    setOutput(null);
+    setEngineError(null);
+    try {
+      const result = await lane.current.run(code, stdin);
+      setOutput({ kind: "run", result });
+    } catch (e) {
+      setEngineError(engineErrorText(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function verify() {
+    if (!lane.current || !check || mode.kind !== "ready") return;
+    setOutput(null);
+    setSaveError(null);
+    setEngineError(null);
+    const results: RunResult[] = [];
+    try {
+      for (let i = 0; i < check.tests.length; i++) {
+        setBusy(`Vérification : test ${i + 1} sur ${check.tests.length}…`);
+        const r = await lane.current.run(code, check.tests[i].input);
+        results.push(r);
+        if ((!r.ok && r.phase === "compile") || r.timedOut) break; // inutile d'aller plus loin
+      }
+    } catch (e) {
+      // Panne du moteur : pas de verdict, rien n'est enregistré.
+      setEngineError(engineErrorText(e));
+      return;
+    } finally {
+      setBusy(null);
+    }
+    const verdict = computeVerdict(check.tests, results);
+    setOutput({ kind: "verdict", verdict });
+    const saved = await saveAttemptAction(exerciseId, mode.language, code, verdict.passed);
+    if (saved.error) setSaveError(saved.error);
+    else router.refresh(); // statut de progression mis à jour (En cours / Maîtrisé)
+  }
+
+  function reset() {
+    if (!language) return;
+    if (code !== STARTER_TEMPLATES[language] && !window.confirm("Remplacer votre code par le gabarit de départ ?")) return;
+    setCode(STARTER_TEMPLATES[language]);
+  }
+
+  return (
+    <section aria-labelledby={`${uid}-t`} className="flex flex-col gap-3 rounded-lg border border-line bg-surface px-4 py-5 md:px-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 id={`${uid}-t`} className="text-[1.1rem] font-semibold">
+          Votre programme
+        </h2>
+        <span className="rounded-full border border-line-strong bg-sunken px-2.5 py-0.5 font-mono text-[12.5px] text-ink-2">
+          {LANGUAGE_LABELS[language]}
+        </span>
+        {mode.kind === "ready" && check && !check.verified && (
+          <span className="rounded-full border border-line-strong px-2.5 py-0.5 text-[12.5px] text-ink-2">
+            Tests générés par IA — non vérifiés
+          </span>
+        )}
+      </div>
+
+      {mode.kind === "preparing" && (
+        <p className="rounded-md bg-sunken px-3 py-2 text-[14px] text-ink-2">
+          Vérification en préparation — revenez plus tard. Vous pouvez déjà écrire et exécuter votre programme.
+        </p>
+      )}
+      {mode.kind === "none" && (
+        <p className="rounded-md bg-sunken px-3 py-2 text-[14px] text-ink-2">
+          Pas de vérification automatique pour cet exercice. Vous pouvez exécuter votre programme et le comparer à la correction.
+        </p>
+      )}
+
+      <p id={`${uid}-hint`} className="text-[13.5px] text-ink-2">
+        Écrivez un programme complet qui lit l&apos;entrée standard et affiche uniquement le résultat (pas de message comme
+        « Entrez un nombre : »). <span className="text-ink-3">Clavier : Tab indente ; Échap puis Tab pour quitter l&apos;éditeur.</span>
+      </p>
+
+      <span id={`${uid}-ed`} className="sr-only">
+        Éditeur de code {LANGUAGE_LABELS[language]}
+      </span>
+      <CodeEditor value={code} onChange={setCode} language={language} labelledBy={`${uid}-ed`} describedBy={`${uid}-hint`} />
+
+      <label className="label">
+        Entrée pour « Exécuter »
+        <textarea
+          value={stdin}
+          onChange={(e) => setStdin(e.target.value)}
+          rows={3}
+          spellCheck={false}
+          className="w-full rounded-md border border-line-strong bg-surface px-3 py-2 font-mono text-[13.5px] font-normal text-ink"
+        />
+      </label>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="btn" disabled={disabled} onClick={run}>
+          Exécuter
+        </button>
+        {mode.kind === "ready" && (
+          <button type="button" className="btn btn-primary" disabled={disabled} onClick={verify}>
+            Vérifier
+          </button>
+        )}
+        <button type="button" className="btn btn-ghost text-ink-2" disabled={busy !== null} onClick={reset}>
+          Revenir au gabarit
+        </button>
+      </div>
+
+      <div aria-live="polite" className="flex flex-col gap-3">
+        {engineError && (
+          <p role="alert" className="text-[13.5px] text-danger">
+            {engineError}
+          </p>
+        )}
+        {(loading || busy || (engine === "error" && !engineError)) && (
+          <p className="text-[13.5px] text-ink-2" role="status">
+            {busy ??
+              (loading
+                ? (lane.current?.loadedOnce ? RELOADING_TEXT : LOADING_TEXT)[language]
+                : "Le moteur d'exécution n'a pas pu être chargé. Réessayez.")}
+          </p>
+        )}
+        {output?.kind === "run" && <RunOutput result={output.result} />}
+        {output?.kind === "verdict" && <VerdictView verdict={output.verdict} />}
+        {saveError && (
+          <p role="alert" className="text-[13px] text-danger">
+            {saveError}
+          </p>
+        )}
+      </div>
+
+      {mode.kind === "ready" && check && <ReportButton exerciseId={exerciseId} />}
+      {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} canVerify={mode.kind === "ready"} />}
+    </section>
+  );
+}
+
+function engineErrorText(e: unknown): string {
+  const detail = e instanceof EngineError || e instanceof Error ? ` (${e.message})` : "";
+  return `Le moteur d'exécution n'a pas pu fonctionner${detail}. Rechargez la page ou réessayez.`;
+}
+
+function Pre({ children, tone = "plain", label }: { children: React.ReactNode; tone?: "plain" | "danger"; label?: string }) {
+  return (
+    <pre
+      aria-label={label}
+      className={`max-h-72 overflow-auto rounded-md border px-3 py-2 font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words ${
+        tone === "danger" ? "border-danger/40 bg-danger-bg text-danger" : "border-line bg-sunken text-ink"
+      }`}
+    >
+      {children}
+    </pre>
+  );
+}
+
+function RunOutput({ result }: { result: RunResult }) {
+  if (result.timedOut) {
+    return <p className="text-[14px] font-medium text-danger">{TIMEOUT_TEXT} — le programme a été arrêté.</p>;
+  }
+  if (!result.ok && result.phase === "compile") {
+    return (
+      <div className="flex flex-col gap-1">
+        <p className="text-[14px] font-medium text-danger">Erreur de compilation</p>
+        <Pre tone="danger">{result.stderr}</Pre>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[13.5px] text-ink-2">
+        Sortie{result.exitCode !== 0 && result.exitCode !== null ? ` (code de sortie ${result.exitCode})` : ""}
+        {result.durationMs ? ` · ${result.durationMs} ms` : ""}
+      </p>
+      <Pre>{result.stdout || <span className="text-ink-3">(aucune sortie)</span>}</Pre>
+      {result.stderr && <Pre tone="danger">{result.stderr}</Pre>}
+    </div>
+  );
+}
+
+function Diff({ expected, actual }: { expected: string; actual: string }) {
+  const lines = diffLines(expected, actual);
+  const cell = "px-2 py-0.5 align-top whitespace-pre-wrap break-all";
+  return (
+    <div className="overflow-x-auto rounded-md border border-line">
+      <table className="w-full border-collapse font-mono text-[13px]">
+        <thead>
+          <tr className="bg-sunken text-left font-sans text-[12.5px] text-ink-2">
+            <th scope="col" className="w-8 px-2 py-1 font-medium">
+              <span className="sr-only">Ligne</span>
+            </th>
+            <th scope="col" className="px-2 py-1 font-medium">
+              Attendu
+            </th>
+            <th scope="col" className="px-2 py-1 font-medium">
+              Obtenu
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.length === 0 && (
+            <tr>
+              <td className={cell} />
+              <td className={`${cell} text-ink-3`}>(vide)</td>
+              <td className={`${cell} text-ink-3`}>(vide)</td>
+            </tr>
+          )}
+          {lines.map((l, i) => (
+            <tr key={i} className={l.same ? "" : "bg-danger-bg"}>
+              <td className={`${cell} text-right text-ink-3`}>
+                {i + 1}
+                {!l.same && <span className="sr-only"> (différente)</span>}
+              </td>
+              <td className={cell}>{l.expected ?? <span className="text-ink-3">(absente)</span>}</td>
+              <td className={`${cell} ${l.same ? "" : "text-danger"}`}>{l.actual ?? <span className="text-ink-3">(absente)</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function VerdictView({ verdict }: { verdict: Verdict }) {
+  const okCount = verdict.outcomes.filter((o) => o.status === "ok").length;
+  return (
+    <div className="flex flex-col gap-3">
+      {verdict.passed ? (
+        <p className="text-[15px] font-semibold text-ok">Bravo, exercice réussi ! Statut : « Maîtrisé ».</p>
+      ) : (
+        <p className="text-[15px] font-semibold text-danger">
+          {okCount} test{okCount > 1 ? "s" : ""} réussi{okCount > 1 ? "s" : ""} sur {verdict.outcomes.length}.
+        </p>
+      )}
+      {verdict.compileError !== null && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[14px] font-medium text-danger">Erreur de compilation</p>
+          <Pre tone="danger">{verdict.compileError}</Pre>
+        </div>
+      )}
+      <ul className="flex flex-col gap-3">
+        {verdict.outcomes.map((o) => (
+          <li key={o.index} className="flex flex-col gap-2">
+            <p className="text-[14px]">
+              <span aria-hidden="true">{o.status === "ok" ? "✅" : "❌"}</span>{" "}
+              <span className="font-medium">
+                Test {o.index + 1}
+                {o.visible ? " (exemple)" : ""}
+              </span>{" "}
+              : {OUTCOME_TEXT[o.status]}
+            </p>
+            {o.visible && o.input !== undefined && o.status !== "compile" && o.status !== "skipped" && (
+              <div className="flex flex-col gap-2 pl-6">
+                <p className="text-[12.5px] text-ink-2">Entrée</p>
+                <Pre>{o.input || <span className="text-ink-3">(vide)</span>}</Pre>
+                {o.status === "timeout" ? (
+                  <p className="text-[13.5px] text-danger">{TIMEOUT_TEXT}</p>
+                ) : (
+                  <Diff expected={o.expected ?? ""} actual={o.actual ?? ""} />
+                )}
+                {o.stderr && o.status !== "timeout" && <Pre tone="danger">{o.stderr}</Pre>}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReportButton({ exerciseId }: { exerciseId: string }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const uid = useId();
+  const [message, setMessage] = useState("");
+  const [result, setResult] = useState<{ error?: string; message?: string } | null>(null);
+  const [pending, start] = useTransition();
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    start(async () => {
+      const r = await reportCheckAction(exerciseId, message);
+      setResult(r);
+      if (!r.error) {
+        setMessage("");
+        dialog.current?.close();
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        className="btn btn-ghost self-start px-2 text-[13px] text-ink-2"
+        onClick={() => {
+          setResult(null);
+          dialog.current?.showModal();
+        }}
+      >
+        Signaler un test faux
+      </button>
+      {result?.message && (
+        <p role="status" className="text-[13px] text-ok">
+          {result.message}
+        </p>
+      )}
+      <dialog
+        ref={dialog}
+        aria-labelledby={`${uid}-rt`}
+        className="m-auto w-[min(92vw,28rem)] rounded-lg border border-line-strong bg-surface p-5 text-ink backdrop:bg-black/40"
+      >
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <h2 id={`${uid}-rt`} className="text-base font-semibold">
+            Signaler un test faux
+          </h2>
+          <label className="label">
+            Qu&apos;est-ce qui ne va pas ?
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              required
+              maxLength={2000}
+              rows={4}
+              className="w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-[15px] font-normal text-ink"
+              placeholder="Ex. : la sortie attendue du test 1 devrait être 4, pas 5."
+            />
+          </label>
+          {result?.error && (
+            <p role="alert" className="text-[13px] text-danger">
+              {result.error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn" onClick={() => dialog.current?.close()}>
+              Annuler
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={pending}>
+              Envoyer
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  );
+}
+
+function AdminTools({ exerciseId, check, canVerify }: { exerciseId: string; check: CodeExerciseCheck; canVerify: boolean }) {
+  const router = useRouter();
+  const [json, setJson] = useState(() => JSON.stringify(check.tests, null, 2));
+  const [editing, setEditing] = useState(false);
+  const [result, setResult] = useState<{ error?: string; message?: string } | null>(null);
+  const [pending, start] = useTransition();
+
+  function act(fn: () => Promise<{ error?: string; message?: string }>, after?: () => void) {
+    setResult(null);
+    start(async () => {
+      const r = await fn();
+      setResult(r);
+      if (!r.error) {
+        after?.();
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <details className="rounded-md border border-line-strong">
+      <summary className="cursor-pointer px-3 py-2 text-[14px] font-medium">Outils administrateur (vérification)</summary>
+      <div className="flex flex-col gap-3 p-3 pt-1">
+        <p className="text-[13px] text-ink-2">
+          Statut du pré-calcul : <span className="font-mono">{check.status}</span>
+          {check.verified ? " · tests validés" : ""}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {canVerify && !check.verified && (
+            <button type="button" className="btn" disabled={pending} onClick={() => act(() => verifyCheckAction(exerciseId))}>
+              Valider les tests
+            </button>
+          )}
+          <button type="button" className="btn" disabled={pending} aria-expanded={editing} onClick={() => setEditing((e) => !e)}>
+            Modifier les tests
+          </button>
+          <button type="button" className="btn" disabled={pending} onClick={() => act(() => retryCheckAction(exerciseId))}>
+            Relancer le pré-calcul
+          </button>
+        </div>
+        {editing && (
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              act(() => updateTestsAction(exerciseId, json), () => setEditing(false));
+            }}
+          >
+            <label className="label">
+              Tests (JSON : {"[{\"input\": \"…\", \"expected\": \"…\", \"visible\": true}]"})
+              <textarea
+                value={json}
+                onChange={(e) => setJson(e.target.value)}
+                rows={10}
+                spellCheck={false}
+                className="w-full rounded-md border border-line-strong bg-surface px-3 py-2 font-mono text-[13px] font-normal text-ink"
+              />
+            </label>
+            <button type="submit" className="btn btn-primary self-start" disabled={pending}>
+              Enregistrer les tests
+            </button>
+          </form>
+        )}
+        <div aria-live="polite">
+          {result?.error && <p className="text-[13px] text-danger">{result.error}</p>}
+          {result?.message && <p className="text-[13px] text-ok">{result.message}</p>}
+        </div>
+      </div>
+    </details>
+  );
+}

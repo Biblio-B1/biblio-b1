@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { QAPanel } from "@/components/qa/QAPanel";
 import { Spine } from "@/components/layout/Spine";
+import { CodeExercise } from "@/components/training/CodeExercise";
 import { Reveal } from "@/components/training/Reveal";
 import { StatusPicker } from "@/components/training/StatusPicker";
 import { requireUser } from "@/server/auth/session";
+import { getAttempt, getCheck } from "@/server/checks";
 import { getDb } from "@/server/db/client";
 import { getDocument } from "@/server/documents";
+import { env } from "@/server/env";
 import { getExercise, getProgress, getVariants } from "@/server/progress";
 import { listSubjects } from "@/server/subjects";
 
@@ -37,6 +40,14 @@ export default async function ExercisePage({ params }: { params: Params }) {
   const status = getProgress(db, user.id).get(ex.id) ?? "todo";
   const variants = getVariants(db, ex);
   const hints = (ex.hints ?? []).filter((h) => h.trim());
+  const checkRow = getCheck(db, ex.id);
+  // Tous les tests (cachés compris) partent au navigateur : la vérification s'y exécute ;
+  // l'interface n'affiche que l'entrée et la sortie attendue du test visible.
+  const check = checkRow
+    ? { status: checkRow.status, language: checkRow.language, tests: checkRow.tests ?? [], verified: checkRow.verified }
+    : null;
+  const attemptRow = getAttempt(db, user.id, ex.id);
+  const attempt = attemptRow ? { language: attemptRow.language, code: attemptRow.code } : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -77,12 +88,21 @@ export default async function ExercisePage({ params }: { params: Params }) {
             </div>
           )}
         </div>
-        <StatusPicker exerciseId={ex.id} status={status} />
+        {/* key : remonté avec le nouveau statut après une vérification réussie (router.refresh). */}
+        <StatusPicker key={status} exerciseId={ex.id} status={status} />
       </header>
 
       <article className="rounded-lg border border-line bg-surface px-5 py-6 md:px-10 md:py-8">
         <Plain text={ex.statement} />
       </article>
+
+      <CodeExercise
+        exerciseId={ex.id}
+        check={check}
+        attempt={attempt}
+        isAdmin={user.role === "admin"}
+        timeoutMs={env.SOLVER_TIMEOUT_MS}
+      />
 
       {hints.length > 0 && (
         <Reveal showLabel="Afficher les indices" hideLabel="Masquer les indices">

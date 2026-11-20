@@ -15,7 +15,7 @@
 import { prepareClang } from "./c.ts";
 import { createEngine, type Engine } from "./engine.ts";
 import type { WorkerRequest, WorkerResponse } from "./protocol.ts";
-import type { ClangModule, PyodideLike } from "./types.ts";
+import type { ClangModule, Language, PyodideLike } from "./types.ts";
 
 export { createEngine } from "./engine.ts";
 export type { Engine } from "./engine.ts";
@@ -35,33 +35,60 @@ export function createBrowserEngine(baseUrl = "/runtimes"): Engine {
       return prepareClang((await importUrl(`${base}/clang/bundle.js`)) as ClangModule);
     },
     async pyodide() {
-      const mod = (await importUrl(`${base}/pyodide/pyodide.mjs`)) as {
-        loadPyodide(o: { indexURL: string }): Promise<PyodideLike>;
-      };
-      return mod.loadPyodide({ indexURL: `${base}/pyodide/` });
+      // webpack transforme `new Worker(url, { type: "module" })` en worker classique (chunks
+      // chargés par importScripts) ; Pyodide refuse alors de démarrer (« Classic web workers
+      // are not supported »). Pendant son chargement, importScripts est masqué : Pyodide
+      // emprunte le chemin « module worker » (import() natif de pyodide.asm.mjs, qui fonctionne).
+      const g = globalThis as { importScripts?: unknown };
+      const saved = g.importScripts;
+      if (typeof saved === "function") {
+        g.importScripts = () => {
+          throw new TypeError("importScripts masqué pendant le chargement de Pyodide");
+        };
+      }
+      try {
+        const mod = (await importUrl(`${base}/pyodide/pyodide.mjs`)) as {
+          loadPyodide(o: { indexURL: string }): Promise<PyodideLike>;
+        };
+        return await mod.loadPyodide({ indexURL: `${base}/pyodide/` });
+      } finally {
+        if (typeof saved === "function") g.importScripts = saved;
+      }
     },
   });
 }
 
+/** Préchauffage (navigateur uniquement) : charge le moteur sans rien exécuter, réponse `ready`. */
+export type PrepareRequest = { id: number; type: "prepare"; lang: Language };
+export type BrowserWorkerRequest = WorkerRequest | PrepareRequest;
+export type BrowserWorkerResponse = WorkerResponse | { id: number; type: "ready" };
+
 type WorkerScope = {
-  postMessage(m: WorkerResponse): void;
-  addEventListener(type: "message", fn: (e: { data: WorkerRequest }) => void): void;
+  postMessage(m: BrowserWorkerResponse): void;
+  addEventListener(type: "message", fn: (e: { data: BrowserWorkerRequest }) => void): void;
 };
 
-/** Branche le protocole de protocol.ts sur un Web Worker. */
+/** Branche le protocole de protocol.ts (+ `prepare`) sur un Web Worker. */
 export function attachWorkerProtocol(scope: WorkerScope, engine: Engine): void {
   let queue: Promise<void> = Promise.resolve();
   scope.addEventListener("message", (e) => {
     const req = e.data;
-    queue = queue.then(() => handle(req));
+    // `.catch` : un postMessage qui lève (résultat non clonable…) ne doit pas bloquer la file.
+    queue = queue.then(() => handle(req)).catch(() => {});
   });
 
-  async function handle(req: WorkerRequest): Promise<void> {
+  async function handle(req: BrowserWorkerRequest): Promise<void> {
     try {
-      const result = await engine.execute(req.lang, req.code, req.stdin, (phase) =>
-        scope.postMessage({ id: req.id, type: "phase", phase }),
+      if ("type" in req && req.type === "prepare") {
+        await engine.prepare(req.lang);
+        scope.postMessage({ id: req.id, type: "ready" });
+        return;
+      }
+      const run = req as WorkerRequest;
+      const result = await engine.execute(run.lang, run.code, run.stdin, (phase) =>
+        scope.postMessage({ id: run.id, type: "phase", phase }),
       );
-      scope.postMessage({ id: req.id, type: "result", result });
+      scope.postMessage({ id: run.id, type: "result", result });
     } catch (err) {
       scope.postMessage({ id: req.id, type: "error", message: err instanceof Error ? err.message : String(err) });
     }
