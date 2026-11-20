@@ -62,14 +62,14 @@ export async function runJavaScript(code: string, stdin: string, onPhase: PhaseL
 
   let fn: (...args: unknown[]) => Promise<unknown>;
   try {
-    fn = new AsyncFunction("input", "readline", "console", ...TIMER_NAMES, code);
+    fn = new AsyncFunction("input", "readline", "console", ...TIMER_NAMES, ...HIDDEN_NAMES, code);
   } catch (e) {
     err.write(formatValue(e) + "\n");
     return done("compile", null);
   }
   onPhase("run");
   try {
-    await fn(api.input, api.readline, api.console, ...timers.api);
+    await fn(api.input, api.readline, api.console, ...timers.api); // HIDDEN_NAMES restent undefined
     await timers.idle(() => failure !== undefined);
   } catch (e) {
     if (failure === undefined) failure = e;
@@ -84,6 +84,13 @@ export async function runJavaScript(code: string, stdin: string, onPhase: PhaseL
 }
 
 const TIMER_NAMES = ["setTimeout", "setInterval", "clearTimeout", "clearInterval"] as const;
+
+/**
+ * Défense en profondeur (le vrai rempart est le bac à sable du processus, cf. index.ts) :
+ * ces noms sont des paramètres jamais fournis, donc `undefined` pour le code exécuté.
+ * Sans effet dans le navigateur, où ils n'existent pas.
+ */
+const HIDDEN_NAMES = ["process", "require", "module", "exports", "__filename", "__dirname"] as const;
 
 type Callback = (...args: unknown[]) => unknown;
 

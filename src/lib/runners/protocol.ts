@@ -1,4 +1,4 @@
-// Messages échangés avec le Worker d'exécution (Node worker_threads ou Web Worker).
+// Messages échangés avec le moteur d'exécution (processus enfant Node via IPC, ou Web Worker).
 import type { Language, RunResult } from "./types.ts";
 
 export type WorkerRequest = { id: number; lang: Language; code: string; stdin: string };

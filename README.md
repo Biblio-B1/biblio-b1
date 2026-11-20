@@ -121,6 +121,16 @@ npm run solver:status                  # compte par statut (lecture seule)
 
 Au démarrage, les exercices sans vérification sont mis en file (`--enqueue-missing` le fait aussi explicitement) et les traitements interrompus depuis plus de 30 min sont repris. Si Ollama est injoignable, les exercices restent en file et le service réessaie (60 s, puis délai doublé jusqu'à 15 min). Un modèle introuvable (`OLLAMA_MODEL` erroné, `ollama pull` oublié) arrête le service avec un message clair (code 1). Ctrl+C est sans danger : la ligne en cours est rendue à la file et le travail reprend où il s'était arrêté. `solver:status` affiche le nombre d'exercices `ready`, `no_code`, `unsupported`, `failed`, `running`, `pending` et non encore mis en file.
 
+### Sécurité du pré-calcul
+Les solutions de référence écrites par le modèle sont du **code non fiable** : un document importé peut contenir des instructions cachées (injection d'invite) qui pousseraient le modèle à écrire un programme malveillant. Le solveur exécute donc chaque référence (C, Python et JavaScript) dans un **processus enfant isolé** par le [modèle de permissions de Node](https://nodejs.org/api/permissions.html) (`node --permission`) :
+
+- lecture limitée au code des moteurs (`src/lib/runners/` et les paquets `@yowasp/clang`, `pyodide`, `@bjorn3/browser_wasi_shim` de `node_modules`) : **ni `storage/` (base `data.db`, fichiers), ni `.env`**, ni le reste du dépôt ;
+- aucune écriture de fichier, aucun processus enfant, aucun worker, aucun module natif ;
+- environnement vide (les variables chargées depuis `.env` ne sont pas transmises) ;
+- arrêt forcé du processus au délai (`SOLVER_TIMEOUT_MS`), puis recréation.
+
+Limites connues : le modèle de permissions de Node (≥ 22.18) ne filtre pas le **réseau** ; un programme malveillant pourrait donc émettre des requêtes vers le réseau local, sans toutefois disposer d'aucun secret à y envoyer. Faites tourner le solveur sous un compte sans privilèges particuliers. Le code des **étudiants**, lui, ne s'exécute jamais sur le serveur (seulement dans leur navigateur).
+
 ### Préparer le PC (Windows, avec Ollama)
 Le modèle est trop lourd pour le Chromebook : il tourne sur un PC de la maison.
 
