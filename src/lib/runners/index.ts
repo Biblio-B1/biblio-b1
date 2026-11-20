@@ -89,11 +89,16 @@ function setRef(child: ChildProcess, on: boolean): void {
   }
 }
 
-/** Tue le processus enfant et attend sa fin. */
+/**
+ * Tue le processus enfant et attend sa fin. Le processus est re-référencé pendant l'attente :
+ * sinon (enfant `unref`), rien ne garderait la boucle d'événements en vie et un
+ * `await disposeRunners()` de premier niveau finirait en « unsettled top-level await » (code 13).
+ */
 function killChild(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise<void>((resolve) => {
     child.once("exit", () => resolve());
+    child.ref();
     child.kill("SIGKILL");
   });
 }

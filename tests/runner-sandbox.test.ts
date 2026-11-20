@@ -152,3 +152,23 @@ int main(void){ FILE *f = fopen(${js(secretFile.replace(/\\/g, "/"))}, "r"); pri
     expect(r).toMatchObject({ ok: true, stdout: "refuse\n" });
   }, LONG);
 });
+
+describe("arrêt du solveur", () => {
+  it("disposeRunners attend la fin des processus enfants : le processus parent sort avec le code 0", async () => {
+    const { spawnSync } = await import("node:child_process");
+    const { pathToFileURL } = await import("node:url");
+    const script = path.join(dir, "dispose.mts");
+    const index = pathToFileURL(path.resolve("src/lib/runners/index.ts")).href;
+    fs.writeFileSync(
+      script,
+      `import { runCode, disposeRunners } from ${JSON.stringify(index)};\n` +
+        `const r = await runCode("javascript", "console.log(1)", "");\n` +
+        `await disposeRunners();\n` +
+        `console.log(r.ok ? "fini" : "échec");\n`,
+    );
+    const p = spawnSync(process.execPath, [script], { encoding: "utf8", timeout: 30_000 });
+    expect(p.stderr).not.toMatch(/unsettled top-level await/);
+    expect(p.status).toBe(0);
+    expect(p.stdout.trim()).toBe("fini");
+  }, LONG);
+});
