@@ -100,12 +100,13 @@ function DayAgenda({
           >
             <button
               type="button"
-              className="flex w-full gap-4 px-4 py-3 text-left hover:bg-sunken"
+              className="flex w-full flex-col gap-1 px-4 py-3 text-left hover:bg-sunken sm:flex-row sm:gap-4"
               onClick={() => onSelect(event, day)}
             >
-              <time dateTime={event.start} className="w-32 shrink-0 text-sm tabular-nums text-ink-2">{time}</time>
+              {/* Téléphone : horaire au-dessus du titre (toute la largeur pour le titre). */}
+              <time dateTime={event.start} className="shrink-0 text-sm tabular-nums text-ink-2 sm:w-32">{time}</time>
               <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-2 font-medium">
+                <span className="flex flex-wrap items-center gap-2 font-medium break-words">
                   {event.title}
                   {due.length > 0 && (
                     <span
@@ -570,28 +571,28 @@ function EventDetails({
           </div>
         )}
 
-        <dl className="mt-5 grid grid-cols-[7rem_1fr] gap-x-3 gap-y-3 text-sm">
+        <dl className="mt-5 grid grid-cols-1 gap-x-3 gap-y-0.5 text-sm sm:grid-cols-[7rem_1fr] sm:gap-y-3">
           {event.categories?.length ? (
             <>
-              <dt className="text-ink-3">Matière</dt>
+              <dt className="mt-2.5 text-ink-3 first:mt-0 sm:mt-0">Matière</dt>
               <dd>{event.categories.join(", ")}</dd>
             </>
           ) : null}
           {event.location && (
             <>
-              <dt className="text-ink-3">Salle</dt>
+              <dt className="mt-2.5 text-ink-3 first:mt-0 sm:mt-0">Salle</dt>
               <dd>{event.location}</dd>
             </>
           )}
           {event.organizer && (
             <>
-              <dt className="text-ink-3">Intervenant</dt>
+              <dt className="mt-2.5 text-ink-3 first:mt-0 sm:mt-0">Intervenant</dt>
               <dd>{event.organizer}</dd>
             </>
           )}
           {cleanedDescription && (
             <>
-              <dt className="text-ink-3">Description</dt>
+              <dt className="mt-2.5 text-ink-3 first:mt-0 sm:mt-0">Description</dt>
               <dd className="whitespace-pre-wrap">{cleanedDescription}</dd>
             </>
           )}

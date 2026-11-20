@@ -30,7 +30,7 @@ const MONO = "var(--font-jetbrains), ui-monospace, \"Cascadia Code\", monospace"
 
 // Couleurs reprises des jetons du site (clair/sombre via les variables CSS).
 const baseTheme = EditorView.theme({
-  "&": { backgroundColor: "var(--surface)", color: "var(--ink)", fontSize: "13.5px", borderRadius: "8px" },
+  "&": { backgroundColor: "var(--surface)", color: "var(--ink)", fontSize: "var(--code-font-size)", borderRadius: "8px" }, // 16 px sur écran tactile (globals.css)
   "&.cm-focused": { outline: "2px solid var(--focus)", outlineOffset: "2px" },
   ".cm-content": { fontFamily: MONO, caretColor: "var(--ink)", padding: "10px 0" },
   ".cm-scroller": { fontFamily: MONO, lineHeight: "1.6", minHeight: "14rem", maxHeight: "32rem" },
