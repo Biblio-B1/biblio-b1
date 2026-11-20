@@ -7,13 +7,16 @@
 # Variables : STORAGE_PATH (défaut ./storage, lu dans .env si présent), KEEP (défaut 14)
 set -eu
 
+# Destination relative : résolue depuis le dossier d'appel, avant de se placer à la racine du dépôt.
+DEST="${1:-./backups}"
+case "$DEST" in /*) ;; *) DEST="$(pwd)/$DEST" ;; esac
+
 cd "$(dirname "$0")/.."
 
 if [ -z "${STORAGE_PATH:-}" ] && [ -f .env ]; then
   STORAGE_PATH=$(sed -n 's/^STORAGE_PATH=//p' .env | tail -n 1 | tr -d '\r"' || true)
 fi
 STORAGE="${STORAGE_PATH:-./storage}"
-DEST="${1:-./backups}"
 KEEP="${KEEP:-14}"
 
 [ -f "$STORAGE/data.db" ] || { echo "Base introuvable : $STORAGE/data.db" >&2; exit 1; }

@@ -53,7 +53,6 @@ export function listDocuments(
     .all();
 }
 
-/** Reclasse manuellement un document (marqué confirmé). */
 /**
  * Change la matière d'un document (confirmée). La matière est copiée dans ses exercices et dans
  * l'index de recherche : exercices et fils qui visent le document ou ses exercices sont réindexés.

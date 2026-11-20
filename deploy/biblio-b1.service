@@ -15,9 +15,10 @@ After=network.target
 Type=simple
 WorkingDirectory=%h/biblio-b1
 Environment=NODE_ENV=production
-# Sous nvm, `npm` n'est pas dans le PATH de systemd : `bash -lc` charge le profil de connexion
-# (~/.profile / ~/.bashrc). Sinon, remplacez par le chemin absolu de npm.
-ExecStart=/bin/bash -lc 'exec npm start'
+# Sous nvm, `npm` n'est pas dans le PATH de systemd et ~/.bashrc ne charge pas nvm en shell non
+# interactif : on source nvm.sh explicitement. Sans nvm : remplacez par le chemin absolu de npm.
+# Alternative : ExecStart=/home/<vous>/.nvm/versions/node/<version>/bin/npm start
+ExecStart=/bin/bash -c '. "$HOME/.nvm/nvm.sh" && exec npm start'
 Restart=on-failure
 RestartSec=5
 

@@ -96,7 +96,7 @@ npm run reindex
 
 ```sh
 npm run build
-npm start        # écoute sur PORT
+npm start        # charge .env puis écoute sur PORT (scripts/start.mjs)
 ```
 
 En production (`NODE_ENV=production`, positionné par `next start`), `SESSION_SECRET` et `ADMIN_INVITE_CODE` doivent être définis, sinon le démarrage échoue avec un message explicite.
@@ -136,7 +136,7 @@ L'archive contient `storage/` : la base `data.db` (copie cohérente via `sqlite3
 Pour automatiser, ajoutez une ligne à `crontab -e` :
 
 ```cron
-30 3 * * * cd ~/biblio-b1 && scripts/backup.sh >> backups/backup.log 2>&1
+30 3 * * * cd ~/biblio-b1 && mkdir -p backups && scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
 **Restauration** :
@@ -168,7 +168,7 @@ Les migrations de base s'appliquent automatiquement au démarrage.
 - **`EADDRINUSE` : port déjà utilisé** : un autre processus occupe le port. `ss -ltnp | grep 3000` pour l'identifier, ou changez `PORT` dans `.env`. Si le service systemd tourne déjà, ne lancez pas `npm start` en parallèle.
 - **« Configuration de production refusée »** : définissez `SESSION_SECRET` (`openssl rand -hex 32`) et `ADMIN_INVITE_CODE` dans `.env`.
 - **Connexion impossible en HTTP** : vérifiez `COOKIE_SECURE=false`.
-- **Le service ne trouve pas `npm`** (nvm) : l'unité lance `bash -lc 'exec npm start'` ; assurez-vous que nvm est chargé dans `~/.profile` ou `~/.bashrc`, ou mettez le chemin absolu de `npm`.
+- **Le service ne trouve pas `npm`** (nvm) : l'unité source `~/.nvm/nvm.sh` avant de lancer `npm start` (`~/.bashrc` n'est pas lu en shell non interactif). Si nvm est installé ailleurs, ou pour viser une version précise, mettez le chemin absolu : `ExecStart=/home/<vous>/.nvm/versions/node/<version>/bin/npm start` (la version active : `nvm which default`, puis remplacez `/bin/node` par `/bin/npm`) ; puis `systemctl --user daemon-reload && systemctl --user restart biblio-b1`.
 - **Uploads refusés** : formats `.pdf .md .c .h .py .txt .jpg .jpeg .png .webp .docx .pptx`, 50 Mo maximum.
 - **Import : « synchronisation du dépôt impossible »** : pas d'accès réseau à GitHub ; l'import local fonctionne quand même.
 
