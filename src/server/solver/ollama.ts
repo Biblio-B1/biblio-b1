@@ -95,10 +95,11 @@ type StreamLine = { response?: unknown; done?: unknown; error?: unknown };
 
 /**
  * Envoie `prompt` au modèle et renvoie l'objet JSON produit (non validé : à passer à zod).
- * Mode `stream: true` : Ollama envoie les en-têtes tout de suite puis des lignes NDJSON
- * `{response, done}` ; les morceaux sont accumulés jusqu'à `done: true` (avec `stream: false`,
- * aucun en-tête n'arrive avant la fin de la génération et le fetch de Node abandonne au bout
- * de 300 s). Le délai global `timeoutMs` couvre tout l'appel.
+ * Mode `stream: true` : Ollama envoie les en-têtes avec le premier jeton (donc après le
+ * chargement du modèle et le traitement de l'invite, ce qui peut prendre plusieurs minutes sur
+ * CPU), puis des lignes NDJSON `{response, done}` ; les morceaux sont accumulés jusqu'à
+ * `done: true` (avec `stream: false`, aucun en-tête n'arrive avant la fin de la génération et
+ * le fetch de Node abandonne au bout de 300 s). Le délai global `timeoutMs` couvre tout l'appel.
  * Erreurs : `OllamaUnavailableError` (connexion impossible ou interruption), `OllamaCallError`
  * (modèle introuvable, délai dépassé, HTTP 5xx, flux interrompu…), `ModelOutputError` (JSON invalide).
  */

@@ -116,10 +116,10 @@ npm run solver -- --limit 10           # au plus 10 exercices
 npm run solver -- --exercise <id>      # (re)calculer un exercice précis
 npm run solver -- --enqueue-missing    # met en file les exercices sans vérification
 npm run solver -- --retry-failed       # remet en file les échecs
-npm run solver:status                  # compte par statut (lecture seule)
+npm run solver:status                  # compte par statut (base ouverte en lecture seule)
 ```
 
-Au démarrage, les exercices sans vérification sont mis en file (`--enqueue-missing` le fait aussi explicitement) et les traitements interrompus depuis plus de 30 min sont repris. Si Ollama est injoignable, les exercices restent en file et le service réessaie (60 s, puis délai doublé jusqu'à 15 min). Un modèle introuvable (`OLLAMA_MODEL` erroné, `ollama pull` oublié) arrête le service avec un message clair (code 1). Ctrl+C est sans danger : la ligne en cours est rendue à la file et le travail reprend où il s'était arrêté. `solver:status` affiche le nombre d'exercices `ready`, `no_code`, `unsupported`, `failed`, `running`, `pending` et non encore mis en file.
+Chaque exercice est mis en file **dès sa création** (import, dépôt) : le service, qui interroge la file en continu, le traite sans redémarrage. Au démarrage, il rattrape seulement les exercices restés sans ligne de vérification (base antérieure à la fonctionnalité, copie partielle ; `--enqueue-missing` le fait aussi explicitement) et reprend les traitements interrompus depuis plus de 30 min. Un exercice qui reçoit plus tard la correction du professeur est remis en file (sauf tests validés) pour que cette référence soit utilisée. Si Ollama est injoignable, les exercices restent en file et le service réessaie (60 s, puis délai doublé jusqu'à 15 min). Un modèle introuvable (`OLLAMA_MODEL` erroné, `ollama pull` oublié) arrête le service avec un message clair (code 1). Ctrl+C est sans danger : la ligne en cours est rendue à la file et le travail reprend où il s'était arrêté. `solver:status` affiche le nombre d'exercices `ready`, `no_code`, `unsupported`, `failed`, `running`, `pending` et non encore mis en file.
 
 ### Sécurité du pré-calcul
 Les solutions de référence écrites par le modèle sont du **code non fiable** : un document importé peut contenir des instructions cachées (injection d'invite) qui pousseraient le modèle à écrire un programme malveillant. Le solveur exécute donc chaque référence (C, Python et JavaScript) dans un **processus enfant isolé** par le [modèle de permissions de Node](https://nodejs.org/api/permissions.html) (`node --permission`) :
@@ -172,7 +172,7 @@ Deux façons d'amener le résultat sur le Chromebook :
    systemctl --user enable --now biblio-b1-solver
    journalctl --user -u biblio-b1-solver -f     # journaux
    ```
-3. Quand le PC est éteint, les exercices restent « en préparation » et le service réessaie ; ils sont traités dès que le PC revient. Les nouveaux exercices importés ensuite sont mis en file automatiquement au redémarrage du service.
+3. Quand le PC est éteint, les exercices restent « en préparation » et le service réessaie ; ils sont traités dès que le PC revient. Les nouveaux exercices importés ensuite sont mis en file dès leur création et traités au fil de l'eau, sans redémarrer le service.
 
 ## Production
 

@@ -1,11 +1,21 @@
-/** `npm run solver:status` : nombre d'exercices par statut de vérification (lecture seule). */
+/**
+ * `npm run solver:status` : nombre d'exercices par statut de vérification.
+ * Strictement en lecture seule : la base est ouverte `readonly` (ni création, ni migration,
+ * ni amorçage), sans passer par getDb().
+ */
 import fs from "node:fs";
-import { getDb } from "../src/server/db/client";
-import { countChecksByStatus } from "../src/server/checks";
+import path from "node:path";
+import { readSolverStatus } from "../src/server/solver/status";
 
 if (fs.existsSync(".env")) process.loadEnvFile(".env");
 
-const c = countChecksByStatus(getDb());
+const file = path.resolve(process.env.STORAGE_PATH || "./storage", "data.db");
+const r = readSolverStatus(file);
+if (!r.ok) {
+  console.error(r.message);
+  process.exit(1);
+}
+const c = r.counts;
 const done = c.ready + c.no_code + c.unsupported + c.failed;
 console.log(`Exercices : ${c.total}`);
 console.log(

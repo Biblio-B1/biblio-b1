@@ -126,7 +126,7 @@ beforeEach(() => {
 });
 
 describe("askModel", () => {
-  it("POST /api/generate avec stream:false, think:false, format = schéma JSON", async () => {
+  it("POST /api/generate avec stream:true, think:false, format = schéma JSON", async () => {
     let seenUrl = "";
     let body: Record<string, unknown> = {};
     const fetchImpl = (async (url: string, init: RequestInit) => {
