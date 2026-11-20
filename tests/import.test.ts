@@ -7,7 +7,7 @@ import { simpleGit } from "simple-git";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, type Db } from "@/server/db/client";
-import { documents, exercises, importExclusions, subjects, threads, users } from "@/server/db/schema";
+import { codeAttempts, documents, exerciseChecks, exercises, importExclusions, subjects, threads, users } from "@/server/db/schema";
 import { getProgress, setStatus } from "@/server/progress";
 import { createThread } from "@/server/threads";
 import { search } from "@/server/search";
@@ -448,4 +448,88 @@ describe("expandZips : garde-fous", () => {
     expect(expandZips(two, path.join(tmp, "bomb3"), { ...limits, maxBytesPerZip: 3500, maxBytesTotal: 5000 })).toHaveLength(5);
     expect(expandZips([f], path.join(tmp, "bomb4"))).toHaveLength(10);
   });
+});
+
+describe("remplacement de document et vérifications", () => {
+  const T = [{ input: "3", expected: "6", visible: true }];
+
+  it("fichier modifié : dernier code conservé ; vérification recopiée si l'énoncé est inchangé, recalculée sinon", async () => {
+    const db = createTestDb();
+    seedSubjects(db);
+    const user = db.insert(users).values({ name: "u", email: "u@x.fr", passwordHash: "h" }).returning().get();
+    const root = path.join(tmp, "replace-checks");
+    const rel = "Algorithmique et Prog C/TD1.pdf";
+    const opts = { root, source: "local" as const, storage: path.join(tmp, "storage-rc"), mode: "folders" as const };
+    put(root, rel, await makePdf([
+      "Exercice 1 : Somme", "Ecrire un programme qui calcule la somme des entiers.",
+      "Exercice 2 : Produit", "Ecrire un programme qui calcule le produit des entiers.",
+    ]));
+    await importTree(db, opts);
+    const old = db.select().from(exercises).all();
+    const o = (n: number) => old.find((e) => e.number === n)!;
+    // Ex. 1 : validé par un admin, mais son énoncé va changer. Ex. 2 : validé, énoncé inchangé.
+    for (const n of [1, 2]) {
+      db.update(exerciseChecks)
+        .set({ status: "ready", language: "c", tests: T, referenceCode: `ref${n}`, referenceSource: "ai", verified: true, verifiedBy: user.id })
+        .where(eq(exerciseChecks.exerciseId, o(n).id))
+        .run();
+      db.insert(codeAttempts).values({ userId: user.id, exerciseId: o(n).id, language: "c", code: `code${n}`, passed: n === 2 }).run();
+    }
+
+    put(root, rel, await makePdf([
+      "Exercice 1 : Somme", "Ecrire un programme qui calcule la somme des entiers de 1 a n (version 2).",
+      "Exercice 2 : Produit", "Ecrire un programme qui calcule le produit des entiers.",
+    ]));
+    const r = await importTree(db, opts);
+    expect(r.updated).toBe(1);
+    const fresh = db.select().from(exercises).all();
+    expect(fresh.map((e) => e.id)).not.toContain(o(1).id);
+    const f = (n: number) => fresh.find((e) => e.number === n)!;
+    expect(f(1).statement).not.toBe(o(1).statement);
+    expect(f(2).statement).toBe(o(2).statement);
+
+    const attempt = (id: string) => db.select().from(codeAttempts).where(eq(codeAttempts.exerciseId, id)).get();
+    expect(attempt(f(1).id)).toMatchObject({ userId: user.id, code: "code1", passed: false });
+    expect(attempt(f(2).id)).toMatchObject({ userId: user.id, code: "code2", passed: true });
+
+    const check = (id: string) => db.select().from(exerciseChecks).where(eq(exerciseChecks.exerciseId, id)).get();
+    expect(check(f(2).id)).toMatchObject({ status: "ready", language: "c", tests: T, referenceCode: "ref2", verified: true, verifiedBy: user.id });
+    expect(check(f(1).id)).toMatchObject({ status: "pending", verified: false, tests: [], referenceCode: null });
+  }, 30_000);
+
+  it("un exercice qui reçoit la correction du prof après son pré-calcul est remis en file (sauf validé ou déjà calculé avec la référence du prof)", async () => {
+    const db = createTestDb();
+    seedSubjects(db);
+    const root = path.join(tmp, "late-solution");
+    const opts = { root, source: "local" as const, storage: path.join(tmp, "storage-ls"), mode: "folders" as const };
+    put(root, "Algorithmique et Prog C/TD1.pdf", await makePdf([
+      "Exercice 1 : Somme", "Ecrire un programme qui calcule la somme des entiers.",
+      "Exercice 2 : Produit", "Ecrire un programme qui calcule le produit des entiers.",
+      "Exercice 3 : Moyenne", "Ecrire un programme qui calcule la moyenne.",
+      "Exercice 4 : Maximum", "Ecrire un programme qui affiche le maximum.",
+    ]));
+    await importTree(db, opts);
+    const ex = db.select().from(exercises).all();
+    const id = (n: number) => ex.find((e) => e.number === n)!.id;
+    const set = (n: number, v: Partial<typeof exerciseChecks.$inferInsert>) =>
+      db.update(exerciseChecks).set(v).where(eq(exerciseChecks.exerciseId, id(n))).run();
+    set(1, { status: "ready", language: "c", tests: T, referenceSource: "ai", attempts: 1 });
+    set(2, { status: "ready", language: "c", tests: T, referenceSource: "ai", verified: true });
+    set(3, { status: "no_code", attempts: 2, error: "x" });
+    set(4, { status: "ready", language: "c", tests: T, referenceSource: "prof" });
+
+    put(root, "Algorithmique et Prog C/TD1 (corrigé).pdf", await makePdf([
+      "Exercice 1 : Somme", "int s = 0; for (int i = 1; i <= n; i++) s += i;",
+      "Exercice 2 : Produit", "int p = 1; for (int i = 1; i <= n; i++) p *= i;",
+      "Exercice 3 : Moyenne", "double m = s / n;",
+      "Exercice 4 : Maximum", "int m = a > b ? a : b;",
+    ]));
+    await importTree(db, opts);
+    const check = (n: number) => db.select().from(exerciseChecks).where(eq(exerciseChecks.exerciseId, id(n))).get()!;
+    expect(db.select().from(exercises).where(eq(exercises.id, id(1))).get()!.solution).toContain("s += i");
+    expect(check(1)).toMatchObject({ status: "pending", attempts: 0, error: null });
+    expect(check(2)).toMatchObject({ status: "ready", verified: true });
+    expect(check(3)).toMatchObject({ status: "pending", attempts: 0, error: null });
+    expect(check(4)).toMatchObject({ status: "ready", referenceSource: "prof" });
+  }, 30_000);
 });

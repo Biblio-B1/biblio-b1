@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, type Db } from "../db/client";
-import { documents, exercises, importExclusions, posts, progress, threads } from "../db/schema";
+import { codeAttempts, documents, exerciseChecks, exercises, importExclusions, posts, progress, threads } from "../db/schema";
 import { classify, normalize } from "../classify";
 import { createDocument, deleteDocument, type Document } from "../documents";
 import { env } from "../env";
@@ -65,14 +65,18 @@ function hasExercises(db: Db, documentId: string): boolean {
 }
 
 /**
- * Remplace `old` (même source et chemin, contenu modifié) par `fresh` : la progression passe aux
- * nouveaux exercices de même numéro (titre identique en priorité), les fils de discussion sont
- * re-ciblés (exercice correspondant, sinon le nouveau document), puis l'ancien document est supprimé
- * sans exclusion d'import. À appeler dans la transaction qui crée `fresh` et ses exercices.
+ * Remplace `old` (même source et chemin, contenu modifié) par `fresh` : la progression et le
+ * dernier code des étudiants passent aux nouveaux exercices de même numéro (titre identique en
+ * priorité), les fils de discussion sont re-ciblés (exercice correspondant, sinon le nouveau
+ * document), puis l'ancien document est supprimé sans exclusion d'import. Vérification
+ * (exercise_checks) : énoncé identique -> ligne recopiée telle quelle (tests validés compris) ;
+ * énoncé modifié -> la nouvelle ligne reste `pending` (nouveau pré-calcul, anciens tests écartés).
+ * À appeler dans la transaction qui crée `fresh` et ses exercices.
  */
 function replaceDocument(db: Db, old: Document, fresh: Document, storage: string): void {
   const oldEx = db.select().from(exercises).where(eq(exercises.documentId, old.id)).orderBy(asc(exercises.number), asc(exercises.groupKey)).all();
   const pool = db.select().from(exercises).where(eq(exercises.documentId, fresh.id)).orderBy(asc(exercises.number), asc(exercises.groupKey)).all();
+  const statements = new Map<string, string>([...oldEx, ...pool].map((e) => [e.id, e.statement]));
   const match = new Map<string, string>(); // ancien id -> nouvel id
   // Deux passes : même numéro + même titre, puis même numéro seul.
   for (const sameTitle of [true, false]) {
@@ -86,6 +90,23 @@ function replaceDocument(db: Db, old: Document, fresh: Document, storage: string
     const rows = db.select().from(progress).where(eq(progress.exerciseId, oldId)).all();
     for (const r of rows) {
       db.insert(progress).values({ ...r, exerciseId: newId }).onConflictDoNothing().run();
+    }
+    for (const { id: _id, ...a } of db.select().from(codeAttempts).where(eq(codeAttempts.exerciseId, oldId)).all()) {
+      db.insert(codeAttempts).values({ ...a, exerciseId: newId }).onConflictDoNothing().run();
+    }
+    const check = db.select().from(exerciseChecks).where(eq(exerciseChecks.exerciseId, oldId)).get();
+    if (check) {
+      if (statements.get(oldId) === statements.get(newId)) {
+        // Un calcul en cours visait l'ancien exercice (supprimé) : la copie repart en file.
+        const status = check.status === "running" ? "pending" : check.status;
+        db.delete(exerciseChecks).where(eq(exerciseChecks.exerciseId, newId)).run();
+        db.insert(exerciseChecks).values({ ...check, exerciseId: newId, status }).run();
+      } else if (check.status !== "pending") {
+        console.log(
+          `[import] énoncé modifié (${fresh.title}, exercice ${check.exerciseId} -> ${newId}) : vérification recalculée` +
+            (check.verified ? " (les tests validés par un admin sont écartés)" : ""),
+        );
+      }
     }
   }
   const moved: string[] = [];
@@ -110,6 +131,23 @@ function replaceDocument(db: Db, old: Document, fresh: Document, storage: string
     const t = db.select().from(threads).where(eq(threads.id, id)).get()!;
     indexThread(db, t, db.select().from(posts).where(eq(posts.threadId, id)).orderBy(asc(posts.createdAt)).all());
   }
+}
+
+/**
+ * Un exercice reçoit la correction du prof après son pré-calcul : on le remet en file pour que la
+ * référence du prof (si c'est du C qui compile) soit utilisée. Jamais pour des tests validés par
+ * un admin, un calcul en cours ou déjà en file, ni s'il a déjà été calculé avec la référence du prof.
+ */
+function requeueForProfSolution(db: Db, exerciseId: string): void {
+  db.$client
+    .prepare(
+      `UPDATE exercise_checks
+         SET status = 'pending', attempts = 0, error = NULL, updated_at = unixepoch('subsec') * 1000
+       WHERE exercise_id = ? AND verified = 0
+         AND status IN ('ready', 'failed', 'no_code', 'unsupported')
+         AND coalesce(reference_source, '') != 'prof'`,
+    )
+    .run(exerciseId);
 }
 
 /** Exécute `fn` dans une transaction SQLite (better-sqlite3 : synchrone, annulée si `fn` lève). */
@@ -232,7 +270,10 @@ export async function importTree(db: Db, opts: ImportTreeOptions): Promise<Impor
               .where(and(eq(exercises.documentId, statementId), eq(exercises.number, number), isNull(exercises.solution)))
               .returning()
               .all();
-            for (const row of updated) indexExercise(db, row); // la solution fait partie du corps indexé
+            for (const row of updated) {
+              indexExercise(db, row); // la solution fait partie du corps indexé
+              requeueForProfSolution(db, row.id);
+            }
           }
         });
       } catch (e) {
