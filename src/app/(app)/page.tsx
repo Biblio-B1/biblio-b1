@@ -1,9 +1,13 @@
 import Link from "next/link";
+import { CalendarView } from "@/components/calendar/CalendarView";
 import { DocumentList } from "@/components/library/DocumentList";
-import { IconCamera, IconPen, IconUpload } from "@/components/layout/Icons";
+import { IconCamera, IconHomework, IconPen, IconUpload } from "@/components/layout/Icons";
+import { homeworksForNextWeek, todayKeyInParis } from "@/lib/calendar-view";
 import { requireUser } from "@/server/auth/session";
+import { getStoredCalendar } from "@/server/boostcamp/calendar";
 import { getDb } from "@/server/db/client";
 import { listDocuments } from "@/server/documents";
+import { listHomeworks } from "@/server/homeworks";
 import { countBySubject } from "@/server/library";
 import { listSubjects } from "@/server/subjects";
 
@@ -15,7 +19,17 @@ export default async function Dashboard() {
   const subjects = listSubjects(db);
   const docs = listDocuments(db);
   const counts = countBySubject(db);
+  const homeworks = listHomeworks(db);
+  const nextWeekHomeworks = homeworksForNextWeek(homeworks, todayKeyInParis());
+  const calendar = getStoredCalendar(db, user.id);
   const toReview = docs.filter((d) => !d.subjectConfirmed || !d.subjectId).slice(0, 5);
+  const calendarSubjects = subjects.map((s) => ({
+    id: s.id,
+    name: s.name,
+    slug: s.slug,
+    color: s.color,
+    rules: s.rules,
+  }));
 
   return (
     <div className="flex flex-col gap-10">
@@ -32,6 +46,18 @@ export default async function Dashboard() {
             <IconPen size={16} /> Écrire une fiche
           </Link>
         </div>
+        <Link
+          href="/devoirs"
+          className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-[14.5px] transition-colors hover:border-line-strong hover:bg-sunken"
+        >
+          <span className="flex items-center gap-2.5 font-medium text-ink">
+            <IconHomework size={18} className="shrink-0 text-ink-2" />
+            <span>
+              {nextWeekHomeworks.length} devoir{nextWeekHomeworks.length > 1 ? "s" : ""} à faire pour la semaine prochaine
+            </span>
+          </span>
+          <span className="shrink-0 text-xs text-ink-3">Voir les devoirs →</span>
+        </Link>
       </section>
 
       <section aria-labelledby="shelf" className="flex flex-col gap-3">
@@ -84,6 +110,28 @@ export default async function Dashboard() {
             </>
           }
         />
+      </section>
+
+      <section aria-labelledby="timetable-preview" className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 id="timetable-preview" className="text-[15px] font-semibold">
+            Aperçu de l&apos;emploi du temps
+          </h2>
+          <Link href="/timetable" className="text-[14px] text-ink-2 hover:text-ink">
+            Ouvrir l&apos;emploi du temps
+          </Link>
+        </div>
+        {calendar ? (
+          <CalendarView events={calendar.events} subjects={calendarSubjects} homeworks={homeworks} />
+        ) : (
+          <div className="rounded-lg border border-dashed border-line-strong p-5 text-[14px] text-ink-2">
+            Aucun emploi du temps lié pour l&apos;instant.{" "}
+            <Link href="/timetable" className="text-ink underline underline-offset-2">
+              Lier votre calendrier Boostcamp
+            </Link>
+            .
+          </div>
+        )}
       </section>
     </div>
   );

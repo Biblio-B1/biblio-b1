@@ -44,6 +44,15 @@ export const sessions = sqliteTable("sessions", {
   createdAt: createdAt(),
 });
 
+export const boostcampCalendarLinks = sqliteTable("boostcamp_calendar_links", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  encryptedUrl: text("encrypted_url").notNull(),
+  eventsJson: text("events_json").notNull().default("[]"),
+  syncedAt: integer("synced_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export const invites = sqliteTable("invites", {
   id: id(),
   tokenHash: text("token_hash").notNull().unique(),
@@ -254,4 +263,29 @@ export const codeAttempts = sqliteTable(
       .default(sql`(unixepoch('subsec') * 1000)`),
   },
   (t) => [uniqueIndex("code_attempts_user_exercise_idx").on(t.userId, t.exerciseId)],
+);
+
+export const homeworks = sqliteTable(
+  "homeworks",
+  {
+    id: id(),
+    subjectId: text("subject_id")
+      .notNull()
+      .references(() => subjects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    dueDate: text("due_date").notNull(), // YYYY-MM-DD
+    englishGroup: text("english_group"),
+    attachmentPath: text("attachment_path"),
+    attachmentName: text("attachment_name"),
+    attachmentMime: text("attachment_mime"),
+    attachmentSize: integer("attachment_size"),
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("homeworks_due_date_idx").on(t.dueDate),
+    index("homeworks_subject_idx").on(t.subjectId),
+  ],
 );

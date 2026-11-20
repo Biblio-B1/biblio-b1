@@ -54,6 +54,7 @@ cp .env.example .env
 | `OLLAMA_URL` | Adresse d'Ollama pour le service de pré-calcul (`npm run solver`). Sur le Chromebook : `http://<IP-du-PC>:11434` (sur le PC, lancer Ollama avec `OLLAMA_HOST=0.0.0.0` et ouvrir le port 11434 du pare-feu Windows au réseau local). | `http://127.0.0.1:11434` |
 | `OLLAMA_MODEL` | Modèle Ollama local utilisé pour écrire les solutions de référence et les entrées de test. | `qwen3.8:27b` |
 | `SOLVER_TIMEOUT_MS` | Délai maximal (ms) d'une exécution de la solution de référence, compilation comprise. | `5000` |
+| `CALENDAR_ENCRYPTION_KEY` | Clé hexadécimale de 32 octets pour chiffrer les URL privées des flux iCalendar liés par les membres. Sans cette clé, la liaison au calendrier est désactivée. | _(vide)_ |
 
 Une chaîne vide dans `.env` équivaut à variable non définie.
 
@@ -65,6 +66,16 @@ Une chaîne vide dans `.env` équivaut à variable non définie.
 4. Les matières se gèrent sous `/admin/subjects`.
 
 Deux rôles seulement : `admin` et `member`.
+
+### Emploi du temps Boostcamp
+
+La rubrique `/timetable` peut lire un lien HTTPS de proxy iCalendar (`.ical`/`.ics`) configuré pour fournir le calendrier Boostcamp. À la première connexion, le membre ouvre Boostcamp puis colle l'URL du proxy. Elle ne demande jamais le mot de passe Boostcamp et ne prétend pas faire un SSO. Le lien du proxy est un secret : il est chiffré dans SQLite avec AES-256-GCM et la clé `CALENDAR_ENCRYPTION_KEY`. Générez une clé avec :
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Configurez cette clé sur le serveur avant que les membres ne lient leur calendrier et conservez-la dans un endroit sûr : sans elle, les abonnements déjà enregistrés ne pourront plus être déchiffrés. Tant que la page Emploi du temps reste ouverte, le navigateur l'actualise toutes les minutes ; le serveur revalide le proxy toutes les 50 secondes et l'utilisateur peut aussi forcer une synchronisation. Il s'agit d'une synchronisation périodique, pas d'un push serveur. Les événements exposent les catégories, la salle, l'organisateur et la description quand le flux les fournit. Une réponse HTTP 401, 403 ou 410 déclenche une invite pour remplacer le lien expiré. Le proxy doit fournir les occurrences (les règles récurrentes `RRULE` ne sont pas développées). Les devoirs, récapitulatifs et PDF ne sont pas fournis par iCalendar et nécessitent une API/proxy Boostcamp distinct documenté avant d'être importés.
 
 ## Importer des cours
 

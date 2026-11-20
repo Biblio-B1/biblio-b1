@@ -2,7 +2,7 @@ import { Spine } from "@/components/layout/Spine";
 import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { formatKeywordLines, listSubjects, type SubjectRules } from "@/server/subjects";
-import { createSubjectAction, updateSubjectAction } from "./actions";
+import { createSubjectAction, deleteSubjectAction, updateSubjectAction } from "./actions";
 import { SubjectForm } from "./SubjectForm";
 
 export const metadata = { title: "Matières et règles" };
@@ -29,11 +29,18 @@ export default async function SubjectsAdminPage() {
         const rules = rulesOf(s.rules);
         return (
           <section key={s.id} aria-labelledby={`subj-${s.id}`} className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-4 md:p-5">
-            <h2 id={`subj-${s.id}`} className="flex items-center gap-2 font-semibold">
-              <Spine color={s.color} className="h-4" />
-              {s.name}
-              <code className="font-mono text-[12.5px] font-normal text-ink-3">{s.slug}</code>
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id={`subj-${s.id}`} className="flex items-center gap-2 font-semibold">
+                <Spine color={s.color} className="h-4" />
+                {s.name}
+                <code className="font-mono text-[12.5px] font-normal text-ink-3">{s.slug}</code>
+              </h2>
+              <form action={deleteSubjectAction.bind(null, s.id)}>
+                <button type="submit" className="btn btn-ghost h-8 px-2 text-[13px] text-danger">
+                  Supprimer
+                </button>
+              </form>
+            </div>
             <SubjectForm
               idPrefix={s.id}
               action={updateSubjectAction.bind(null, s.id)}

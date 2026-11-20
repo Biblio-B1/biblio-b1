@@ -44,6 +44,11 @@ describe("parseEnv", () => {
     expect(() => parseEnv({ APP_URL: "ftp://x.fr" })).toThrow(/APP_URL/);
   });
 
+  it("valide la clé de chiffrement des liens de calendrier lorsqu’elle est fournie", () => {
+    expect(parseEnv({ CALENDAR_ENCRYPTION_KEY: "a".repeat(64) }).CALENDAR_ENCRYPTION_KEY).toBe("a".repeat(64));
+    expect(() => parseEnv({ CALENDAR_ENCRYPTION_KEY: "short" })).toThrow(/CALENDAR_ENCRYPTION_KEY/);
+  });
+
   it("valeur invalide : message en français", () => {
     expect(() => parseEnv({ PORT: "abc" })).toThrow(/Configuration invalide : PORT/);
   });

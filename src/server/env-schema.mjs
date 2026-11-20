@@ -20,6 +20,10 @@ export const envSchema = z.object({
   OLLAMA_MODEL: z.string().min(1).default("qwen3.8:27b"),
   // Délai maximal d'une exécution de la solution de référence (compilation comprise), en ms.
   SOLVER_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(5000),
+  CALENDAR_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, "clé hexadécimale de 32 octets attendue")
+    .optional(),
   // Adresse publique de l'application (liens d'invitation), sans « / » final.
   APP_URL: z
     .url({ protocol: /^https?$/, error: "URL http(s) attendue, ex. http://192.168.1.20:3000" })

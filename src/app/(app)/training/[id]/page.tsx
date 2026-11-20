@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { QAPanel } from "@/components/qa/QAPanel";
 import { Spine } from "@/components/layout/Spine";
 import { CodeExercise } from "@/components/training/CodeExercise";
+import { ExerciseCodeEditor } from "@/components/training/ExerciseCodeEditor";
 import { Reveal } from "@/components/training/Reveal";
 import { StatusPicker } from "@/components/training/StatusPicker";
 import { requireUser } from "@/server/auth/session";
@@ -105,15 +106,19 @@ export default async function ExercisePage({ params }: { params: Params }) {
         <Plain text={ex.statement} />
       </article>
 
-      <CodeExercise
-        key={ex.id}
-        exerciseId={ex.id}
-        check={check}
-        attempt={attempt}
-        isAdmin={isAdmin}
-        timeoutMs={env.SOLVER_TIMEOUT_MS}
-        subjectName={subject?.name ?? null}
-      />
+      {check?.status === "ready" ? (
+        <CodeExercise
+          key={ex.id}
+          exerciseId={ex.id}
+          check={check}
+          attempt={attempt}
+          isAdmin={isAdmin}
+          timeoutMs={env.SOLVER_TIMEOUT_MS}
+          subjectName={subject?.name ?? null}
+        />
+      ) : (
+        <ExerciseCodeEditor exerciseId={ex.id} lang={ex.lang} />
+      )}
 
       {hints.length > 0 && (
         <Reveal showLabel="Afficher les indices" hideLabel="Masquer les indices">

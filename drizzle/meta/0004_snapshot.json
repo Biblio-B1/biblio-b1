@@ -1,183 +1,50 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "289db48f-d617-4ef9-9ec3-e541027988b7",
+  "id": "19c6e59e-5c2d-44b8-96d3-33b75f3eb850",
   "prevId": "6b73e953-056c-43ae-ab30-24d974849dfe",
   "tables": {
-    "check_reports": {
-      "name": "check_reports",
+    "boostcamp_calendar_links": {
+      "name": "boostcamp_calendar_links",
       "columns": {
-        "id": {
-          "name": "id",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
-        "user_id": {
-          "name": "user_id",
+        "encrypted_url": {
+          "name": "encrypted_url",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "exercise_id": {
-          "name": "exercise_id",
+        "events_json": {
+          "name": "events_json",
           "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "message": {
-          "name": "message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "resolved": {
-          "name": "resolved",
-          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": false
+          "default": "'[]'"
         },
-        "created_at": {
-          "name": "created_at",
+        "synced_at": {
+          "name": "synced_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "autoincrement": false
         }
       },
-      "indexes": {
-        "check_reports_exercise_idx": {
-          "name": "check_reports_exercise_idx",
-          "columns": [
-            "exercise_id"
-          ],
-          "isUnique": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
-        "check_reports_user_id_users_id_fk": {
-          "name": "check_reports_user_id_users_id_fk",
-          "tableFrom": "check_reports",
+        "boostcamp_calendar_links_user_id_users_id_fk": {
+          "name": "boostcamp_calendar_links_user_id_users_id_fk",
+          "tableFrom": "boostcamp_calendar_links",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "check_reports_exercise_id_exercises_id_fk": {
-          "name": "check_reports_exercise_id_exercises_id_fk",
-          "tableFrom": "check_reports",
-          "tableTo": "exercises",
-          "columnsFrom": [
-            "exercise_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "code_attempts": {
-      "name": "code_attempts",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "exercise_id": {
-          "name": "exercise_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "language": {
-          "name": "language",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "passed": {
-          "name": "passed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
-        }
-      },
-      "indexes": {
-        "code_attempts_user_exercise_idx": {
-          "name": "code_attempts_user_exercise_idx",
-          "columns": [
-            "user_id",
-            "exercise_id"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "code_attempts_user_id_users_id_fk": {
-          "name": "code_attempts_user_id_users_id_fk",
-          "tableFrom": "code_attempts",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "code_attempts_exercise_id_exercises_id_fk": {
-          "name": "code_attempts_exercise_id_exercises_id_fk",
-          "tableFrom": "code_attempts",
-          "tableTo": "exercises",
-          "columnsFrom": [
-            "exercise_id"
           ],
           "columnsTo": [
             "id"
@@ -357,136 +224,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "exercise_checks": {
-      "name": "exercise_checks",
-      "columns": {
-        "exercise_id": {
-          "name": "exercise_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "language": {
-          "name": "language",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reference_code": {
-          "name": "reference_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reference_source": {
-          "name": "reference_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "tests": {
-          "name": "tests",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
-        "verified": {
-          "name": "verified",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "verified_by": {
-          "name": "verified_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "model": {
-          "name": "model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
-        }
-      },
-      "indexes": {
-        "exercise_checks_status_idx": {
-          "name": "exercise_checks_status_idx",
-          "columns": [
-            "status",
-            "updated_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "exercise_checks_exercise_id_exercises_id_fk": {
-          "name": "exercise_checks_exercise_id_exercises_id_fk",
-          "tableFrom": "exercise_checks",
-          "tableTo": "exercises",
-          "columnsFrom": [
-            "exercise_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
