@@ -22,7 +22,6 @@ export default async function Dashboard() {
   const homeworks = listHomeworks(db);
   const nextWeekHomeworks = homeworksForNextWeek(homeworks, todayKeyInParis());
   const calendar = getStoredCalendar(db, user.id);
-  const toReview = docs.filter((d) => !d.subjectConfirmed || !d.subjectId).slice(0, 5);
   const calendarSubjects = subjects.map((s) => ({
     id: s.id,
     name: s.name,
@@ -80,13 +79,27 @@ export default async function Dashboard() {
         </ul>
       </section>
 
-      {toReview.length > 0 && (
-        <section aria-labelledby="review" className="flex flex-col gap-3">
-          <h2 id="review" className="text-[15px] font-semibold">Matière à vérifier</h2>
-          <p className="-mt-1 text-[14px] text-ink-2">Classés automatiquement ou sans matière : ouvrez-les pour confirmer.</p>
-          <DocumentList docs={toReview} subjects={subjects} />
-        </section>
-      )}
+      <section aria-labelledby="timetable-preview" className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 id="timetable-preview" className="text-[15px] font-semibold">
+            Aperçu de l&apos;emploi du temps
+          </h2>
+          <Link href="/timetable" className="text-[14px] text-ink-2 hover:text-ink">
+            Ouvrir l&apos;emploi du temps
+          </Link>
+        </div>
+        {calendar ? (
+          <CalendarView events={calendar.events} subjects={calendarSubjects} homeworks={homeworks} />
+        ) : (
+          <div className="rounded-lg border border-dashed border-line-strong p-5 text-[14px] text-ink-2">
+            Aucun emploi du temps lié pour l&apos;instant.{" "}
+            <Link href="/timetable" className="text-ink underline underline-offset-2">
+              Lier votre calendrier Boostcamp
+            </Link>
+            .
+          </div>
+        )}
+      </section>
 
       <section aria-labelledby="recent" className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
@@ -110,28 +123,6 @@ export default async function Dashboard() {
             </>
           }
         />
-      </section>
-
-      <section aria-labelledby="timetable-preview" className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 id="timetable-preview" className="text-[15px] font-semibold">
-            Aperçu de l&apos;emploi du temps
-          </h2>
-          <Link href="/timetable" className="text-[14px] text-ink-2 hover:text-ink">
-            Ouvrir l&apos;emploi du temps
-          </Link>
-        </div>
-        {calendar ? (
-          <CalendarView events={calendar.events} subjects={calendarSubjects} homeworks={homeworks} />
-        ) : (
-          <div className="rounded-lg border border-dashed border-line-strong p-5 text-[14px] text-ink-2">
-            Aucun emploi du temps lié pour l&apos;instant.{" "}
-            <Link href="/timetable" className="text-ink underline underline-offset-2">
-              Lier votre calendrier Boostcamp
-            </Link>
-            .
-          </div>
-        )}
       </section>
     </div>
   );
