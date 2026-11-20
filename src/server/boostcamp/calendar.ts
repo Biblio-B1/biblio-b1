@@ -1,5 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import fs from "node:fs";
 import { lookup } from "node:dns/promises";
+import path from "node:path";
 import https from "node:https";
 import { isIP } from "node:net";
 import tls from "node:tls";
@@ -40,10 +42,34 @@ export class CalendarError extends Error {
   }
 }
 
-function encryptionKey(): Buffer {
-  const key = env.CALENDAR_ENCRYPTION_KEY;
-  if (!key) throw new CalendarError("La synchronisation du calendrier n’est pas configurée par l’administrateur.");
-  return Buffer.from(key, "hex");
+let storedKey: { file: string; key: Buffer } | null = null;
+
+/**
+ * Clé AES-256 des liens de calendrier : CALENDAR_ENCRYPTION_KEY si définie, sinon une clé
+ * générée une fois et gardée dans STORAGE_PATH/calendar.key (lecture seule du propriétaire).
+ * Ainsi chaque membre peut lier son calendrier sans configuration préalable par l'administrateur.
+ * Changer ou perdre la clé rend illisibles les liens enregistrés (il faut alors les relier).
+ */
+export function encryptionKey(): Buffer {
+  if (env.CALENDAR_ENCRYPTION_KEY) return Buffer.from(env.CALENDAR_ENCRYPTION_KEY, "hex");
+  const file = path.join(env.STORAGE_PATH, "calendar.key");
+  if (storedKey?.file === file) return storedKey.key;
+  let hex: string;
+  try {
+    hex = fs.readFileSync(file, "utf8").trim();
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    fs.mkdirSync(env.STORAGE_PATH, { recursive: true });
+    try {
+      fs.writeFileSync(file, randomBytes(32).toString("hex"), { flag: "wx", mode: 0o600 });
+    } catch (w) {
+      if ((w as NodeJS.ErrnoException).code !== "EEXIST") throw w; // créée en parallèle : on la relit
+    }
+    hex = fs.readFileSync(file, "utf8").trim();
+  }
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error(`Clé de calendrier invalide dans ${file}`);
+  storedKey = { file, key: Buffer.from(hex, "hex") };
+  return storedKey.key;
 }
 
 export function encryptCalendarUrl(value: string): string {
@@ -67,7 +93,7 @@ export function decryptCalendarUrl(value: string): string {
       decipher.final(),
     ]).toString("utf8");
   } catch {
-    throw new CalendarError("Impossible de déchiffrer le lien du calendrier. Vérifiez CALENDAR_ENCRYPTION_KEY.");
+    throw new CalendarError("Le lien du calendrier enregistré ne peut plus être lu (clé du serveur changée). Reliez votre calendrier.", "reauth_required");
   }
 }
 

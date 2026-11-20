@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   decryptCalendarUrl,
@@ -93,6 +96,30 @@ describe("calendar URL encryption", () => {
     const [iv, tag, ciphertext] = encrypted.split(".");
     const changedCiphertext = `${ciphertext[0] === "A" ? "B" : "A"}${ciphertext.slice(1)}`;
     const changed = `${iv}.${tag}.${changedCiphertext}`;
-    expect(() => decryptCalendarUrl(changed)).toThrow(/déchiffrer/);
+    expect(() => decryptCalendarUrl(changed)).toThrow(/ne peut plus être lu/);
+  });
+});
+
+describe("clé de chiffrement sans configuration", () => {
+  it("génère une clé dans STORAGE_PATH/calendar.key, la réutilise et permet de relire les liens", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bb1-calkey-"));
+    try {
+      vi.stubEnv("CALENDAR_ENCRYPTION_KEY", "");
+      vi.stubEnv("STORAGE_PATH", dir);
+      vi.resetModules();
+      const first = await import("@/server/boostcamp/calendar");
+      const url = "https://calendar.example.test/private?token=secret";
+      const encrypted = first.encryptCalendarUrl(url);
+      const file = path.join(dir, "calendar.key");
+      expect(fs.readFileSync(file, "utf8")).toMatch(/^[0-9a-f]{64}$/);
+
+      // Redémarrage du serveur : nouvelle instance du module, même fichier → lien toujours lisible.
+      vi.resetModules();
+      const second = await import("@/server/boostcamp/calendar");
+      expect(second.decryptCalendarUrl(encrypted)).toBe(url);
+    } finally {
+      vi.resetModules();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

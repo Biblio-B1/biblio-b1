@@ -1,6 +1,5 @@
 import { ActionForm, Field } from "@/components/ActionForm";
 import { requireUser } from "@/server/auth/session";
-import { env } from "@/server/env";
 import { getCalendar, getStoredCalendar, CalendarError } from "@/server/boostcamp/calendar";
 import { getDb } from "@/server/db/client";
 import { listHomeworks } from "@/server/homeworks";
@@ -21,7 +20,6 @@ export default async function TimetablePage() {
     rules: s.rules,
   }));
   const homeworks = listHomeworks(db);
-  const canLinkCalendar = Boolean(env.CALENDAR_ENCRYPTION_KEY);
   let calendar = getStoredCalendar(db, user.id);
   let syncError: string | undefined;
   let reauthRequired = false;
@@ -48,7 +46,7 @@ export default async function TimetablePage() {
           <div className="flex flex-col gap-2">
             <h2 className="text-base font-semibold">Lier votre calendrier</h2>
             <p className="text-sm text-ink-2">
-              Connectez-vous sur Boostcamp, puis collez ici le lien HTTPS de votre proxy iCalendar (.ical).
+              Collez ici le lien d’abonnement de votre emploi du temps (adresse https qui finit souvent par .ics, par exemple https://planning-paris.omneseducation.com/…/Edt_NOM.ics?…). Il est enregistré, chiffré, sur votre compte : vous n’aurez plus à le saisir.
               Biblio B1 ne demande ni ne stocke votre mot de passe Boostcamp.
             </p>
             <p className="text-sm">
@@ -60,15 +58,9 @@ export default async function TimetablePage() {
               Le proxy doit être accessible publiquement en HTTPS et renvoyer un calendrier iCalendar valide.
             </p>
           </div>
-          {canLinkCalendar ? (
-            <ActionForm action={linkCalendarAction} submitLabel="Lier le calendrier">
-              <Field label="Lien du proxy iCalendar (.ical)" name="calendarUrl" type="url" autoComplete="off" />
-            </ActionForm>
-          ) : (
-            <p role="status" className="rounded-md border border-line bg-sunken p-3 text-sm text-ink-2">
-              La liaison est désactivée : l’administrateur doit configurer <code>CALENDAR_ENCRYPTION_KEY</code> sur le serveur.
-            </p>
-          )}
+          <ActionForm action={linkCalendarAction} submitLabel="Lier le calendrier">
+            <Field label="Lien de votre calendrier (.ics)" name="calendarUrl" type="url" autoComplete="off" />
+          </ActionForm>
         </section>
       ) : (
         <>
@@ -83,13 +75,9 @@ export default async function TimetablePage() {
               <a className="w-fit text-sm underline underline-offset-2" href="https://boostcamp.omneseducation.com/home" target="_blank" rel="noreferrer">
                 Ouvrir Boostcamp
               </a>
-              {canLinkCalendar ? (
-                <ActionForm action={linkCalendarAction} submitLabel="Reconnecter le calendrier">
-                  <Field label="Nouveau lien du proxy iCalendar (.ical)" name="calendarUrl" type="url" autoComplete="off" />
-                </ActionForm>
-              ) : (
-                <p className="text-sm">L’administrateur doit configurer <code>CALENDAR_ENCRYPTION_KEY</code> sur le serveur.</p>
-              )}
+              <ActionForm action={linkCalendarAction} submitLabel="Reconnecter le calendrier">
+                <Field label="Nouveau lien de votre calendrier (.ics)" name="calendarUrl" type="url" autoComplete="off" />
+              </ActionForm>
             </section>
           ) : syncError && (
             <p role="alert" className="rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger">
