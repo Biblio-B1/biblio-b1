@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import AdmZip from "adm-zip";
 import { ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES } from "../storage";
+import { isExcludedDirName, isExcludedPath } from "./exclusions";
 
 export type ScannedFile = {
   /** Chemin absolu sur disque (pour un fichier extrait d'un zip : copie temporaire). */
@@ -12,16 +13,10 @@ export type ScannedFile = {
   ext: string;
 };
 
-const EXCLUDED_DIRS = new Set([
-  ".git", "bin", "obj", "node_modules", "000_template", "__macosx", "cmakefiles", ".idea", ".vscode",
-]);
 const ALLOWED = new Set(ALLOWED_EXTENSIONS);
 
-/** Dossier ignoré : build (bin, obj, cmake-build-*), dépôt git, modèles, pages web enregistrées (`*_files`). */
-export function isExcludedDir(name: string): boolean {
-  const n = name.toLowerCase();
-  return EXCLUDED_DIRS.has(n) || n.endsWith("_files") || n.startsWith("cmake-build-");
-}
+/** Dossier ignoré : règles de `exclusions.ts` (build, dépôt git, modèles, archives de versions...). */
+export const isExcludedDir = isExcludedDirName;
 
 /** Fichier retenu : extension autorisée (ou .zip, développé ensuite) ; pas de fichier caché. */
 function isWantedFile(name: string): boolean {
@@ -45,7 +40,7 @@ export function scanDir(root: string): ScannedFile[] {
       const r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
         if (!isExcludedDir(e.name)) walk(abs, r);
-      } else if (e.isFile() && isWantedFile(e.name)) {
+      } else if (e.isFile() && isWantedFile(e.name) && !isExcludedPath(r)) {
         out.push({ absPath: abs, relPath: r, ext: path.extname(e.name).toLowerCase() });
       }
     }
@@ -62,6 +57,7 @@ function safeEntryParts(name: string): string[] | null {
   if (!parts.length || parts.includes("..") || /^[a-z]:$/i.test(parts[0]) || name.startsWith("/")) return null;
   if (parts.slice(0, -1).some(isExcludedDir)) return null;
   if (!isWantedFile(parts[parts.length - 1])) return null;
+  if (isExcludedPath(parts.join("/"))) return null;
   return parts;
 }
 

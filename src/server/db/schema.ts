@@ -171,3 +171,13 @@ export const posts = sqliteTable(
   },
   (t) => [index("posts_thread_idx").on(t.threadId)],
 );
+
+/** Documents importés supprimés à la main : leur sha256 n'est plus ré-importé. */
+export const importExclusions = sqliteTable("import_exclusions", {
+  sha256: text("sha256").primaryKey(),
+  sourcePath: text("source_path"),
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch('subsec') * 1000)`),
+  deletedBy: text("deleted_by"), // id utilisateur (sans FK : survit à la suppression du compte), null = système
+});

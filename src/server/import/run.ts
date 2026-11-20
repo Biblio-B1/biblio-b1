@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb, type Db } from "../db/client";
-import { documents, exercises } from "../db/schema";
+import { documents, exercises, importExclusions } from "../db/schema";
 import { classify, normalize } from "../classify";
 import { createDocument, type Document } from "../documents";
 import { env } from "../env";
@@ -123,6 +123,10 @@ export async function importTree(db: Db, opts: ImportTreeOptions): Promise<Impor
           continue;
         }
         const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
+        if (db.select({ s: importExclusions.sha256 }).from(importExclusions).where(eq(importExclusions.sha256, sha256)).get()) {
+          stats.skipped++; // supprimé à la main : ne pas ré-importer
+          continue;
+        }
         const existing = db.select().from(documents).where(eq(documents.sha256, sha256)).get();
         if (existing) {
           stats.skipped++;

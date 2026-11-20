@@ -58,14 +58,6 @@ export const DEFAULT_SUBJECTS: DefaultSubject[] = [
     pathPatterns: ["\\bposture\\b", "\\bprise\\s+de\\s+parole\\b"],
     keywords: { "prise de parole": 2, "langage corporel": 2, "posture professionnelle": 3, gestuelle: 1 },
   }),
-  subject("data-analysis", "#0891b2", {
-    pathPatterns: ["\\bdata[\\s_-]+analy(sis|se|tics)\\b", "\\banalyse\\s+de\\s+donnees\\b"],
-    keywords: {
-      pandas: 3, dataframe: 3, dataframes: 3, numpy: 2, matplotlib: 3, seaborn: 3,
-      "power bi": 2, "tableau croise": 2, "tableaux croises": 2, groupby: 2,
-      "data visualisation": 2, "data visualization": 2, dataviz: 2, jupyter: 1,
-    },
-  }),
   subject("Développement web Front-End", "#7c3aed", {
     pathPatterns: [
       "\\bhtml5?\\b", "\\bcss3?\\b", "\\bjavascript\\b", "\\bfront[\\s_-]*end\\b",

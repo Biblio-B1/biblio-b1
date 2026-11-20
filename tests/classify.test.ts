@@ -22,7 +22,6 @@ describe("classify", () => {
         "algorithmique-et-prog-c",
         "anglais-professionnel-technique-avance",
         "comm-posture-professionnelle",
-        "data-analysis",
         "developpement-web-front-end",
         "infra-data",
         "linux-environnement-ia",
@@ -104,12 +103,11 @@ describe("classify", () => {
     expect(classify({ fileName: "a.txt", text: "essay" }, subjects).subjectId).toBeNull();
   });
 
-  it("les 11 matières portent exactement les noms des dossiers de cours", () => {
+  it("les 10 matières portent exactement les noms des dossiers de cours", () => {
     expect(DEFAULT_SUBJECTS.map((s) => s.name)).toEqual([
       "Algorithmique et Prog C",
       "Anglais professionnel & technique avancé",
       "comm-posture professionnelle",
-      "data-analysis",
       "Développement web Front-End",
       "infra-data",
       "Linux & environnement IA",
@@ -138,7 +136,6 @@ describe("classify", () => {
     expect(slug({ fileName: "2_CSS_Flexbox.pdf" })).toBe("developpement-web-front-end");
     expect(slug({ fileName: "notes.txt", text: "document.querySelector et addEventListener sur le DOM" })).toBe("developpement-web-front-end");
     expect(slug({ fileName: "notes.txt", text: "Databricks, lakehouse, ETL et parquet" })).toBe("infra-data");
-    expect(slug({ fileName: "notes.txt", text: "import pandas ; dataframe.groupby ; matplotlib" })).toBe("data-analysis");
     expect(slug({ fileName: "Syllabus_TECHAWAY_Data Analysis N1.pdf" })).toBe("techaway-dataanalysis");
     expect(slug({ fileName: "grammar.txt", text: "present perfect, irregular verbs" })).toBe("anglais-professionnel-technique-avance");
   });

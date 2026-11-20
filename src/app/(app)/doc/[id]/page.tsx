@@ -13,10 +13,11 @@ import { DOC_TYPE_LABELS, fileUrl, formatDate } from "@/lib/labels";
 import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { documents, users } from "@/server/db/schema";
-import { getDocument, type Document } from "@/server/documents";
+import { canDeleteDocument, getDocument, type Document } from "@/server/documents";
 import { resolveStoragePath } from "@/server/storage";
 import { listSubjects } from "@/server/subjects";
-import { setSubjectAction } from "../actions";
+import { DeleteDocumentButton } from "@/components/library/DeleteDocumentButton";
+import { deleteDocumentAction, setSubjectAction } from "../actions";
 
 type Params = Promise<{ id: string }>;
 
@@ -123,7 +124,7 @@ async function Viewer({ doc }: { doc: Document }) {
 }
 
 export default async function DocPage({ params }: { params: Params }) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const db = getDb();
@@ -134,6 +135,7 @@ export default async function DocPage({ params }: { params: Params }) {
   const author = doc.authorId
     ? db.select({ name: users.name }).from(users).where(eq(users.id, doc.authorId)).get()?.name
     : undefined;
+  const canDelete = canDeleteDocument(doc, user);
   const needsReview = !doc.subjectConfirmed || !doc.subjectId;
 
   return (
@@ -152,6 +154,7 @@ export default async function DocPage({ params }: { params: Params }) {
             <IconDownload size={16} />
             <span className="hidden sm:inline">Télécharger</span>
           </a>
+          {canDelete && <DeleteDocumentButton id={doc.id} action={deleteDocumentAction} />}
         </div>
 
         <form
