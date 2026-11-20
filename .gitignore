@@ -50,3 +50,6 @@ storage/
 /public/pdf.worker.min.mjs
 /.playwright-mcp/
 /backups/
+
+# moteurs WASM (clang, Pyodide) copiés par scripts/copy-runtimes.mjs
+/public/runtimes/

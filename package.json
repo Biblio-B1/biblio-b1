@@ -6,10 +6,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "postinstall": "node scripts/copy-pdf-worker.mjs",
-    "predev": "node scripts/copy-pdf-worker.mjs",
+    "postinstall": "node scripts/copy-pdf-worker.mjs && node scripts/copy-runtimes.mjs",
+    "predev": "node scripts/copy-pdf-worker.mjs && node scripts/copy-runtimes.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/copy-pdf-worker.mjs",
+    "prebuild": "node scripts/copy-pdf-worker.mjs && node scripts/copy-runtimes.mjs",
     "build": "next build",
     "start": "node scripts/start.mjs",
     "import": "tsx scripts/import.ts",
@@ -19,8 +19,10 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@bjorn3/browser_wasi_shim": "0.4.2",
     "@next/env": "15.5.29",
     "@node-rs/argon2": "^2.2.2",
+    "@yowasp/clang": "22.0.0-git20695-13",
     "adm-zip": "^0.6.1",
     "better-sqlite3": "^13.2.0",
     "cmdk": "^1.1.1",
@@ -29,6 +31,7 @@
     "mammoth": "^1.13.0",
     "next": "15.5.29",
     "pdfjs-dist": "^6.5.438",
+    "pyodide": "314.0.8",
     "radix-ui": "^1.8.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
