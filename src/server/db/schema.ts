@@ -24,6 +24,7 @@ export const DOC_SOURCES = ["upload", "local", "github"] as const;
 export const PROGRESS_STATUSES = ["todo", "doing", "mastered"] as const;
 export const LANGS = ["fr", "en"] as const;
 export const THREAD_TARGETS = ["document", "exercise"] as const;
+export const THREAD_KINDS = ["question", "note"] as const;
 
 export const users = sqliteTable("users", {
   id: id(),
@@ -144,7 +145,9 @@ export const threads = sqliteTable(
     id: id(),
     targetType: text("target_type", { enum: THREAD_TARGETS }).notNull(),
     targetId: text("target_id").notNull(),
-    question: text("question").notNull(),
+    question: text("question").notNull(), // titre du fil
+    kind: text("kind", { enum: THREAD_KINDS }).notNull().default("question"),
+    isSynthesis: integer("is_synthesis", { mode: "boolean" }).notNull().default(false),
     authorId: text("author_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

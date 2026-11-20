@@ -2,9 +2,10 @@ import fs from "node:fs";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "./db/client";
-import { DOC_SOURCES, DOC_TYPES, documents, exercises, importExclusions, progress, threads } from "./db/schema";
+import { DOC_SOURCES, DOC_TYPES, documents, exercises, importExclusions, posts, progress, threads } from "./db/schema";
 import { indexDocument, removeFromIndex } from "./search";
 import { resolveStoragePath } from "./storage";
+import { removeUnreferencedImages } from "./threads";
 
 export type Document = typeof documents.$inferSelect;
 
@@ -93,7 +94,7 @@ export function deleteDocument(
   if (!doc) throw new Error("not_found");
   if (!canDeleteDocument(doc, actor)) throw new Error("forbidden");
 
-  const { exerciseIds, threadIds, fileShared } = db.$client.transaction(() => {
+  const { exerciseIds, threadIds, fileShared, images } = db.$client.transaction(() => {
     const exerciseIds = db.select({ id: exercises.id }).from(exercises).where(eq(exercises.documentId, id)).all().map((e) => e.id);
     const threadRows = db
       .select({ id: threads.id })
@@ -104,6 +105,9 @@ export function deleteDocument(
       ? db.select({ id: threads.id }).from(threads).where(and(eq(threads.targetType, "exercise"), inArray(threads.targetId, exerciseIds))).all()
       : [];
     const threadIds = [...threadRows, ...exThreads].map((t) => t.id);
+    const images = threadIds.length
+      ? db.select({ p: posts.imagePath }).from(posts).where(inArray(posts.threadId, threadIds)).all().map((r) => r.p)
+      : [];
     if (threadIds.length) db.delete(threads).where(inArray(threads.id, threadIds)).run(); // posts : cascade
     if (exerciseIds.length) {
       db.delete(progress).where(inArray(progress.exerciseId, exerciseIds)).run();
@@ -118,7 +122,7 @@ export function deleteDocument(
     }
     db.delete(documents).where(eq(documents.id, id)).run();
     const fileShared = !!db.select({ id: documents.id }).from(documents).where(eq(documents.filePath, doc.filePath)).limit(1).get();
-    return { exerciseIds, threadIds, fileShared };
+    return { exerciseIds, threadIds, fileShared, images };
   })();
 
   if (!fileShared) {
@@ -128,6 +132,7 @@ export function deleteDocument(
       // fichier déjà absent ou chemin invalide : la base est déjà propre
     }
   }
+  removeUnreferencedImages(db, images, root);
   removeFromIndex(db, "document", id);
   for (const e of exerciseIds) removeFromIndex(db, "exercise", e);
   for (const t of threadIds) removeFromIndex(db, "thread", t);

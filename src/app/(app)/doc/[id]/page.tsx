@@ -16,6 +16,7 @@ import { documents, users } from "@/server/db/schema";
 import { canDeleteDocument, getDocument, type Document } from "@/server/documents";
 import { resolveStoragePath } from "@/server/storage";
 import { listSubjects } from "@/server/subjects";
+import { QAPanel } from "@/components/qa/QAPanel";
 import { DeleteDocumentButton } from "@/components/library/DeleteDocumentButton";
 import { deleteDocumentAction, setSubjectAction } from "../actions";
 
@@ -180,6 +181,7 @@ export default async function DocPage({ params }: { params: Params }) {
       </header>
 
       <Viewer doc={doc} />
+      <QAPanel targetType="document" targetId={doc.id} viewer={{ id: user.id, role: user.role }} />
     </div>
   );
 }

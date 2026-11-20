@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { QAPanel } from "@/components/qa/QAPanel";
 import { Spine } from "@/components/layout/Spine";
 import { Reveal } from "@/components/training/Reveal";
 import { StatusPicker } from "@/components/training/StatusPicker";
@@ -102,6 +103,8 @@ export default async function ExercisePage({ params }: { params: Params }) {
       ) : (
         <p className="text-[14px] text-ink-3">Pas de correction disponible pour cet exercice.</p>
       )}
+
+      <QAPanel targetType="exercise" targetId={ex.id} viewer={{ id: user.id, role: user.role }} />
     </div>
   );
 }

@@ -22,6 +22,13 @@
       "when": 1795136093776,
       "tag": "0002_great_skaar",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1795136769413,
+      "tag": "0003_lowly_snowbird",
+      "breakpoints": true
     }
   ]
 }
