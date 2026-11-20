@@ -51,3 +51,6 @@ export const IconChevron = ({ className, size, dir = "right" }: P & { dir?: "lef
 export const IconExpand = ({ className, size }: P) => (
   <svg {...base(size)} className={className}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
 );
+export const IconCheckList = ({ className, size }: P) => (
+  <svg {...base(size)} className={className}><path d="m4 7 2 2 3-3.5M4 17l2 2 3-3.5M13 7.5h7M13 17.5h7" /></svg>
+);

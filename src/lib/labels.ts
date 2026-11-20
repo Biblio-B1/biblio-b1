@@ -33,3 +33,13 @@ export function fileUrl(filePath: string, download = false): string {
   const p = filePath.split("/").map(encodeURIComponent).join("/");
   return `/files/${p}${download ? "?download=1" : ""}`;
 }
+
+export const PROGRESS_STATUS_VALUES = ["todo", "doing", "mastered"] as const;
+export type ProgressStatusValue = (typeof PROGRESS_STATUS_VALUES)[number];
+export const PROGRESS_STATUS_LABELS: Record<ProgressStatusValue, string> = {
+  todo: "À faire",
+  doing: "En cours",
+  mastered: "Maîtrisé",
+};
+export const parseStatus = (s?: string): ProgressStatusValue | undefined =>
+  PROGRESS_STATUS_VALUES.includes(s as ProgressStatusValue) ? (s as ProgressStatusValue) : undefined;

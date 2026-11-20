@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logoutAction } from "@/app/(auth)/actions";
 import { Spine } from "./Spine";
-import { IconBooks, IconClose, IconHome, IconPen, IconSettings, IconUpload, IconUsers } from "./Icons";
+import { IconBooks, IconCheckList, IconClose, IconHome, IconPen, IconSettings, IconUpload, IconUsers } from "./Icons";
 
 export type SidebarSubject = { slug: string; name: string; color: string; count: number };
 
@@ -51,6 +51,9 @@ function SidebarContent({ subjects, unclassified, user }: Props) {
         </NavLink>
         <NavLink href="/library" active={is("/library")}>
           <IconBooks /> Bibliothèque
+        </NavLink>
+        <NavLink href="/training" active={pathname === "/training" || pathname.startsWith("/training/")}>
+          <IconCheckList /> Entraînement
         </NavLink>
         <NavLink href="/upload" active={is("/upload")}>
           <IconUpload /> Déposer des fichiers
