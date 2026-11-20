@@ -14,9 +14,10 @@ const dryRun = process.argv.includes("--dry-run");
 const db = getDb();
 const r = pruneImported(db, env.STORAGE_PATH, { dryRun });
 const verb = dryRun ? "à retirer" : "retirés";
+const verbF = dryRun ? "à retirer" : "retirées";
 
 console.log(`Documents ${verb} : ${r.documents.length}`);
 for (const d of r.documents) console.log(`  - ${d.title}  [${d.sourcePath}]`);
-console.log(`Matières ${verb} : ${r.subjects.length}`);
+console.log(`Matières ${verbF} : ${r.subjects.length}`);
 for (const s of r.subjects) console.log(`  - ${s}`);
 if (dryRun) console.log("\n(simulation : rien n'a été modifié)");

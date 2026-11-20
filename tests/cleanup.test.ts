@@ -26,14 +26,14 @@ function put(root: string, rel: string, content: string): void {
 }
 
 describe("exclusions", () => {
-  it("exclut netflix, logos, cmake-build, archives de versions", () => {
+  it("exclut netflix, logos, cmake-build, Version Archive (PDF Archive gardé)", () => {
     expect(isExcludedPath("HOMEWORKS/TPE07 - 01/Resources/VS--Netflix-LeVoyage-23.jpg")).toBe(true);
     expect(isExcludedPath("Présentations B1/ECE_logo.png")).toBe(true);
     expect(isExcludedPath("assets/Omnes Logo.JPG")).toBe(true);
     expect(isExcludedPath("PROJECTS/demo/cmake-build-debug/main.c")).toBe(true);
     expect(isExcludedPath("PROJECTS/demo/CMakeLists.txt")).toBe(true);
     expect(isExcludedPath("COURSES/TPE-004/Version Archive/Basics (1.0).pptx")).toBe(true);
-    expect(isExcludedPath("COURSES/TPE-004/PDF Archive/Basics (v0.8).pdf")).toBe(true);
+    expect(isExcludedPath("COURSES/TPE-004/PDF Archive/Basics (v0.8).pdf")).toBe(false);
     expect(isExcludedPath("LICENSE.md")).toBe(true);
   });
 

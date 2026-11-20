@@ -1,6 +1,6 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { documents, subjects } from "../db/schema";
+import { documents, exercises, subjects } from "../db/schema";
 import { deleteDocument } from "../documents";
 import { DEFAULT_SUBJECTS } from "../subjects";
 import { isExcludedPath } from "./exclusions";
@@ -30,15 +30,23 @@ export function pruneImported(db: Db, storage?: string, opts: { dryRun?: boolean
   }
 
   const keep = new Set(DEFAULT_SUBJECTS.map((s) => s.slug));
+  // Matières sans document ni exercice (en simulation : une fois les documents condamnés retirés).
+  const doomedIds = new Set(result.documents.map((d) => d.id));
+  const counts = new Map<string, number>();
+  for (const d of db.select({ id: documents.id, subjectId: documents.subjectId }).from(documents).all()) {
+    if (d.subjectId && !doomedIds.has(d.id)) counts.set(d.subjectId, (counts.get(d.subjectId) ?? 0) + 1);
+  }
+  const withExercises = new Set(
+    db.select({ s: exercises.subjectId }).from(exercises).all().map((e) => e.s).filter((x): x is string => !!x),
+  );
   const empty = db
     .select()
     .from(subjects)
-    .where(sql`not exists (select 1 from documents d where d.subject_id = ${subjects.id}) and not exists (select 1 from exercises e where e.subject_id = ${subjects.id})`)
     .all()
-    .filter((s) => !keep.has(s.slug));
+    .filter((s) => !keep.has(s.slug) && !counts.has(s.id) && !withExercises.has(s.id));
   for (const s of empty) {
     result.subjects.push(s.name);
-    if (!opts.dryRun) db.delete(subjects).where(and(eq(subjects.id, s.id))).run();
+    if (!opts.dryRun) db.delete(subjects).where(eq(subjects.id, s.id)).run();
   }
   return result;
 }

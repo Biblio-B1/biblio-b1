@@ -21,7 +21,7 @@ export const EXCLUDED_DIR_PATTERNS: RegExp[] = [
   /^\.vscode$/i,
   /_files$/i, // pages web enregistrées
   // Anciennes versions d'un cours dont une version plus récente existe à côté.
-  /^(version|pdf)[\s_-]*archives?$/i,
+  /^version[\s_-]*archives?$/i,
   /^(old|anciennes?)[\s_-]*versions?$/i,
 ];
 
