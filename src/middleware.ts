@@ -8,6 +8,8 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (PUBLIC.some((re) => re.test(pathname))) return NextResponse.next();
   if (req.cookies.has("bb1_session")) return NextResponse.next();
+  // API : réponse JSON plutôt qu'une redirection HTML (le client affiche « session expirée »).
+  if (pathname.startsWith("/api/")) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   return NextResponse.redirect(new URL("/login", req.url));
 }
 

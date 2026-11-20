@@ -200,10 +200,13 @@ export async function importTree(db: Db, opts: ImportTreeOptions): Promise<Impor
             if (ex.body && !solutions.has(ex.number)) solutions.set(ex.number, ex.body);
           }
           for (const [number, solution] of solutions) {
-            db.update(exercises)
+            const updated = db
+              .update(exercises)
               .set({ solution })
               .where(and(eq(exercises.documentId, statementId), eq(exercises.number, number), isNull(exercises.solution)))
-              .run();
+              .returning()
+              .all();
+            for (const row of updated) indexExercise(db, row); // la solution fait partie du corps indexé
           }
         });
       } catch (e) {

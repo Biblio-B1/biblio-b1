@@ -37,7 +37,13 @@ export function pruneImported(db: Db, storage?: string, opts: { dryRun?: boolean
     if (d.subjectId && !doomedIds.has(d.id)) counts.set(d.subjectId, (counts.get(d.subjectId) ?? 0) + 1);
   }
   const withExercises = new Set(
-    db.select({ s: exercises.subjectId }).from(exercises).all().map((e) => e.s).filter((x): x is string => !!x),
+    db
+      .select({ s: exercises.subjectId, doc: exercises.documentId })
+      .from(exercises)
+      .all()
+      .filter((e) => !doomedIds.has(e.doc)) // en simulation : les exercices des documents condamnés disparaîtront
+      .map((e) => e.s)
+      .filter((x): x is string => !!x),
   );
   const empty = db
     .select()

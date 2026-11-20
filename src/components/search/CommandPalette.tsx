@@ -20,7 +20,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const router = useRouter();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PaletteResult[]>([]);
-  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error" | "expired">("idle");
   const seq = useRef(0);
 
   useEffect(() => {
@@ -37,6 +37,12 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/search?${new URLSearchParams({ q: term, limit: "20" })}`, { signal: ctrl.signal });
+        if (res.status === 401) {
+          if (mine !== seq.current) return;
+          setResults([]);
+          setState("expired");
+          return;
+        }
         if (!res.ok || !res.headers.get("content-type")?.includes("json")) throw new Error("search");
         const data = (await res.json()) as { results: PaletteResult[] };
         if (mine !== seq.current) return;
@@ -85,6 +91,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       <Command.List className="max-h-[60vh] overflow-y-auto p-1.5">
         {state === "loading" && results.length === 0 && <div className="px-3 py-6 text-center text-[14px] text-ink-3">Recherche…</div>}
         {state === "error" && <div className="px-3 py-6 text-center text-[14px] text-danger">La recherche a échoué. Réessayez.</div>}
+        {state === "expired" && <div className="px-3 py-6 text-center text-[14px] text-danger">Session expirée — reconnectez-vous.</div>}
         {state === "done" && results.length === 0 && <div className="px-3 py-6 text-center text-[14px] text-ink-3">Aucun résultat pour « {q.trim()} ».</div>}
         {state === "idle" && <div className="px-3 py-6 text-center text-[14px] text-ink-3">Tapez pour chercher dans les cours, exercices et notes.</div>}
         {DOC_TYPE_VALUES.map((type) => {
@@ -112,7 +119,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             </Command.Group>
           );
         })}
-        {q.trim() && state !== "error" && (
+        {q.trim() && state !== "error" && state !== "expired" && (
           <Command.Group>
             <Command.Item
               value="__all"

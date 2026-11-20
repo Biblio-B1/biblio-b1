@@ -41,6 +41,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: SP }
               <Link href="/upload" className="text-ink underline underline-offset-2">
                 Déposer des fichiers
               </Link>
+              {" "}ou lancer <code className="font-mono text-[13px]">npm run import</code> sur le serveur.
             </>
           )
         }

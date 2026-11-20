@@ -189,3 +189,23 @@ describe("pruneImported", () => {
     expect(again.subjects).toHaveLength(0);
   });
 });
+
+describe("pruneImported (simulation)", () => {
+  it("une matière dont les seuls exercices appartiennent à des documents condamnés est annoncée vide", () => {
+    const db = createTestDb();
+    seedSubjects(db);
+    const storage = fs.mkdtempSync(path.join(tmp, "st-prune-dry-"));
+    const extra = db.insert(subjects).values({ name: "data-analysis", slug: "data-analysis" }).returning().get();
+    const saved = saveImported(Buffer.from("x"), ".txt", storage);
+    const doc = createDocument(db, {
+      title: "x", type: "exercise", filePath: saved.filePath, mime: saved.mime, sha256: saved.sha256,
+      source: "local", sourcePath: "HW/Resources/VS--Netflix-a.png", subjectId: null,
+    });
+    db.insert(exercises).values({ documentId: doc.id, number: 1, title: "e", statement: "s", groupKey: "g", subjectId: extra.id }).run();
+    const dry = pruneImported(db, storage, { dryRun: true });
+    expect(dry.documents).toHaveLength(1);
+    expect(dry.subjects).toEqual(["data-analysis"]);
+    const real = pruneImported(db, storage);
+    expect(real.subjects).toEqual(dry.subjects);
+  });
+});

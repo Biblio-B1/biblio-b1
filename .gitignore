@@ -49,3 +49,4 @@ storage/
 # worker pdf.js copié par scripts/copy-pdf-worker.mjs
 /public/pdf.worker.min.mjs
 /.playwright-mcp/
+/backups/

@@ -4,7 +4,9 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
 import { documents, exercises, subjects, users } from "@/server/db/schema";
-import { createDocument, deleteDocument } from "@/server/documents";
+import { eq } from "drizzle-orm";
+import { createDocument, deleteDocument, setDocumentSubject } from "@/server/documents";
+import { importTree } from "@/server/import/run";
 import { indexDocument, indexExercise, parseSearchQuery, reindexAll, search } from "@/server/search";
 import { createThread, deleteThread } from "@/server/threads";
 
@@ -210,7 +212,33 @@ describe("parseSearchQuery et route", () => {
 
   it("la route /api/search valide elle-même la session", () => {
     const src = fs.readFileSync(path.resolve(import.meta.dirname, "../src/app/api/search/route.ts"), "utf8");
-    expect(src).toMatch(/await requireUser\(/);
+    expect(src).toMatch(/await getCurrentUser[(]/);
+    expect(src).toMatch(/status: 401/);
     expect(src).toMatch(/parseSearchQuery/);
+  });
+});
+
+describe("fraîcheur de l'index", () => {
+  it("l'appariement d'un corrigé à l'import réindexe les solutions des exercices", async () => {
+    const root = fs.mkdtempSync(path.join(tmp, "idx-"));
+    const put = (rel: string, c: string) => fs.writeFileSync(path.join(root, rel), c);
+    put("TD1.txt", "Exercice 1 : Somme\nCalculer la somme.\nExercice 2 : Produit\nCalculer le produit.");
+    put("TD1 (corrigé).txt", "Exercice 1 : Somme\nutiliser accumulateurzeta ici.\nExercice 2 : Produit\nautre chose.");
+    const st = fs.mkdtempSync(path.join(tmp, "idx-st-"));
+    await importTree(db, { root, source: "local", storage: st, mode: "classify" });
+    expect(db.select().from(exercises).all().some((e) => e.solution?.includes("accumulateurzeta"))).toBe(true);
+    expect(search(db, { q: "accumulateurzeta" }).map((h) => h.entity)).toContain("exercise");
+  });
+
+  it("setDocumentSubject réindexe le document, ses exercices et les fils qui les visent", () => {
+    const d = mkDoc("Cours tableaux", "tableaux", { subjectId: subjA });
+    const e = mkEx(d.id, "Exo tableaux", "tableaux", subjA);
+    createThread(db, { targetType: "document", targetId: d.id, authorId: userId, title: "Question tableaux", body: "tableaux ?", kind: "question" });
+    createThread(db, { targetType: "exercise", targetId: e.id, authorId: userId, title: "Note exo tableaux", body: "tableaux", kind: "note" });
+    expect(search(db, { q: "tableaux", subjectId: subjA })).toHaveLength(4);
+    setDocumentSubject(db, d.id, subjB);
+    expect(search(db, { q: "tableaux", subjectId: subjA })).toEqual([]);
+    expect(search(db, { q: "tableaux", subjectId: subjB })).toHaveLength(4);
+    expect(db.select().from(exercises).where(eq(exercises.id, e.id)).get()!.subjectId).toBe(subjB);
   });
 });

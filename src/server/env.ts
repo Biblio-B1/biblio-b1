@@ -15,11 +15,13 @@ const schema = z.object({
 
 export type Env = z.infer<typeof schema>;
 
-// Chaîne vide dans .env = variable non définie (retombe sur le défaut).
-function readEnv(): Env {
+export const DEV_SESSION_SECRET = "dev-insecure-secret-change-me";
+
+/** Valide un environnement brut (chaîne vide = variable non définie, retombe sur le défaut). */
+export function parseEnv(source: Record<string, string | undefined>): Env {
   const raw: Record<string, string | undefined> = {};
   for (const key of Object.keys(schema.shape)) {
-    const v = process.env[key];
+    const v = source[key];
     if (v !== undefined && v !== "") raw[key] = v;
   }
   const parsed = schema.safeParse(raw);
@@ -30,7 +32,24 @@ function readEnv(): Env {
         .join(", ")}`,
     );
   }
-  return parsed.data;
+  const data = parsed.data;
+  if (source.NODE_ENV === "production") {
+    const problems: string[] = [];
+    if (data.SESSION_SECRET.trim() === "" || data.SESSION_SECRET === DEV_SESSION_SECRET || data.SESSION_SECRET === "change-me-to-a-long-random-string") {
+      problems.push("SESSION_SECRET doit être une chaîne aléatoire longue (ex. : openssl rand -hex 32)");
+    }
+    if (data.ADMIN_INVITE_CODE.trim() === "" || data.ADMIN_INVITE_CODE === "change-me") {
+      problems.push("ADMIN_INVITE_CODE doit être défini à une valeur secrète (pas « change-me »)");
+    }
+    if (problems.length) {
+      throw new Error(`Configuration de production refusée : ${problems.join(" ; ")}. Corrigez le fichier .env.`);
+    }
+  }
+  return data;
+}
+
+function readEnv(): Env {
+  return parseEnv(process.env);
 }
 
 let cached: Env | undefined;

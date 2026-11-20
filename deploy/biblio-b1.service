@@ -1,0 +1,25 @@
+# Unité systemd « utilisateur » pour Biblio B1.
+# Installation :
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/biblio-b1.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now biblio-b1
+#   loginctl enable-linger "$USER"     # démarre aussi sans session ouverte
+# Adaptez WorkingDirectory si le dépôt n'est pas dans ~/biblio-b1.
+# La configuration (PORT, SESSION_SECRET, …) est lue dans le fichier .env du dossier de travail.
+[Unit]
+Description=Biblio B1 (bibliothèque d'étude de la promo)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/biblio-b1
+Environment=NODE_ENV=production
+# Sous nvm, `npm` n'est pas dans le PATH de systemd : `bash -lc` charge le profil de connexion
+# (~/.profile / ~/.bashrc). Sinon, remplacez par le chemin absolu de npm.
+ExecStart=/bin/bash -lc 'exec npm start'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "./db/client";
 import { DOC_SOURCES, DOC_TYPES, documents, exercises, importExclusions, posts, progress, threads } from "./db/schema";
-import { indexDocument, removeFromIndex } from "./search";
+import { indexDocument, indexExercise, indexThread, removeFromIndex } from "./search";
 import { resolveStoragePath } from "./storage";
 import { removeUnreferencedImages } from "./threads";
 
@@ -54,19 +54,42 @@ export function listDocuments(
 }
 
 /** Reclasse manuellement un document (marqué confirmé). */
+/**
+ * Change la matière d'un document (confirmée). La matière est copiée dans ses exercices et dans
+ * l'index de recherche : exercices et fils qui visent le document ou ses exercices sont réindexés.
+ */
 export function setDocumentSubject(
   db: Db,
   id: string,
   subjectId: string | null,
 ): Document | undefined {
-  const doc = db
-    .update(documents)
-    .set({ subjectId, subjectConfirmed: true })
-    .where(eq(documents.id, id))
-    .returning()
-    .get();
-  if (doc) indexDocument(db, doc);
-  return doc;
+  return db.$client.transaction(() => {
+    const doc = db
+      .update(documents)
+      .set({ subjectId, subjectConfirmed: true })
+      .where(eq(documents.id, id))
+      .returning()
+      .get();
+    if (!doc) return undefined;
+    indexDocument(db, doc);
+    const exs = db.update(exercises).set({ subjectId }).where(eq(exercises.documentId, id)).returning().all();
+    for (const e of exs) indexExercise(db, e);
+    const exIds = exs.map((e) => e.id);
+    const ths = db
+      .select()
+      .from(threads)
+      .where(
+        or(
+          and(eq(threads.targetType, "document"), eq(threads.targetId, id)),
+          exIds.length ? and(eq(threads.targetType, "exercise"), inArray(threads.targetId, exIds)) : undefined,
+        ),
+      )
+      .all();
+    for (const t of ths) {
+      indexThread(db, t, db.select().from(posts).where(eq(posts.threadId, t.id)).orderBy(asc(posts.createdAt)).all());
+    }
+    return doc;
+  })();
 }
 
 export type DeleteActor = { id: string | null; role: "admin" | "member" };

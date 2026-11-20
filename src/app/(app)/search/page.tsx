@@ -30,7 +30,9 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
         <h1 className="page-title">Recherche</h1>
         <p className="text-ink-2" aria-live="polite">
           {!parsed
-            ? "Filtres invalides : vérifiez les dates."
+            ? (raw.q ?? "").trim().length > 200
+              ? "Recherche trop longue (200 caractères max)."
+              : "Filtres invalides : vérifiez les dates."
             : v?.q
               ? `${results.length} résultat${results.length > 1 ? "s" : ""} pour « ${v.q} »`
               : "Cherchez dans les cours, exercices, annales et notes."}
