@@ -10,7 +10,8 @@ import { ImageGallery } from "@/components/viewers/ImageGallery";
 import { MarkdownView } from "@/components/viewers/MarkdownView";
 import { PdfViewer } from "@/components/viewers/PdfViewer";
 import { DOC_TYPE_LABELS, fileUrl, formatDate } from "@/lib/labels";
-import { requireUser } from "@/server/auth/session";
+import Link from "next/link";
+import { getCurrentUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { documents, users } from "@/server/db/schema";
 import { canDeleteDocument, getDocument, type Document } from "@/server/documents";
@@ -30,7 +31,7 @@ const CODE_LANG: Record<string, string> = { ".c": "c", ".h": "c", ".py": "python
 const isUuid = (s: string) => /^[0-9a-f-]{36}$/i.test(s);
 
 export async function generateMetadata({ params }: { params: Params }) {
-  await requireUser();
+  await getCurrentUser(); // page publique : consultation sans compte
   const { id } = await params;
   return { title: (isUuid(id) && getDocument(getDb(), id)?.title) || "Document" };
 }
@@ -125,7 +126,7 @@ async function Viewer({ doc }: { doc: Document }) {
 }
 
 export default async function DocPage({ params }: { params: Params }) {
-  const user = await requireUser();
+  const user = await getCurrentUser(); // page publique : null pour un visiteur sans compte
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const db = getDb();
@@ -136,7 +137,7 @@ export default async function DocPage({ params }: { params: Params }) {
   const author = doc.authorId
     ? db.select({ name: users.name }).from(users).where(eq(users.id, doc.authorId)).get()?.name
     : undefined;
-  const canDelete = canDeleteDocument(doc, user);
+  const canDelete = user ? canDeleteDocument(doc, user) : false;
   const needsReview = !doc.subjectConfirmed || !doc.subjectId;
 
   return (
@@ -158,6 +159,7 @@ export default async function DocPage({ params }: { params: Params }) {
           {canDelete && <DeleteDocumentButton id={doc.id} action={deleteDocumentAction} />}
         </div>
 
+        {user && (
         <form
           action={setSubjectAction}
           className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[14px] ${
@@ -178,10 +180,17 @@ export default async function DocPage({ params }: { params: Params }) {
           </select>
           <button className={`btn h-8 ${needsReview ? "btn-primary" : ""}`}>{needsReview ? "Confirmer" : "Changer"}</button>
         </form>
+        )}
       </header>
 
       <Viewer doc={doc} />
-      <QAPanel targetType="document" targetId={doc.id} viewer={{ id: user.id, role: user.role }} />
+      {user ? (
+        <QAPanel targetType="document" targetId={doc.id} viewer={{ id: user.id, role: user.role }} />
+      ) : (
+        <p className="rounded-lg border border-line bg-surface px-4 py-3 text-[14px] text-ink-2">
+          <Link href="/login" className="underline underline-offset-2">Connectez-vous</Link> pour voir les notes et poser une question sur ce document.
+        </p>
+      )}
     </div>
   );
 }

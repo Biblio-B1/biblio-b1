@@ -14,7 +14,8 @@ export const MENU_EVENT = "bb1:menu";
 type Props = {
   subjects: SidebarSubject[];
   unclassified: number;
-  user: { name: string; role: "admin" | "member" };
+  /** null : visiteur sans compte (bibliothèque publique seulement). */
+  user: { name: string; role: "admin" | "member" } | null;
 };
 
 function NavLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
@@ -46,21 +47,27 @@ function SidebarContent({ subjects, unclassified, user }: Props) {
       </Link>
 
       <nav className="flex flex-col gap-0.5" aria-label="Navigation principale">
-        <NavLink href="/" active={is("/")}>
-          <IconHome /> Tableau de bord
-        </NavLink>
+        {user && (
+          <NavLink href="/" active={is("/")}>
+            <IconHome /> Tableau de bord
+          </NavLink>
+        )}
         <NavLink href="/library" active={is("/library")}>
           <IconBooks /> Bibliothèque
         </NavLink>
-        <NavLink href="/training" active={pathname === "/training" || pathname.startsWith("/training/")}>
-          <IconCheckList /> Entraînement
-        </NavLink>
-        <NavLink href="/upload" active={is("/upload")}>
-          <IconUpload /> Déposer des fichiers
-        </NavLink>
-        <NavLink href="/notes/new" active={is("/notes/new")}>
-          <IconPen /> Nouvelle fiche
-        </NavLink>
+        {user && (
+          <>
+            <NavLink href="/training" active={pathname === "/training" || pathname.startsWith("/training/")}>
+              <IconCheckList /> Entraînement
+            </NavLink>
+            <NavLink href="/upload" active={is("/upload")}>
+              <IconUpload /> Déposer des fichiers
+            </NavLink>
+            <NavLink href="/notes/new" active={is("/notes/new")}>
+              <IconPen /> Nouvelle fiche
+            </NavLink>
+          </>
+        )}
       </nav>
 
       <nav className="flex flex-col gap-0.5" aria-label="Matières">
@@ -81,7 +88,7 @@ function SidebarContent({ subjects, unclassified, user }: Props) {
         )}
       </nav>
 
-      {user.role === "admin" && (
+      {user?.role === "admin" && (
         <nav className="flex flex-col gap-0.5" aria-label="Administration">
           <p className="px-2 pb-1 text-[12.5px] font-medium text-ink-3">Administration</p>
           <NavLink href="/admin/subjects" active={is("/admin/subjects")}>
@@ -96,6 +103,7 @@ function SidebarContent({ subjects, unclassified, user }: Props) {
         </nav>
       )}
 
+      {user ? (
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-line px-2 pt-3 text-sm">
         <span className="truncate text-ink-2" title={user.name}>
           {user.name}
@@ -104,6 +112,14 @@ function SidebarContent({ subjects, unclassified, user }: Props) {
           <button className="text-[13px] text-ink-3 underline-offset-2 hover:text-ink hover:underline">Se déconnecter</button>
         </form>
       </div>
+      ) : (
+        <div className="mt-auto border-t border-line px-2 pt-3 text-sm">
+          <Link href="/login" className="text-ink-2 underline-offset-2 hover:text-ink hover:underline">
+            Se connecter
+          </Link>
+          <p className="mt-1 text-[12.5px] text-ink-3">Entraînement, dépôt et questions réservés aux membres.</p>
+        </div>
+      )}
     </div>
   );
 }

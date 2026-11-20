@@ -15,11 +15,25 @@ function pages(dir: string): string[] {
   });
 }
 
+// Pages publiques (consultation des documents sans compte, demande de l'utilisateur) :
+// elles lisent la session avec getCurrentUser() et masquent ce qui exige un compte.
+const PUBLIC_PAGES = new Set(["library/page.tsx", "library/[subject]/page.tsx", "doc/[id]/page.tsx"]);
+const rel = (f: string) => path.relative(APP_DIR, f).split(path.sep).join("/");
+
+describe("pages publiques", () => {
+  it.each([...PUBLIC_PAGES])("%s lit la session avec getCurrentUser()", (r) => {
+    const src = fs.readFileSync(path.join(APP_DIR, r), "utf8");
+    const exported = src.match(/export (default )?async function \w+/g) ?? [];
+    expect(src).not.toMatch(/requireUser\(/);
+    expect((src.match(/await getCurrentUser\(/g) ?? []).length).toBeGreaterThanOrEqual(exported.length);
+  });
+});
+
 describe("pages authentifiées", () => {
-  const files = pages(APP_DIR);
+  const files = pages(APP_DIR).filter((f) => !PUBLIC_PAGES.has(rel(f)));
 
   it("trouve les pages du groupe (app)", () => {
-    expect(files.length).toBeGreaterThanOrEqual(8);
+    expect(files.length).toBeGreaterThanOrEqual(6);
   });
 
   it.each(files.map((f) => [path.relative(APP_DIR, f), f]))("%s appelle requireUser()", (_rel, file) => {

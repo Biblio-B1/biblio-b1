@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { DocumentList, TypeFilter } from "@/components/library/DocumentList";
 import { Spine } from "@/components/layout/Spine";
 import { fileUrl, parseType } from "@/lib/labels";
-import { requireUser } from "@/server/auth/session";
+import { getCurrentUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { listDocuments } from "@/server/documents";
 import { filterByTitle, listUnclassified } from "@/server/library";
@@ -15,14 +15,14 @@ type Params = Promise<{ subject: string }>;
 type SP = Promise<{ type?: string; q?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }) {
-  await requireUser();
+  await getCurrentUser(); // page publique : consultation sans compte
   const { subject } = await params;
   if (subject === UNCLASSIFIED) return { title: "Sans matière" };
   return { title: getSubjectBySlug(getDb(), subject)?.name ?? "Matière" };
 }
 
 export default async function SubjectPage({ params, searchParams }: { params: Params; searchParams: SP }) {
-  await requireUser();
+  await getCurrentUser(); // page publique : consultation sans compte
   const { subject: slug } = await params;
   const { type: rawType, q: rawQ } = await searchParams;
   const q = typeof rawQ === "string" ? rawQ.slice(0, 200) : undefined;

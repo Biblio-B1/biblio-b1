@@ -14,12 +14,10 @@ const INLINE = new Set(["application/pdf", "image/jpeg", "image/png", "image/web
 
 /**
  * GET /files/<filePath> : sert un fichier stocké sous STORAGE_PATH/uploads.
- * Le middleware laisse passer les URL finissant par une extension d'image :
- * la session est donc vérifiée ici, systématiquement.
+ * Les fichiers des documents de la bibliothèque sont publics ; les autres
+ * (images jointes aux questions/réponses) exigent une session, vérifiée ici.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
-  if (!(await getCurrentUser())) return new Response("Non authentifié", { status: 401 });
-
   const segments = (await params).path;
   const abs = resolveServedFile(segments);
   if (!abs) return new Response("Fichier introuvable", { status: 404 });
@@ -32,6 +30,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
     .from(documents)
     .where(eq(documents.filePath, relPath))
     .get();
+  if (!doc && !(await getCurrentUser())) return new Response("Non authentifié", { status: 401 });
   const downloadName = `${(doc?.title ?? "fichier").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 150)}${ext}`;
   const wantsDownload = new URL(req.url).searchParams.has("download");
   const inline = INLINE.has(mime) && !wantsDownload;
