@@ -6,7 +6,7 @@ Tout est stocké dans un dossier (`storage/` par défaut) : base `data.db`, fich
 
 ## Prérequis
 
-Node.js 20 ou plus récent, git, et une chaîne de compilation (certains modules natifs, comme `better-sqlite3`, se compilent à l'installation si aucun binaire précompilé n'existe).
+Node.js 22 LTS (22.18 ou plus récent, requis par les moteurs d'exécution des exercices), git, et une chaîne de compilation (certains modules natifs, comme `better-sqlite3`, se compilent à l'installation si aucun binaire précompilé n'existe).
 
 ### Sur ChromeOS (Linux / Crostini)
 
@@ -19,14 +19,14 @@ Node.js 20 ou plus récent, git, et une chaîne de compilation (certains modules
    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
    # rouvrez le terminal, puis :
    nvm install 22
-   node -v   # v22.x
+   node -v   # v22.18 ou plus
    ```
 
    (`sqlite3` est facultatif : il sert aux sauvegardes ; sans lui le script utilise Node.)
 
 ### Sur Windows (développement)
 
-Node 20+ et git suffisent ; utilisez PowerShell ou Git Bash.
+Node 22 LTS (22.18+) et git suffisent ; utilisez PowerShell ou Git Bash.
 
 ## Installation
 

@@ -118,6 +118,19 @@ describe("runCode — Python", () => {
     expect(r).toMatchObject({ ok: false, exitCode: 2, stdout: "avant\n" });
   }, LONG);
 
+  it("builtins modifiés par une exécution n'affectent pas la suivante", async () => {
+    await runCode("python", "import builtins\nbuiltins.input = lambda *a: '21'\nbuiltins.print = None", "");
+    const r = await runCode("python", "print(int(input())*2)", "");
+    expect(r.ok).toBe(false);
+    expect(r.stderr).toMatch(/EOFError/);
+  }, LONG);
+
+  it("module standard modifié (math, io) restauré pour l'exécution suivante", async () => {
+    await runCode("python", "import math, io, sys\nmath.sqrt = lambda x: 0\nio.StringIO = None\nsys.setrecursionlimit(50)\nsys.path.append('/x')", "");
+    const r = await runCode("python", "import math, io, sys\nprint(math.sqrt(4))\nprint(io.StringIO is not None)\nprint(sys.getrecursionlimit() > 50, '/x' in sys.path)", "");
+    expect(r.stdout).toBe("2.0\nTrue\nTrue False\n");
+  }, LONG);
+
   it("boucle infinie → arrêtée au délai", async () => {
     const t0 = Date.now();
     const r = await runCode("python", "while True:\n  pass", "", { timeoutMs: 1500 });
@@ -151,6 +164,37 @@ describe("runCode — JavaScript", () => {
     expect(r).toMatchObject({ ok: false, phase: "compile" });
     expect(r.stderr).toMatch(/SyntaxError/);
   });
+
+  it("minuteries : attendues jusqu'à la fin, sortie capturée", async () => {
+    const r = await runCode("javascript", "setTimeout(() => console.log('tard'), 20);\nconst id = setTimeout(() => console.log('jamais'), 30);\nclearTimeout(id);\nlet n = 0; const t = setInterval(() => { n++; if (n === 3) { clearInterval(t); console.log(n); } }, 5);\nconsole.log('tôt');", "", { timeoutMs: 3000 });
+    expect(r).toMatchObject({ ok: true, stdout: "tôt\ntard\n3\n" });
+  });
+
+  it("exception dans une minuterie → ok=false", async () => {
+    const r = await runCode("javascript", "setTimeout(() => { throw new Error('plus tard') }, 5)", "", { timeoutMs: 3000 });
+    expect(r).toMatchObject({ ok: false, phase: "run" });
+    expect(r.stderr).toMatch(/Error: plus tard/);
+  });
+
+  it("minuterie qui boucle ou setInterval sans fin → délai, puis exécution suivante normale", async () => {
+    const a = await runCode("javascript", "setTimeout(() => { while (true) {} }, 10); console.log('hi')", "", { timeoutMs: 1000 });
+    expect(a.timedOut).toBe(true);
+    const b = await runCode("javascript", "setInterval(() => {}, 1); console.log('x')", "", { timeoutMs: 1000 });
+    expect(b.timedOut).toBe(true);
+    const t0 = Date.now();
+    const c = await runCode("javascript", "console.log(1)", "", { timeoutMs: 1000 });
+    expect(c).toMatchObject({ ok: true, stdout: "1\n" });
+    expect(Date.now() - t0).toBeLessThan(1500);
+  });
+
+  it("minuterie globale contournée (globalThis.setTimeout) : l'exécution suivante n'est pas bloquée", async () => {
+    await runCode("javascript", "globalThis.setTimeout(() => { while (true) {} }, 10); console.log('hi')", "", { timeoutMs: 1000 });
+    await new Promise((r) => setTimeout(r, 100));
+    const t0 = Date.now();
+    const c = await runCode("javascript", "console.log(2)", "", { timeoutMs: 1000 });
+    expect(c).toMatchObject({ ok: true, stdout: "2\n" });
+    expect(Date.now() - t0).toBeLessThan(2500);
+  }, 10_000);
 
   it("boucle infinie → arrêtée au délai", async () => {
     const r = await runCode("javascript", "while (true) {}", "", { timeoutMs: 1000 });

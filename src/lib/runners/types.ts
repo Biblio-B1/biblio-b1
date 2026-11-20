@@ -42,8 +42,10 @@ export const MAX_OUTPUT_CHARS = 1_000_000;
  *   arguments séparés par une espace, saut de ligne final. Chaînes telles quelles,
  *   autres valeurs en JSON (`[1,2]`, `{"a":1}`), sinon `String(valeur)`.
  * - `console.error(...)` / `console.warn` : écrivent sur la sortie d'erreur.
- * - `await` est autorisé au niveau principal ; le programme se termine quand le code
- *   principal a fini (les minuteries encore en attente sont ignorées).
+ * - `await` est autorisé au niveau principal.
+ * - `setTimeout` / `setInterval` / `clearTimeout` / `clearInterval` sont fournis : le programme
+ *   se termine quand le code principal a fini ET qu'aucune minuterie n'est en attente
+ *   (un `setInterval` jamais arrêté mène donc au délai dépassé).
  */
 export type JavaScriptStudentApi = {
   input(): string | null;

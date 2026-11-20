@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18"
   },
   "scripts": {
     "postinstall": "node scripts/copy-pdf-worker.mjs && node scripts/copy-runtimes.mjs",

@@ -2,6 +2,11 @@
 // worker_thread persistant (moteur chargé une seule fois) ; à l'échéance du délai, le worker
 // est terminé (le code bouclant est réellement arrêté) puis recréé à la demande suivante.
 // Le navigateur utilise `browser.ts` (aucune dépendance Node).
+//
+// RÉSERVÉ à tsx (solveur) et vitest : ne jamais importer ce fichier depuis du code serveur
+// Next (webpack ne sait pas lancer node-worker.ts). Le worker est chargé par Node lui-même :
+// sous vitest grâce au « type stripping » natif (Node >= 22.18), sous tsx par son chargeur
+// (hérité par les worker_threads).
 import { Worker } from "node:worker_threads";
 import { timeoutMessage, type WorkerRequest, type WorkerResponse } from "./protocol.ts";
 import { DEFAULT_TIMEOUT_MS, type Language, type RunOptions, type RunResult } from "./types.ts";
@@ -13,6 +18,15 @@ export type { Language, RunOptions, RunResult } from "./types.ts";
 /** Délai maximal de chargement d'un moteur (clang ~100 Mo à compiler au premier appel). */
 const LOAD_TIMEOUT_MS = 120_000;
 
+/**
+ * Un worker déjà chaud répond en quelques ms par un message `phase`. Sans réponse dans ce
+ * délai, il est considéré bloqué (code d'une exécution précédente encore actif, p. ex. une
+ * minuterie posée via globalThis) : il est terminé et la requête relancée sur un worker neuf.
+ */
+const STALL_MS = 2_000;
+
+const STALLED = Symbol("stalled");
+
 const WORKER_URL = new URL("./node-worker.ts", import.meta.url);
 
 class Lane {
@@ -20,13 +34,18 @@ class Lane {
   private queue: Promise<unknown> = Promise.resolve();
   private nextId = 1;
   private readonly lang: Language;
+  /** Workers ayant déjà rendu un résultat (moteur chargé). */
+  private readonly warm = new WeakSet<Worker>();
 
   constructor(lang: Language) {
     this.lang = lang;
   }
 
   run(code: string, stdin: string, timeoutMs: number): Promise<RunResult> {
-    const p = this.queue.then(() => this.exec(code, stdin, timeoutMs));
+    const p = this.queue.then(async () => {
+      const r = await this.exec(code, stdin, timeoutMs);
+      return r === STALLED ? ((await this.exec(code, stdin, timeoutMs)) as RunResult) : r;
+    });
     this.queue = p.catch(() => {});
     return p;
   }
@@ -45,9 +64,10 @@ class Lane {
     return this.worker;
   }
 
-  private exec(code: string, stdin: string, timeoutMs: number): Promise<RunResult> {
-    return new Promise<RunResult>((resolve) => {
+  private exec(code: string, stdin: string, timeoutMs: number): Promise<RunResult | typeof STALLED> {
+    return new Promise<RunResult | typeof STALLED>((resolve) => {
       const worker = this.ensureWorker();
+      const warm = this.warm.has(worker);
       const id = this.nextId++;
       let phase: "compile" | "run" = this.lang === "c" ? "compile" : "run";
       let startedAt = 0;
@@ -64,7 +84,7 @@ class Lane {
         durationMs: startedAt ? Math.round(performance.now() - startedAt) : 0,
       });
 
-      const finish = (r: RunResult, kill: boolean) => {
+      const finish = (r: RunResult | typeof STALLED, kill: boolean) => {
         if (settled) return;
         settled = true;
         clearTimeout(loadTimer);
@@ -91,6 +111,7 @@ class Lane {
             runTimer = setTimeout(() => finish(fail(timeoutMessage(timeoutMs), true), true), timeoutMs);
           }
         } else if (m.type === "result") {
+          this.warm.add(worker);
           finish(m.result, false);
         } else {
           finish(fail(m.message, false), false);
@@ -100,8 +121,8 @@ class Lane {
       const onExit = (code: number) => finish(fail(`Le moteur d'exécution s'est arrêté (code ${code}).`, false), true);
 
       const loadTimer = setTimeout(
-        () => finish(fail("Le moteur d'exécution n'a pas pu être chargé à temps.", false), true),
-        LOAD_TIMEOUT_MS,
+        () => finish(warm ? STALLED : fail("Le moteur d'exécution n'a pas pu être chargé à temps.", false), true),
+        warm ? STALL_MS : LOAD_TIMEOUT_MS,
       );
 
       worker.on("message", onMessage);

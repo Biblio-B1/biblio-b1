@@ -9,6 +9,9 @@
 // Côté page : `postMessage({ id, lang, code, stdin })`, messages `phase` puis `result` / `error`
 // (voir protocol.ts). Le délai s'applique côté page : `worker.terminate()` au premier message
 // `phase` + timeoutMs, puis nouveau Worker (le moteur sera rechargé, depuis le cache HTTP).
+// Les requêtes sont traitées une à une (file FIFO). Un worker déjà chaud qui n'envoie pas
+// `phase` en ~2 s est bloqué (code d'une exécution précédente) : le terminer et relancer
+// la requête sur un worker neuf (même règle que index.ts côté Node).
 import { prepareClang } from "./c.ts";
 import { createEngine, type Engine } from "./engine.ts";
 import type { WorkerRequest, WorkerResponse } from "./protocol.ts";
@@ -47,8 +50,13 @@ type WorkerScope = {
 
 /** Branche le protocole de protocol.ts sur un Web Worker. */
 export function attachWorkerProtocol(scope: WorkerScope, engine: Engine): void {
-  scope.addEventListener("message", async (e) => {
+  let queue: Promise<void> = Promise.resolve();
+  scope.addEventListener("message", (e) => {
     const req = e.data;
+    queue = queue.then(() => handle(req));
+  });
+
+  async function handle(req: WorkerRequest): Promise<void> {
     try {
       const result = await engine.execute(req.lang, req.code, req.stdin, (phase) =>
         scope.postMessage({ id: req.id, type: "phase", phase }),
@@ -57,5 +65,5 @@ export function attachWorkerProtocol(scope: WorkerScope, engine: Engine): void {
     } catch (err) {
       scope.postMessage({ id: req.id, type: "error", message: err instanceof Error ? err.message : String(err) });
     }
-  });
+  }
 }

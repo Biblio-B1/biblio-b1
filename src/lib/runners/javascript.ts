@@ -53,20 +53,103 @@ export async function runJavaScript(code: string, stdin: string, onPhase: PhaseL
     durationMs: Math.round(performance.now() - t0),
   });
 
+  // Minuteries fournies au code : suivies pour que l'exécution attende celles en attente
+  // (leur sortie est capturée) et qu'aucune ne survive à la fin de l'exécution.
+  let failure: unknown = undefined;
+  const timers = createTimers((e) => {
+    if (failure === undefined) failure = e;
+  });
+
   let fn: (...args: unknown[]) => Promise<unknown>;
   try {
-    fn = new AsyncFunction("input", "readline", "console", code);
+    fn = new AsyncFunction("input", "readline", "console", ...TIMER_NAMES, code);
   } catch (e) {
     err.write(formatValue(e) + "\n");
     return done("compile", null);
   }
   onPhase("run");
   try {
-    await fn(api.input, api.readline, api.console);
-    return done("run", 0);
+    await fn(api.input, api.readline, api.console, ...timers.api);
+    await timers.idle(() => failure !== undefined);
   } catch (e) {
-    err.write(formatValue(e) + "\n");
+    if (failure === undefined) failure = e;
+  } finally {
+    timers.clearAll();
+  }
+  if (failure !== undefined) {
+    err.write(formatValue(failure) + "\n");
     return done("run", 1);
   }
+  return done("run", 0);
 }
 
+const TIMER_NAMES = ["setTimeout", "setInterval", "clearTimeout", "clearInterval"] as const;
+
+type Callback = (...args: unknown[]) => unknown;
+
+function createTimers(onError: (e: unknown) => void) {
+  const pending = new Map<number, { kind: "timeout" | "interval"; handle: ReturnType<typeof setTimeout> }>();
+  let nextId = 1;
+  let wake: (() => void) | null = null;
+  let stopped = false;
+  const notify = () => wake?.();
+
+  const invoke = (cb: unknown, args: unknown[]) => {
+    if (stopped) return;
+    try {
+      const r = typeof cb === "function" ? (cb as Callback)(...args) : undefined;
+      if (r && typeof (r as Promise<unknown>).then === "function") (r as Promise<unknown>).then(undefined, (e) => {
+          onError(e);
+          notify();
+        });
+    } catch (e) {
+      onError(e);
+    }
+    notify();
+  };
+
+  const setT = (cb: unknown, ms?: number, ...args: unknown[]): number => {
+    const id = nextId++;
+    const handle = setTimeout(() => {
+      pending.delete(id);
+      invoke(cb, args);
+    }, Number(ms) || 0);
+    pending.set(id, { kind: "timeout", handle });
+    return id;
+  };
+  const setI = (cb: unknown, ms?: number, ...args: unknown[]): number => {
+    const id = nextId++;
+    const handle = setInterval(() => invoke(cb, args), Number(ms) || 0);
+    pending.set(id, { kind: "interval", handle });
+    return id;
+  };
+  const clear = (id: unknown) => {
+    const t = pending.get(id as number);
+    if (!t) return;
+    if (t.kind === "timeout") clearTimeout(t.handle);
+    else clearInterval(t.handle);
+    pending.delete(id as number);
+    notify();
+  };
+
+  return {
+    api: [setT, setI, clear, clear] as unknown[],
+    /** Résout quand plus aucune minuterie n'est en attente (ou si `stop()` devient vrai). */
+    idle(stop: () => boolean): Promise<void> {
+      return new Promise<void>((resolve) => {
+        const check = () => {
+          if (pending.size === 0 || stop()) {
+            wake = null;
+            resolve();
+          }
+        };
+        wake = () => queueMicrotask(check);
+        check();
+      });
+    },
+    clearAll() {
+      stopped = true;
+      for (const id of [...pending.keys()]) clear(id);
+    },
+  };
+}
