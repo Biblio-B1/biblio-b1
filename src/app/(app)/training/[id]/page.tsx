@@ -6,7 +6,7 @@ import { CodeExercise } from "@/components/training/CodeExercise";
 import { Reveal } from "@/components/training/Reveal";
 import { StatusPicker } from "@/components/training/StatusPicker";
 import { requireUser } from "@/server/auth/session";
-import { getAttempt, getCheck } from "@/server/checks";
+import { getAttempt, getCheck, listOpenReports } from "@/server/checks";
 import { getDb } from "@/server/db/client";
 import { getDocument } from "@/server/documents";
 import { env } from "@/server/env";
@@ -43,8 +43,17 @@ export default async function ExercisePage({ params }: { params: Params }) {
   const checkRow = getCheck(db, ex.id);
   // Tous les tests (cachés compris) partent au navigateur : la vérification s'y exécute ;
   // l'interface n'affiche que l'entrée et la sortie attendue du test visible.
+  const isAdmin = user.role === "admin";
+  const reports = isAdmin
+    ? listOpenReports(db, { id: user.id, role: user.role }, ex.id).map((r) => ({
+        id: r.id,
+        message: r.message,
+        authorName: r.authorName,
+        createdAt: r.createdAt.toISOString(),
+      }))
+    : undefined;
   const check = checkRow
-    ? { status: checkRow.status, language: checkRow.language, tests: checkRow.tests ?? [], verified: checkRow.verified }
+    ? { status: checkRow.status, language: checkRow.language, tests: checkRow.tests ?? [], verified: checkRow.verified, reports }
     : null;
   const attemptRow = getAttempt(db, user.id, ex.id);
   const attempt = attemptRow ? { language: attemptRow.language, code: attemptRow.code } : null;
@@ -101,7 +110,7 @@ export default async function ExercisePage({ params }: { params: Params }) {
         exerciseId={ex.id}
         check={check}
         attempt={attempt}
-        isAdmin={user.role === "admin"}
+        isAdmin={isAdmin}
         timeoutMs={env.SOLVER_TIMEOUT_MS}
         subjectName={subject?.name ?? null}
       />

@@ -3,7 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/server/auth/session";
-import { reportCheck, requeueCheck, saveAttempt, updateTests, verifyCheck, type CheckTest } from "@/server/checks";
+import {
+  reportCheck,
+  requeueCheck,
+  resolveReport,
+  saveAttempt,
+  updateTests,
+  verifyCheck,
+  type CheckLanguage,
+  type CheckTest,
+} from "@/server/checks";
 import { getDb } from "@/server/db/client";
 import { CHECK_LANGUAGES } from "@/server/db/schema";
 
@@ -28,6 +37,7 @@ function errorText(e: unknown, fallback: string): string {
   if (m === "forbidden") return "Action réservée aux administrateurs.";
   if (m === "not_found") return "Exercice introuvable.";
   if (m === "invalid") return "Données invalides.";
+  if (m === "unverifiable") return "Validation impossible : le pré-calcul n'a pas produit de tests (statut autre que « ready »). Modifiez les tests à la main.";
   return fallback;
 }
 
@@ -69,17 +79,24 @@ export async function verifyCheckAction(exerciseId: string): Promise<Result> {
   try {
     verifyCheck(getDb(), id.data, { id: user.id, role: user.role });
   } catch (e) {
-    return { error: errorText(e, "Validation impossible.") };
+    const unverifiable = e instanceof Error && e.message === "invalid";
+    return { error: errorText(unverifiable ? new Error("unverifiable") : e, "Validation impossible.") };
   }
   revalidate(id.data);
   return { message: "Tests validés." };
 }
 
-/** Admin : remplace les tests à partir d'un JSON `[{input, expected, visible}]` (validé par zod). */
-export async function updateTestsAction(exerciseId: string, json: string): Promise<Result> {
+/**
+ * Admin : remplace les tests à partir d'un JSON `[{input, expected, visible}]` (validé par zod).
+ * `language` : obligatoire si le pré-calcul n'a pas encore fixé de langage. L'exercice devient
+ * `ready` et validé.
+ */
+export async function updateTestsAction(exerciseId: string, json: string, language?: string | null): Promise<Result> {
   const user = await requireUser();
   const id = idSchema.safeParse(exerciseId);
   if (!id.success) return { error: "Exercice introuvable." };
+  const lang = z.enum(CHECK_LANGUAGES).nullish().safeParse(language === "" ? null : language);
+  if (!lang.success) return { error: "Langage invalide." };
   let tests: unknown;
   try {
     tests = JSON.parse(typeof json === "string" ? json : "");
@@ -87,33 +104,54 @@ export async function updateTestsAction(exerciseId: string, json: string): Promi
     return { error: "JSON invalide." };
   }
   try {
-    updateTests(getDb(), id.data, tests as CheckTest[], { id: user.id, role: user.role });
+    updateTests(getDb(), id.data, tests as CheckTest[], { id: user.id, role: user.role }, (lang.data ?? null) as CheckLanguage | null);
   } catch (e) {
     if (e instanceof z.ZodError) {
       const issue = e.issues[0];
       const where = issue?.path.length ? ` (${issue.path.join(".")})` : "";
       return { error: `Tests invalides${where} : ${issue?.message ?? "format attendu [{input, expected, visible}]"}` };
     }
+    if (e instanceof Error && e.message === "invalid") return { error: "Choisissez le langage des tests." };
     return { error: errorText(e, "Enregistrement impossible.") };
   }
   revalidate(id.data);
   return { message: "Tests enregistrés et validés." };
 }
 
-/** Admin : remet l'exercice en file du pré-calcul (`pending`). */
-export async function retryCheckAction(exerciseId: string): Promise<Result> {
+/**
+ * Admin : remet l'exercice en file du pré-calcul (`pending`). Sur des tests validés, il faut
+ * `confirm: true` (confirmation explicite) : la validation est alors retirée.
+ */
+export async function retryCheckAction(exerciseId: string, confirm?: boolean): Promise<Result> {
   const user = await requireUser();
   if (user.role !== "admin") return { error: "Action réservée aux administrateurs." };
   const id = idSchema.safeParse(exerciseId);
   if (!id.success) return { error: "Exercice introuvable." };
   let r: ReturnType<typeof requeueCheck>;
   try {
-    r = requeueCheck(getDb(), id.data);
+    r = requeueCheck(getDb(), id.data, { unverify: confirm === true });
   } catch {
     return { error: "Exercice introuvable." };
   }
-  if (r === "verified") return { error: "Tests validés par un administrateur : modifiez-les plutôt que de relancer le pré-calcul." };
+  if (r === "verified") return { error: "Tests validés par un administrateur : confirmez pour retirer la validation et relancer le pré-calcul." };
   if (r === "busy") return { error: "Pré-calcul en cours : réessayez quand il sera terminé." };
   revalidate(id.data);
   return { message: "Exercice remis en file du pré-calcul." };
+}
+
+/** Admin : marque un signalement comme traité. */
+export async function resolveReportAction(reportId: string): Promise<Result> {
+  const user = await requireUser();
+  if (user.role !== "admin") return { error: "Action réservée aux administrateurs." };
+  const id = idSchema.safeParse(reportId);
+  if (!id.success) return { error: "Signalement introuvable." };
+  let exerciseId: string;
+  try {
+    exerciseId = resolveReport(getDb(), id.data, { id: user.id, role: user.role });
+  } catch (e) {
+    return { error: e instanceof Error && e.message === "not_found" ? "Signalement introuvable." : errorText(e, "Action impossible.") };
+  }
+  revalidate(exerciseId);
+  revalidatePath("/admin/reports");
+  return { message: "Signalement marqué comme traité." };
 }

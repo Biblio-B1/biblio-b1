@@ -102,8 +102,8 @@ Sur la page d'un exercice de programmation, un éditeur de code (C, Python ou Ja
 Un modèle d'IA local (Ollama) **pré-calcule** pour chaque exercice un jeu de vérification : langage, solution de référence et 4 à 6 tests (entrée → sortie attendue), le premier étant visible. La correction du professeur sert de référence si c'est du C qui compile ; sinon le modèle écrit la solution. Les sorties attendues sont toujours **calculées en exécutant la référence** (deux fois, pour écarter les solutions non déterministes) avec les mêmes moteurs que le navigateur. Ce pré-calcul se fait hors ligne : les étudiants n'attendent jamais le modèle.
 
 - Tant que les tests n'ont pas été relus par un administrateur, l'exercice affiche le badge **« non vérifiés »** (tests écrits par l'IA, donc faillibles).
-- Les étudiants peuvent **signaler** des tests erronés ; les signalements apparaissent côté administrateur.
-- Les administrateurs peuvent corriger les tests et les marquer comme validés (le badge disparaît, et le solveur n'y touche plus).
+- Les étudiants peuvent **signaler** des tests erronés ; les signalements non traités apparaissent côté administrateur, dans les « Outils administrateur » de l'exercice (auteur, date, message, bouton « Marquer comme traité ») et sur la page **Administration → Signalements** (`/admin/reports`), avec un lien vers chaque exercice.
+- Les administrateurs peuvent corriger les tests (en choisissant le langage si le pré-calcul n'en a pas fixé) ou valider ceux du pré-calcul (seulement s'il en a produit) : le badge disparaît, et le solveur n'y touche plus. « Relancer le pré-calcul » sur des tests validés demande confirmation et retire la validation.
 - Exercice sans calcul vérifiable (question de cours, schéma…) : pas d'éditeur de vérification. Exercice pas encore traité : « en préparation ».
 
 ### Le service de pré-calcul (`npm run solver`)

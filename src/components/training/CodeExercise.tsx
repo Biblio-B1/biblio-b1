@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import {
   reportCheckAction,
+  resolveReportAction,
   retryCheckAction,
   saveAttemptAction,
   updateTestsAction,
@@ -34,12 +35,19 @@ const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ),
 });
 
+/** Signalement non traité (transmis aux administrateurs seulement). */
+export type CodeExerciseReport = { id: string; message: string; authorName: string; createdAt: string };
+
 export type CodeExerciseCheck = {
   status: string;
   language: Language | null;
   tests: CheckTestData[];
   verified: boolean;
+  /** Admins seulement : signalements non traités de cet exercice. */
+  reports?: CodeExerciseReport[];
 };
+
+const reportDate = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
 const LOADING_TEXT: Record<Language, string> = {
   c: "Chargement du compilateur C (≈27 Mo, une seule fois)…",
@@ -144,7 +152,7 @@ export function CodeExercise({
           </button>
         </div>
       )}
-      {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} canVerify={false} />}
+      {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} />}
     </section>
   );
 }
@@ -366,7 +374,7 @@ function CodeWorkspace({
       </div>
 
       {kind === "ready" && check && <ReportButton exerciseId={exerciseId} />}
-      {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} canVerify={kind === "ready"} />}
+      {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} />}
     </section>
   );
 }
@@ -583,10 +591,16 @@ function ReportButton({ exerciseId }: { exerciseId: string }) {
   );
 }
 
-function AdminTools({ exerciseId, check, canVerify }: { exerciseId: string; check: CodeExerciseCheck; canVerify: boolean }) {
+function AdminTools({ exerciseId, check }: { exerciseId: string; check: CodeExerciseCheck }) {
   const router = useRouter();
+  const uid = useId();
   const [json, setJson] = useState(() => JSON.stringify(check.tests, null, 2));
   const [editing, setEditing] = useState(false);
+  // Langage des tests : à choisir quand le pré-calcul n'en a pas fixé (pending, no_code…).
+  const [editLanguage, setEditLanguage] = useState<Language>(check.language ?? "c");
+  // « Valider » n'a de sens que sur des tests produits par le pré-calcul (ready, non vide).
+  const canVerify = check.status === "ready" && check.tests.length > 0 && !check.verified;
+  const reports = check.reports ?? [];
   const [result, setResult] = useState<{ error?: string; message?: string } | null>(null);
   const [pending, start] = useTransition();
 
@@ -602,16 +616,60 @@ function AdminTools({ exerciseId, check, canVerify }: { exerciseId: string; chec
     });
   }
 
+  function retry() {
+    if (check.verified) {
+      const ok = window.confirm(
+        "Ces tests ont été validés par un administrateur. Relancer le pré-calcul retire la validation et remplacera les tests. Continuer ?",
+      );
+      if (!ok) return;
+      act(() => retryCheckAction(exerciseId, true));
+    } else {
+      act(() => retryCheckAction(exerciseId));
+    }
+  }
+
   return (
-    <details className="rounded-md border border-line-strong">
-      <summary className="cursor-pointer px-3 py-2 text-[14px] font-medium">Outils administrateur (vérification)</summary>
+    <details className="rounded-md border border-line-strong" open={reports.length > 0 || undefined}>
+      <summary className="cursor-pointer px-3 py-2 text-[14px] font-medium">
+        Outils administrateur (vérification)
+        {reports.length > 0 && (
+          <span className="ml-2 rounded-full bg-danger-bg px-2 py-0.5 text-[12.5px] text-danger">
+            {reports.length} signalement{reports.length > 1 ? "s" : ""}
+          </span>
+        )}
+      </summary>
       <div className="flex flex-col gap-3 p-3 pt-1">
         <p className="text-[13px] text-ink-2">
           Statut du pré-calcul : <span className="font-mono">{check.status}</span>
           {check.verified ? " · tests validés" : ""}
         </p>
+        {reports.length > 0 && (
+          <section aria-labelledby={`${uid}-sig`} className="flex flex-col gap-2">
+            <h3 id={`${uid}-sig`} className="text-[13px] font-semibold">
+              Signalements ouverts ({reports.length})
+            </h3>
+            <ul className="flex flex-col gap-2">
+              {reports.map((r) => (
+                <li key={r.id} className="flex flex-col gap-1 rounded-md border border-line bg-surface p-2 text-[13px]">
+                  <p className="text-ink-3">
+                    {r.authorName} · {reportDate.format(new Date(r.createdAt))}
+                  </p>
+                  <p className="whitespace-pre-wrap break-words text-ink">{r.message}</p>
+                  <button
+                    type="button"
+                    className="btn btn-ghost self-start px-2 text-[13px]"
+                    disabled={pending}
+                    onClick={() => act(() => resolveReportAction(r.id))}
+                  >
+                    Marquer comme traité
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <div className="flex flex-wrap gap-2">
-          {canVerify && !check.verified && (
+          {canVerify && (
             <button type="button" className="btn" disabled={pending} onClick={() => act(() => verifyCheckAction(exerciseId))}>
               Valider les tests
             </button>
@@ -619,7 +677,7 @@ function AdminTools({ exerciseId, check, canVerify }: { exerciseId: string; chec
           <button type="button" className="btn" disabled={pending} aria-expanded={editing} onClick={() => setEditing((e) => !e)}>
             Modifier les tests
           </button>
-          <button type="button" className="btn" disabled={pending} onClick={() => act(() => retryCheckAction(exerciseId))}>
+          <button type="button" className="btn" disabled={pending} onClick={retry}>
             Relancer le pré-calcul
           </button>
         </div>
@@ -628,9 +686,15 @@ function AdminTools({ exerciseId, check, canVerify }: { exerciseId: string; chec
             className="flex flex-col gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              act(() => updateTestsAction(exerciseId, json), () => setEditing(false));
+              act(() => updateTestsAction(exerciseId, json, check.language ? null : editLanguage), () => setEditing(false));
             }}
           >
+            {!check.language && (
+              <label className="flex items-center gap-2 text-[14px] text-ink-2">
+                Langage des tests
+                <LanguageSelect value={editLanguage} onChange={setEditLanguage} />
+              </label>
+            )}
             <label className="label">
               Tests (JSON : {"[{\"input\": \"…\", \"expected\": \"…\", \"visible\": true}]"})
               <textarea

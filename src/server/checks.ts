@@ -1,4 +1,4 @@
-import { and, eq, lt } from "drizzle-orm";
+import { and, asc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "./db/client";
 import {
@@ -7,6 +7,7 @@ import {
   codeAttempts,
   exerciseChecks,
   exercises,
+  users,
   type CHECK_LANGUAGES,
   type CHECK_STATUSES,
   type REFERENCE_SOURCES,
@@ -71,17 +72,18 @@ export function getCheck(db: Db, exerciseId: string): ExerciseCheck | null {
 }
 
 /**
- * Prend le plus ancien `pending`, le passe `running` (attempts + 1) et renvoie son id.
- * Un seul UPDATE gardé par `status = 'pending'` : sûr aussi entre processus (solveur séparé
- * du serveur web). Ne relit pas la ligne : utilisable même si elle est corrompue.
+ * Prend le plus ancien `pending` non validé, le passe `running` (attempts + 1) et renvoie son id.
+ * Un seul UPDATE gardé par `status = 'pending' AND verified = 0` : sûr aussi entre processus
+ * (solveur séparé du serveur web). Ne relit pas la ligne : utilisable même si elle est corrompue.
+ * Une ligne validée par un admin n'est jamais reprise par le solveur.
  */
 export function claimNextPendingId(db: Db): string | null {
   const row = db.$client
     .prepare(
       `UPDATE exercise_checks
          SET status = 'running', attempts = attempts + 1, updated_at = unixepoch('subsec') * 1000
-       WHERE status = 'pending' AND exercise_id = (
-         SELECT exercise_id FROM exercise_checks WHERE status = 'pending'
+       WHERE status = 'pending' AND verified = 0 AND exercise_id = (
+         SELECT exercise_id FROM exercise_checks WHERE status = 'pending' AND verified = 0
          ORDER BY created_at ASC, rowid ASC LIMIT 1)
        RETURNING exercise_id AS id`,
     )
@@ -95,14 +97,14 @@ export function claimNextPending(db: Db): ExerciseCheck | null {
   return id ? getCheck(db, id) : null;
 }
 
-/** Passe un exercice précis de `pending` à `running` (attempts + 1) ; false s'il n'était pas `pending`. */
+/** Passe un exercice précis de `pending` à `running` (attempts + 1) ; false s'il n'était pas `pending` non validé. */
 export function claimCheck(db: Db, exerciseId: string): boolean {
   return (
     db.$client
       .prepare(
         `UPDATE exercise_checks
            SET status = 'running', attempts = attempts + 1, updated_at = unixepoch('subsec') * 1000
-         WHERE exercise_id = ? AND status = 'pending'`,
+         WHERE exercise_id = ? AND status = 'pending' AND verified = 0`,
       )
       .run(exerciseId).changes > 0
   );
@@ -142,16 +144,19 @@ export function touchCheck(db: Db, exerciseId: string): void {
  * Remet un exercice en file pour un nouveau calcul (`pending`, attempts = 0, erreur effacée),
  * en le créant au besoin. `verified` : tests validés par un admin (inchangés) ; `busy` : calcul
  * en cours (`running`), inchangé.
+ * `unverify: true` (confirmation explicite de l'admin) : une ligne validée perd sa validation
+ * (verified = 0, verified_by = NULL) et repart en file.
  */
-export function requeueCheck(db: Db, exerciseId: string): "ok" | "verified" | "busy" {
+export function requeueCheck(db: Db, exerciseId: string, opts: { unverify?: boolean } = {}): "ok" | "verified" | "busy" {
   enqueueCheck(db, exerciseId);
   const changed = db.$client
     .prepare(
       `UPDATE exercise_checks
-         SET status = 'pending', attempts = 0, error = NULL, updated_at = unixepoch('subsec') * 1000
-       WHERE exercise_id = ? AND verified = 0 AND status != 'running'`,
+         SET status = 'pending', attempts = 0, error = NULL, verified = 0, verified_by = NULL,
+             updated_at = unixepoch('subsec') * 1000
+       WHERE exercise_id = ? AND (verified = 0 OR ?) AND status != 'running'`,
     )
-    .run(exerciseId).changes;
+    .run(exerciseId, opts.unverify ? 1 : 0).changes;
   if (changed > 0) return "ok";
   const row = db.$client
     .prepare(`SELECT status, verified FROM exercise_checks WHERE exercise_id = ?`)
@@ -227,25 +232,98 @@ function requireAdmin(actor: CheckActor): string {
   return actor.id;
 }
 
-/** L'admin valide les tests tels quels. Erreurs : `forbidden`, `not_found`. */
+/**
+ * L'admin valide les tests tels quels. Seulement pour une ligne `ready` ayant un langage et
+ * des tests (sinon l'exercice resterait bloqué : validé, mais sans vérification utilisable).
+ * Erreurs : `forbidden`, `not_found`, `invalid`.
+ */
 export function verifyCheck(db: Db, exerciseId: string, admin: CheckActor): void {
   const adminId = requireAdmin(admin);
-  if (!getCheck(db, exerciseId)) throw new Error("not_found");
+  const row = getCheck(db, exerciseId);
+  if (!row) throw new Error("not_found");
+  if (row.status !== "ready" || !row.language || !row.tests || row.tests.length === 0) throw new Error("invalid");
   db.update(exerciseChecks)
     .set({ verified: true, verifiedBy: adminId, updatedAt: new Date() })
+    .where(and(eq(exerciseChecks.exerciseId, exerciseId), eq(exerciseChecks.status, "ready")))
+    .run();
+}
+
+/**
+ * L'admin remplace les tests (validés par zod) : la ligne devient `ready`, validée, avec le
+ * langage indiqué (obligatoire si la ligne n'en a pas encore, p. ex. `pending`, `no_code`).
+ * Erreurs : `forbidden`, `not_found`, `invalid` (langage manquant ou inconnu), ZodError.
+ */
+export function updateTests(
+  db: Db,
+  exerciseId: string,
+  tests: CheckTest[],
+  admin: CheckActor,
+  language?: CheckLanguage | null,
+): void {
+  const adminId = requireAdmin(admin);
+  const parsed = testsSchema.parse(tests);
+  if (language != null && !(LANGUAGES as readonly string[]).includes(language)) throw new Error("invalid");
+  const row = getCheck(db, exerciseId);
+  if (!row) throw new Error("not_found");
+  const lang = language ?? row.language;
+  if (!lang) throw new Error("invalid");
+  db.update(exerciseChecks)
+    .set({
+      tests: parsed,
+      language: lang,
+      status: "ready",
+      error: null,
+      verified: true,
+      verifiedBy: adminId,
+      updatedAt: new Date(),
+    })
     .where(eq(exerciseChecks.exerciseId, exerciseId))
     .run();
 }
 
-/** L'admin remplace les tests (validés par zod) ; ils sont alors marqués vérifiés. */
-export function updateTests(db: Db, exerciseId: string, tests: CheckTest[], admin: CheckActor): void {
-  const adminId = requireAdmin(admin);
-  const parsed = testsSchema.parse(tests);
-  if (!getCheck(db, exerciseId)) throw new Error("not_found");
-  db.update(exerciseChecks)
-    .set({ tests: parsed, verified: true, verifiedBy: adminId, updatedAt: new Date() })
-    .where(eq(exerciseChecks.exerciseId, exerciseId))
-    .run();
+export type CheckReport = {
+  id: string;
+  exerciseId: string;
+  exerciseTitle: string;
+  message: string;
+  authorName: string;
+  createdAt: Date;
+};
+
+/** Admin : signalements non traités (tous, ou ceux d'un exercice), du plus ancien au plus récent. */
+export function listOpenReports(db: Db, admin: CheckActor, exerciseId?: string): CheckReport[] {
+  requireAdmin(admin);
+  const where = exerciseId
+    ? and(eq(checkReports.resolved, false), eq(checkReports.exerciseId, exerciseId))
+    : eq(checkReports.resolved, false);
+  return db
+    .select({
+      id: checkReports.id,
+      exerciseId: checkReports.exerciseId,
+      exerciseTitle: exercises.title,
+      message: checkReports.message,
+      authorName: users.name,
+      createdAt: checkReports.createdAt,
+    })
+    .from(checkReports)
+    .innerJoin(users, eq(users.id, checkReports.userId))
+    .innerJoin(exercises, eq(exercises.id, checkReports.exerciseId))
+    .where(where)
+    .orderBy(asc(checkReports.createdAt), asc(checkReports.id))
+    .all();
+}
+
+/** Admin : marque un signalement comme traité ; renvoie l'exercice concerné. Erreurs : `forbidden`, `not_found`. */
+export function resolveReport(db: Db, reportId: string, admin: CheckActor): string {
+  requireAdmin(admin);
+  const row = db
+    .update(checkReports)
+    .set({ resolved: true })
+    .where(eq(checkReports.id, reportId))
+    .returning({ exerciseId: checkReports.exerciseId })
+    .get();
+  if (!row) throw new Error("not_found");
+  return row.exerciseId;
 }
 
 /** Signale un test faux. Erreurs : `not_found`, `invalid`. */

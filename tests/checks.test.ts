@@ -4,14 +4,18 @@ import { createTestDb, type Db } from "@/server/db/client";
 import { codeAttempts, documents, exerciseChecks, exercises, users } from "@/server/db/schema";
 import { createExercises } from "@/server/exercises";
 import {
+  claimCheck,
   claimNextPending,
   countChecksByStatus,
   enqueueAllMissing,
   enqueueCheck,
   getAttempt,
   getCheck,
+  listOpenReports,
   releaseStale,
   reportCheck,
+  requeueCheck,
+  resolveReport,
   saveAttempt,
   saveCheckResult,
   updateTests,
@@ -133,7 +137,7 @@ describe("file d'attente", () => {
     const a = mkEx(1);
     enqueueCheck(db, a);
     claimNextPending(db);
-    updateTests(db, a, tests, { id: admin, role: "admin" });
+    updateTests(db, a, tests, { id: admin, role: "admin" }, "c");
     saveCheckResult(db, a, { status: "ready", tests: [{ input: "9", expected: "9", visible: true }] });
     const c = getCheck(db, a)!;
     expect(c.tests).toEqual(tests);
@@ -155,11 +159,90 @@ describe("administration et signalement", () => {
     enqueueCheck(db, a);
     expect(() => updateTests(db, a, tests, { id: member, role: "member" })).toThrow("forbidden");
     expect(() => verifyCheck(db, a, { id: member, role: "member" })).toThrow("forbidden");
-    updateTests(db, a, tests, { id: admin, role: "admin" });
+    updateTests(db, a, tests, { id: admin, role: "admin" }, "c");
     const c = getCheck(db, a)!;
     expect(c.verified).toBe(true);
     expect(c.verifiedBy).toBe(admin);
     expect(c.tests).toEqual(tests);
+  });
+
+  it("updateTests sur une ligne non prête : langage requis, puis ready + validé", () => {
+    const a = mkEx(1);
+    enqueueCheck(db, a); // pending, sans langage
+    const adm = { id: admin, role: "admin" as const };
+    expect(() => updateTests(db, a, tests, adm)).toThrow("invalid");
+    expect(() => updateTests(db, a, tests, adm, "cobol" as never)).toThrow("invalid");
+    expect(getCheck(db, a)!.verified).toBe(false);
+    updateTests(db, a, tests, adm, "python");
+    expect(getCheck(db, a)).toMatchObject({ status: "ready", language: "python", verified: true, verifiedBy: admin, error: null });
+    // ligne déjà dotée d'un langage : il est conservé si on n'en donne pas
+    const b = mkEx(2);
+    enqueueCheck(db, b);
+    expect(claimNextPending(db)?.exerciseId).toBe(b);
+    saveCheckResult(db, b, { status: "failed", language: "c", error: "boum" });
+    updateTests(db, b, tests, adm);
+    expect(getCheck(db, b)).toMatchObject({ status: "ready", language: "c", verified: true, error: null });
+  });
+
+  it("verifyCheck n'est permis que sur une ligne ready avec des tests", () => {
+    const a = mkEx(1);
+    enqueueCheck(db, a);
+    const adm = { id: admin, role: "admin" as const };
+    expect(() => verifyCheck(db, a, adm)).toThrow("invalid"); // pending
+    expect(getCheck(db, a)!.verified).toBe(false);
+    claimNextPending(db);
+    saveCheckResult(db, a, { status: "no_code" });
+    expect(() => verifyCheck(db, a, adm)).toThrow("invalid"); // no_code, sans tests
+    db.update(exerciseChecks).set({ status: "ready", language: "c", tests: [] }).where(eq(exerciseChecks.exerciseId, a)).run();
+    expect(() => verifyCheck(db, a, adm)).toThrow("invalid"); // ready mais sans tests
+    db.update(exerciseChecks).set({ tests }).where(eq(exerciseChecks.exerciseId, a)).run();
+    verifyCheck(db, a, adm);
+    expect(getCheck(db, a)).toMatchObject({ status: "ready", verified: true, verifiedBy: admin });
+  });
+
+  it("une ligne validée n'est jamais reprise par le solveur (claim)", () => {
+    const a = mkEx(1);
+    const b = mkEx(2);
+    enqueueCheck(db, a);
+    enqueueCheck(db, b);
+    // état hérité : pending mais validé (ancien bogue) — ne doit pas être pris
+    db.update(exerciseChecks).set({ verified: true }).where(eq(exerciseChecks.exerciseId, a)).run();
+    expect(claimCheck(db, a)).toBe(false);
+    expect(claimNextPending(db)?.exerciseId).toBe(b);
+    expect(claimNextPending(db)).toBeNull();
+    expect(getCheck(db, a)!.status).toBe("pending");
+  });
+
+  it("requeueCheck sur des tests validés : refusé sans confirmation, sinon validation retirée", () => {
+    const a = mkEx(1);
+    enqueueCheck(db, a);
+    updateTests(db, a, tests, { id: admin, role: "admin" }, "c");
+    expect(requeueCheck(db, a)).toBe("verified");
+    expect(getCheck(db, a)).toMatchObject({ status: "ready", verified: true });
+    expect(requeueCheck(db, a, { unverify: true })).toBe("ok");
+    expect(getCheck(db, a)).toMatchObject({ status: "pending", verified: false, verifiedBy: null, attempts: 0 });
+    expect(claimNextPending(db)?.exerciseId).toBe(a);
+  });
+
+  it("signalements : liste (auteur, date, exercice) et « traité », réservés aux admins", () => {
+    const a = mkEx(1);
+    const b = mkEx(2);
+    reportCheck(db, a, member, "Le test 2 est faux");
+    reportCheck(db, b, member, "Sortie attendue erronée");
+    const adm = { id: admin, role: "admin" as const };
+    const mem = { id: member, role: "member" as const };
+    expect(() => listOpenReports(db, mem)).toThrow("forbidden");
+    const all = listOpenReports(db, adm);
+    expect(all).toHaveLength(2);
+    const onA = listOpenReports(db, adm, a);
+    expect(onA).toHaveLength(1);
+    expect(onA[0]).toMatchObject({ exerciseId: a, exerciseTitle: "t1", message: "Le test 2 est faux", authorName: "mem" });
+    expect(onA[0].createdAt).toBeInstanceOf(Date);
+    expect(() => resolveReport(db, onA[0].id, mem)).toThrow("forbidden");
+    expect(resolveReport(db, onA[0].id, adm)).toBe(a);
+    expect(listOpenReports(db, adm, a)).toHaveLength(0);
+    expect(listOpenReports(db, adm)).toHaveLength(1);
+    expect(() => resolveReport(db, "00000000-0000-4000-8000-000000000000", adm)).toThrow("not_found");
   });
 
   it("updateTests valide les tests", () => {

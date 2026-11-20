@@ -90,6 +90,9 @@ function SidebarContent({ subjects, unclassified, user }: Props) {
           <NavLink href="/admin/invites" active={is("/admin/invites")}>
             <IconUsers /> Invitations
           </NavLink>
+          <NavLink href="/admin/reports" active={is("/admin/reports")}>
+            <IconCheckList /> Signalements
+          </NavLink>
         </nav>
       )}
 
