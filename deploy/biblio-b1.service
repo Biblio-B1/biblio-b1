@@ -17,10 +17,11 @@ WorkingDirectory=%h/biblio-b1
 Environment=NODE_ENV=production
 # Aucun signal ne peut ouvrir l'inspecteur V8 (défense en profondeur, bac à sable du solveur).
 Environment=NODE_OPTIONS=--disable-sigusr1
-# Sous nvm, `npm` n'est pas dans le PATH de systemd et ~/.bashrc ne charge pas nvm en shell non
-# interactif : on source nvm.sh explicitement. Sans nvm : remplacez par le chemin absolu de npm.
-# Alternative : ExecStart=/home/<vous>/.nvm/versions/node/<version>/bin/npm start
-ExecStart=/bin/bash -c '. "$HOME/.nvm/nvm.sh" && exec npm start'
+# Node installé avec nvm : `npm` n'est pas dans le PATH de systemd et ~/.bashrc n'est pas lu en
+# shell non interactif, d'où le chargement de nvm.sh… seulement s'il existe : sans nvm (paquet apt,
+# NodeSource), node et npm viennent du PATH. Le code de retour de nvm est ignoré (il peut être non nul
+# sans empêcher node de fonctionner) : seul l'échec de `npm start` compte.
+ExecStart=/bin/bash -c 'if [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1; nvm use --silent default >/dev/null 2>&1; fi; exec npm start'
 Restart=on-failure
 RestartSec=5
 # 143 = 128 + SIGTERM : un arrêt via `systemctl stop` n'est pas compté comme un échec.
