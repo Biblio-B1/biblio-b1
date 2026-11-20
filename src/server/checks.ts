@@ -92,14 +92,30 @@ export function claimCheck(db: Db, exerciseId: string): boolean {
 }
 
 /**
- * Rend un `running` à la file sans compter la prise (Ollama injoignable, arrêt du solveur) :
- * `pending`, attempts - 1.
+ * Rend un `running` à la file (`pending`).
+ * - par défaut, la prise n'est pas comptée (attempts - 1) : Ollama injoignable, arrêt du solveur,
+ *   erreur de configuration — l'exercice n'y est pour rien ;
+ * - `counted: true` : la prise reste comptée et `error` est conservée (délai du modèle dépassé,
+ *   erreur 5xx) : au-delà du plafond de prises, la ligne passera `failed` avec cette raison.
  */
-export function releaseCheck(db: Db, exerciseId: string): void {
+export function releaseCheck(db: Db, exerciseId: string, opts: { counted?: boolean; error?: string } = {}): void {
   db.$client
     .prepare(
       `UPDATE exercise_checks
-         SET status = 'pending', attempts = max(attempts - 1, 0), updated_at = unixepoch('subsec') * 1000
+         SET status = 'pending',
+             attempts = CASE WHEN ? THEN attempts ELSE max(attempts - 1, 0) END,
+             error = coalesce(?, error),
+             updated_at = unixepoch('subsec') * 1000
+       WHERE exercise_id = ? AND status = 'running'`,
+    )
+    .run(opts.counted ? 1 : 0, opts.error ?? null, exerciseId);
+}
+
+/** Signe de vie d'un `running` (évite que `releaseStale` le reprenne pendant un long calcul). */
+export function touchCheck(db: Db, exerciseId: string): void {
+  db.$client
+    .prepare(
+      `UPDATE exercise_checks SET updated_at = unixepoch('subsec') * 1000
        WHERE exercise_id = ? AND status = 'running'`,
     )
     .run(exerciseId);
@@ -107,19 +123,23 @@ export function releaseCheck(db: Db, exerciseId: string): void {
 
 /**
  * Remet un exercice en file pour un nouveau calcul (`pending`, attempts = 0, erreur effacée),
- * en le créant au besoin. Refusé (false) si ses tests ont été validés par un admin.
+ * en le créant au besoin. `verified` : tests validés par un admin (inchangés) ; `busy` : calcul
+ * en cours (`running`), inchangé.
  */
-export function requeueCheck(db: Db, exerciseId: string): boolean {
+export function requeueCheck(db: Db, exerciseId: string): "ok" | "verified" | "busy" {
   enqueueCheck(db, exerciseId);
-  return (
-    db.$client
-      .prepare(
-        `UPDATE exercise_checks
-           SET status = 'pending', attempts = 0, error = NULL, updated_at = unixepoch('subsec') * 1000
-         WHERE exercise_id = ? AND verified = 0`,
-      )
-      .run(exerciseId).changes > 0
-  );
+  const changed = db.$client
+    .prepare(
+      `UPDATE exercise_checks
+         SET status = 'pending', attempts = 0, error = NULL, updated_at = unixepoch('subsec') * 1000
+       WHERE exercise_id = ? AND verified = 0 AND status != 'running'`,
+    )
+    .run(exerciseId).changes;
+  if (changed > 0) return "ok";
+  const row = db.$client
+    .prepare(`SELECT status, verified FROM exercise_checks WHERE exercise_id = ?`)
+    .get(exerciseId) as { status: string; verified: number } | undefined;
+  return row?.verified ? "verified" : "busy";
 }
 
 /** Remet en file tous les `failed` (attempts = 0) ; renvoie leur nombre. */
@@ -153,8 +173,11 @@ export type CheckResult = {
   error?: string | null;
 };
 
-/** Enregistre le résultat du solveur ; sans effet si l'exercice a été supprimé entre-temps. */
-export function saveCheckResult(db: Db, exerciseId: string, result: CheckResult): void {
+/**
+ * Enregistre le résultat du solveur ; sans effet (renvoie false) si l'exercice a été supprimé
+ * entre-temps, n'est plus `running` ou a des tests validés par un admin.
+ */
+export function saveCheckResult(db: Db, exerciseId: string, result: CheckResult): boolean {
   const set: Partial<typeof exerciseChecks.$inferInsert> = {
     status: result.status,
     error: result.error ?? null,
@@ -167,16 +190,19 @@ export function saveCheckResult(db: Db, exerciseId: string, result: CheckResult)
   if (result.model !== undefined) set.model = result.model;
   // Garde : un résultat tardif n'écrase ni des tests vérifiés par un admin, ni une ligne
   // qui n'est plus `running` (libérée puis reprise, ou supprimée).
-  db.update(exerciseChecks)
-    .set(set)
-    .where(
-      and(
-        eq(exerciseChecks.exerciseId, exerciseId),
-        eq(exerciseChecks.status, "running"),
-        eq(exerciseChecks.verified, false),
-      ),
-    )
-    .run();
+  return (
+    db
+      .update(exerciseChecks)
+      .set(set)
+      .where(
+        and(
+          eq(exerciseChecks.exerciseId, exerciseId),
+          eq(exerciseChecks.status, "running"),
+          eq(exerciseChecks.verified, false),
+        ),
+      )
+      .run().changes > 0
+  );
 }
 
 function requireAdmin(actor: CheckActor): string {

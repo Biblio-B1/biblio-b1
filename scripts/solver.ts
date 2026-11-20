@@ -8,7 +8,10 @@
  *   --enqueue-missing    met en file les exercices sans ligne (fait aussi à chaque démarrage)
  *
  * Sans option : boucle longue (service systemd). Ollama injoignable → l'exercice reste
- * `pending`, attente (60 s, doublée jusqu'à 15 min) puis nouvel essai. SIGINT/SIGTERM :
+ * `pending`, attente (60 s, doublée jusqu'à 15 min) puis nouvel essai. Modèle introuvable
+ * (HTTP 404/400) : message clair et sortie 1 (le service systemd passe en échec). Délai du
+ * modèle dépassé ou erreur 5xx : prise comptée, l'exercice finit `failed` après 3 prises.
+ * SIGINT/SIGTERM :
  * la ligne en cours est rendue à la file, les moteurs sont arrêtés, sortie 0.
  */
 import fs from "node:fs";
@@ -17,7 +20,7 @@ import { getDb } from "../src/server/db/client";
 import { enqueueAllMissing, claimCheck, getCheck, releaseStale, requeueCheck, requeueFailed } from "../src/server/checks";
 import { env } from "../src/server/env";
 import { exercises } from "../src/server/db/schema";
-import { processNext, solveExercise, type SolveDeps, type SolveOutcome } from "../src/server/solver/solve";
+import { processNext, solveExerciseDetailed, type SolveDeps, type SolveResult } from "../src/server/solver/solve";
 import { disposeRunners } from "../src/lib/runners/index.ts";
 import { eq } from "drizzle-orm";
 
@@ -59,14 +62,18 @@ const onSignal = (sig: string) => {
 process.on("SIGINT", () => onSignal("SIGINT"));
 process.on("SIGTERM", () => onSignal("SIGTERM"));
 
-/** Attente interrompue par un signal d'arrêt. */
+/** Attente interrompue par un signal d'arrêt (l'écouteur est retiré à la fin de l'attente). */
 function pause(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    const t = setTimeout(resolve, ms);
-    stop.signal.addEventListener("abort", () => {
+    const onAbort = () => {
       clearTimeout(t);
       resolve();
-    }, { once: true });
+    };
+    const t = setTimeout(() => {
+      stop.signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    stop.signal.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -78,7 +85,7 @@ const deps: SolveDeps = {
   signal: stop.signal,
 };
 
-function logLine(id: string, outcome: SolveOutcome, durationMs: number): void {
+function logLine(id: string, r: SolveResult, durationMs: number): void {
   let title = "?";
   try {
     title = db.select({ t: exercises.title }).from(exercises).where(eq(exercises.id, id)).get()?.t ?? "(supprimé)";
@@ -88,16 +95,23 @@ function logLine(id: string, outcome: SolveOutcome, durationMs: number): void {
   let detail = "";
   try {
     const c = getCheck(db, id);
-    if (c && (outcome === "ready" || outcome === "failed")) {
-      detail = outcome === "ready"
-        ? ` ${c.language}, ${c.tests.length} tests, réf. ${c.referenceSource}`
-        : ` ${c.error?.split("\n")[0].slice(0, 160) ?? ""}`;
-    }
+    if (c && r.outcome === "ready") detail = ` ${c.language}, ${c.tests.length} tests, réf. ${c.referenceSource}`;
+    else if (c && r.outcome === "failed") detail = ` ${c.error?.split("\n")[0].slice(0, 160) ?? ""}`;
   } catch {
     /* ligne illisible */
   }
+  if (r.message && !detail) detail = ` ${r.message.split("\n")[0].slice(0, 200)}`;
   const short = title.length > 60 ? `${title.slice(0, 57)}…` : title;
-  console.log(`[solveur] ${id.slice(0, 8)} « ${short} » → ${outcome}${detail} (${(durationMs / 1000).toFixed(1)} s)`);
+  for (const n of r.notes) console.log(`[solveur] ${id.slice(0, 8)} note : ${n.slice(0, 200)}`);
+  console.log(`[solveur] ${id.slice(0, 8)} « ${short} » → ${r.outcome}${detail} (${(durationMs / 1000).toFixed(1)} s)`);
+}
+
+function configError(message: string | undefined): number {
+  console.error(
+    `[solveur] erreur de configuration d'Ollama : ${message ?? "?"}\n` +
+      `[solveur] vérifiez OLLAMA_MODEL (${deps.model}) et OLLAMA_URL (${deps.url}) dans .env, ou lancez « ollama pull ${deps.model} ». Arrêt.`,
+  );
+  return 1;
 }
 
 async function main(): Promise<number> {
@@ -115,14 +129,20 @@ async function main(): Promise<number> {
       console.error(`[solveur] exercice introuvable : ${id}`);
       return 1;
     }
-    if (!requeueCheck(db, id) || !claimCheck(db, id)) {
-      console.error(`[solveur] ${id} : tests validés par un admin ou déjà en cours ailleurs, rien à faire.`);
+    const q = requeueCheck(db, id);
+    if (q === "verified") {
+      console.error(`[solveur] ${id} : tests validés par un admin, rien à faire.`);
+      return 1;
+    }
+    if (q === "busy" || !claimCheck(db, id)) {
+      console.error(`[solveur] ${id} : calcul déjà en cours (statut running), rien à faire.`);
       return 1;
     }
     const t0 = performance.now();
-    const outcome = await solveExercise(db, id, deps);
-    logLine(id, outcome, Math.round(performance.now() - t0));
-    return outcome === "unavailable" ? 1 : 0;
+    const r = await solveExerciseDetailed(db, id, deps);
+    logLine(id, r, Math.round(performance.now() - t0));
+    if (r.outcome === "config_error") return configError(r.message);
+    return r.outcome === "unavailable" || r.outcome === "retry_later" ? 1 : 0;
   }
 
   let done = 0;
@@ -131,6 +151,10 @@ async function main(): Promise<number> {
   while (!stopping && done < limit) {
     let r;
     try {
+      // Lignes `running` abandonnées (autre solveur arrêté brutalement) : rendues à la file.
+      // Les calculs actifs envoient un signe de vie avant chaque appel au modèle.
+      const stale = releaseStale(db, STALE_MS);
+      if (stale > 0) console.log(`[solveur] ${stale} calcul(s) abandonné(s) remis en file.`);
       r = await processNext(db, deps);
     } catch (e) {
       // Erreur imprévue (base verrouillée…) : en service, on journalise et on réessaie.
@@ -144,9 +168,10 @@ async function main(): Promise<number> {
       await pause(IDLE_MS);
       continue;
     }
+    if (r.outcome === "config_error") return configError(r.message);
     if (r.outcome === "unavailable") {
       if (!warnedUnavailable) {
-        console.warn(`[solveur] Ollama injoignable (${deps.url}) : exercices laissés en file, nouvel essai plus tard.`);
+        console.warn(`[solveur] Ollama injoignable : ${r.message ?? deps.url} — exercices laissés en file, nouvel essai plus tard.`);
         warnedUnavailable = true;
       }
       if (bounded) return 1;
@@ -158,7 +183,9 @@ async function main(): Promise<number> {
     warnedUnavailable = false;
     backoff = BACKOFF_START_MS;
     if (r.outcome !== "interrupted" && r.outcome !== "skipped") done++;
-    logLine(r.id, r.outcome, r.durationMs);
+    logLine(r.id, r, r.durationMs);
+    // Délai dépassé / erreur 5xx : prise comptée, petite pause avant de réessayer.
+    if (r.outcome === "retry_later" && !bounded) await pause(BACKOFF_START_MS);
   }
   return 0;
 }

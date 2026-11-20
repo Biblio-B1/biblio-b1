@@ -14,9 +14,12 @@ export type SolverLanguage = "c" | "python" | "javascript";
 export type Feedback = { reason: string; code?: string };
 
 /** Au-delà, l'énoncé est tronqué (num_ctx 8192 jetons, prompt et réponse compris). */
-const MAX_STATEMENT_CHARS = 12_000;
-const MAX_CODE_CHARS = 8_000;
-const MAX_REASON_CHARS = 2_000;
+// Budgets (caractères) pour tenir dans num_ctx 8192 jetons avec la réponse (num_predict 3000).
+const MAX_STATEMENT_CHARS = 6_000;
+const MAX_CODE_CHARS = 4_000;
+const MAX_REASON_CHARS = 1_500;
+/** Énoncé plus long : l'ancien code n'est pas renvoyé avec l'erreur (seule la raison l'est). */
+const LONG_STATEMENT_CHARS = 3_500;
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n[…tronqué]` : s);
 
@@ -52,9 +55,9 @@ const TEST_RULES = `- Propose 4 à 6 tests. Pour chacun : "input" = le texte exa
 - Inclure au moins un cas limite (zéro, valeur négative, un seul élément, valeur maximale…). Les entrées doivent être valides au regard de l'énoncé.
 - N'écris pas les sorties attendues : elles seront calculées en exécutant la solution.`;
 
-function feedbackBlock(feedback?: Feedback): string {
+function feedbackBlock(feedback: Feedback | undefined, statement: string): string {
   if (!feedback) return "";
-  const code = feedback.code
+  const code = feedback.code && statement.length <= LONG_STATEMENT_CHARS
     ? `Code précédent :\n"""\n${clip(feedback.code, MAX_CODE_CHARS)}\n"""\n`
     : "";
   return `
@@ -82,7 +85,7 @@ ${PROGRAM_RULES}
 4. "tests" : 4 à 6 tests.
 ${TEST_RULES}
 Si needsCode vaut false : "solution" = "" et "tests" = [].
-${feedbackBlock(feedback)}`;
+${feedbackBlock(feedback, ex.statement)}`;
 }
 
 /** Prompt réduit (correction du prof déjà exécutable) : seules les entrées de test sont demandées. */
@@ -96,7 +99,7 @@ ${clip(code, MAX_CODE_CHARS)}
 Réponds uniquement avec un objet JSON conforme au schéma demandé : "tests" = 4 à 6 entrées de test pour ce programme.
 ${TEST_RULES}
 - Respecte exactement l'ordre et le format des lectures du programme (scanf, fgets, getchar…).
-${feedbackBlock(feedback)}`;
+${feedbackBlock(feedback, ex.statement)}`;
 }
 
 // --- Schémas : JSON Schema pour `format` (grammaire imposée par Ollama) + zod pour valider ---
@@ -111,7 +114,7 @@ export const SOLVE_JSON_SCHEMA = {
   type: "object",
   properties: {
     needsCode: { type: "boolean" },
-    language: { enum: ["c", "python", "javascript", "other", null] },
+    language: { type: ["string", "null"], enum: ["c", "python", "javascript", "other", null] },
     solution: { type: "string" },
     tests: { type: "array", items: testItemJson, minItems: 0, maxItems: 6 },
   },
