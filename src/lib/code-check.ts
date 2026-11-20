@@ -18,6 +18,14 @@ export function initialCode(lang: Language, attempt: { language: string; code: s
   return attempt && attempt.language === lang && attempt.code ? attempt.code : STARTER_TEMPLATES[lang];
 }
 
+/**
+ * Langage proposé pour « Écrire du code en attendant » (pré-calcul pas encore fait) :
+ * C pour une matière de programmation C, sinon Python.
+ */
+export function defaultLanguageForSubject(subjectName: string | null | undefined): Language {
+  return subjectName && /(^|[^a-z])c($|[^a-z+#])/i.test(subjectName) ? "c" : "python";
+}
+
 export type CheckModeInput = { status: string; language: Language | null; tests: CheckTestData[] } | null;
 
 /**
@@ -59,7 +67,8 @@ export type TestOutcome = {
 export type Verdict = { passed: boolean; compileError: string | null; outcomes: TestOutcome[] };
 
 function outcomeStatus(r: RunResult, expected: string): OutcomeStatus {
-  if (r.timedOut) return "timeout";
+  // Délai dépassé pendant la compilation : erreur de compilation (« Compilation trop longue »).
+  if (r.timedOut) return r.phase === "compile" ? "compile" : "timeout";
   if (!r.ok) return r.phase === "compile" ? "compile" : "runtime";
   return outputsMatch(r.stdout, expected) ? "ok" : "wrong";
 }

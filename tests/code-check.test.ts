@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkMode,
   computeVerdict,
+  defaultLanguageForSubject,
   diffLines,
   initialCode,
   STARTER_TEMPLATES,
@@ -134,5 +135,29 @@ describe("diffLines", () => {
   });
   it("sorties vides", () => {
     expect(diffLines("", "")).toEqual([]);
+  });
+});
+
+describe("defaultLanguageForSubject", () => {
+  it("matière de programmation C → c", () => {
+    expect(defaultLanguageForSubject("Algorithmique et Prog C")).toBe("c");
+    expect(defaultLanguageForSubject("Programmation C")).toBe("c");
+    expect(defaultLanguageForSubject("Langage C")).toBe("c");
+    expect(defaultLanguageForSubject("prog c avancée")).toBe("c");
+  });
+  it("autres matières ou inconnue → python", () => {
+    expect(defaultLanguageForSubject("Mathématiques")).toBe("python");
+    expect(defaultLanguageForSubject("Physique-Chimie")).toBe("python");
+    expect(defaultLanguageForSubject("Communication")).toBe("python");
+    expect(defaultLanguageForSubject(null)).toBe("python");
+    expect(defaultLanguageForSubject("")).toBe("python");
+  });
+});
+
+describe("compilation trop longue", () => {
+  it("délai pendant la compilation → erreur de compilation avec le message du délai", () => {
+    const v = computeVerdict(tests, [res({ ok: false, timedOut: true, phase: "compile", exitCode: null, stderr: "Compilation trop longue" })]);
+    expect(v.outcomes.map((o) => o.status)).toEqual(["compile", "skipped", "skipped"]);
+    expect(v.compileError).toBe("Compilation trop longue");
   });
 });

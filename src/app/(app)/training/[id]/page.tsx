@@ -97,11 +97,13 @@ export default async function ExercisePage({ params }: { params: Params }) {
       </article>
 
       <CodeExercise
+        key={ex.id}
         exerciseId={ex.id}
         check={check}
         attempt={attempt}
         isAdmin={user.role === "admin"}
         timeoutMs={env.SOLVER_TIMEOUT_MS}
+        subjectName={subject?.name ?? null}
       />
 
       {hints.length > 0 && (

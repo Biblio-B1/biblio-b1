@@ -39,6 +39,10 @@ export function createBrowserEngine(baseUrl = "/runtimes"): Engine {
       // chargés par importScripts) ; Pyodide refuse alors de démarrer (« Classic web workers
       // are not supported »). Pendant son chargement, importScripts est masqué : Pyodide
       // emprunte le chemin « module worker » (import() natif de pyodide.asm.mjs, qui fonctionne).
+      // Vérifié avec pyodide 314.0.8 (version épinglée dans package.json) : son test
+      // « isClassicWorker » appelle importScripts("data:…") et ne regarde que si l’appel lève.
+      // À revérifier à chaque mise à jour de Pyodide (si le test change, ce masquage peut devenir
+      // inutile ou insuffisant : symptôme « Classic web workers are not supported » dans le worker).
       const g = globalThis as { importScripts?: unknown };
       const saved = g.importScripts;
       if (typeof saved === "function") {

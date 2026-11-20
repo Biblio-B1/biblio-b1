@@ -13,6 +13,7 @@ import {
 import {
   checkMode,
   computeVerdict,
+  defaultLanguageForSubject,
   diffLines,
   initialCode,
   LANGUAGE_LABELS,
@@ -21,7 +22,7 @@ import {
   type TestOutcome,
   type Verdict,
 } from "@/lib/code-check";
-import type { Language, RunResult } from "@/lib/runners/types";
+import { LANGUAGES, type Language, type RunResult } from "@/lib/runners/types";
 import { EngineError, RunnerLane, type EngineState } from "./runner-client";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
@@ -65,83 +66,178 @@ const OUTCOME_TEXT: Record<TestOutcome["status"], string> = {
 
 type Output = { kind: "run"; result: RunResult } | { kind: "verdict"; verdict: Verdict } | null;
 
+type Kind = "ready" | "preparing" | "none";
+
+/**
+ * Section « Votre programme » de la page d'exercice. Pendant le pré-calcul, si le langage n'est
+ * pas encore connu, l'étudiant peut choisir d'écrire du code en attendant (Exécuter seulement).
+ */
 export function CodeExercise({
   exerciseId,
   check,
   attempt,
   isAdmin,
   timeoutMs,
+  subjectName,
 }: {
   exerciseId: string;
   check: CodeExerciseCheck | null;
   attempt: { language: string; code: string } | null;
   isAdmin: boolean;
   timeoutMs: number;
+  subjectName: string | null;
 }) {
   const mode = checkMode(check);
-  const language = mode.language;
+  const uid = useId();
+  const [practice, setPractice] = useState<Language | null>(null);
+  const [choice, setChoice] = useState<Language>(() => defaultLanguageForSubject(subjectName));
+
+  if (mode.language) {
+    return (
+      <CodeWorkspace
+        key={mode.language}
+        exerciseId={exerciseId}
+        check={check}
+        kind={mode.kind}
+        language={mode.language}
+        attempt={attempt}
+        isAdmin={isAdmin}
+        timeoutMs={timeoutMs}
+      />
+    );
+  }
+
+  if (mode.kind === "preparing" && practice) {
+    return (
+      <CodeWorkspace
+        key={practice}
+        exerciseId={exerciseId}
+        check={check}
+        kind="preparing"
+        language={practice}
+        attempt={attempt}
+        isAdmin={isAdmin}
+        timeoutMs={timeoutMs}
+        practice={{ onLanguage: setPractice }}
+      />
+    );
+  }
+
+  return (
+    <section aria-labelledby={`${uid}-t`} className="flex flex-col gap-3">
+      <h2 id={`${uid}-t`} className="sr-only">
+        Vérification automatique
+      </h2>
+      <p className="text-[14px] text-ink-3">
+        {mode.kind === "preparing"
+          ? "Vérification en préparation — revenez plus tard."
+          : "Pas de vérification automatique pour cet exercice."}
+      </p>
+      {mode.kind === "preparing" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-[14px] text-ink-2">
+            Langage
+            <LanguageSelect value={choice} onChange={setChoice} />
+          </label>
+          <button type="button" className="btn" onClick={() => setPractice(choice)}>
+            Écrire du code en attendant
+          </button>
+        </div>
+      )}
+      {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} canVerify={false} />}
+    </section>
+  );
+}
+
+function LanguageSelect({ value, onChange, id }: { value: Language; onChange: (l: Language) => void; id?: string }) {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value as Language)}
+      className="h-9 rounded-md border border-line-strong bg-surface px-2 text-[14px] text-ink"
+    >
+      {LANGUAGES.map((l) => (
+        <option key={l} value={l}>
+          {LANGUAGE_LABELS[l]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * Éditeur et exécution pour un langage (le parent le remonte si le langage change : `key`).
+ * `practice` : code écrit en attendant le pré-calcul — Exécuter seulement, rien n'est enregistré.
+ */
+function CodeWorkspace({
+  exerciseId,
+  check,
+  kind,
+  language,
+  attempt,
+  isAdmin,
+  timeoutMs,
+  practice,
+}: {
+  exerciseId: string;
+  check: CodeExerciseCheck | null;
+  kind: Kind;
+  language: Language;
+  attempt: { language: string; code: string } | null;
+  isAdmin: boolean;
+  timeoutMs: number;
+  practice?: { onLanguage: (l: Language) => void };
+}) {
   const uid = useId();
   const router = useRouter();
 
-  const [code, setCode] = useState(() => (language ? initialCode(language, attempt) : ""));
+  const [code, setCode] = useState(() => initialCode(language, attempt));
   const visibleTest = check?.tests.find((t) => t.visible);
-  const [stdin, setStdin] = useState(mode.kind === "ready" ? (visibleTest?.input ?? "") : "");
+  const [stdin, setStdin] = useState(kind === "ready" ? (visibleTest?.input ?? "") : "");
   const [engine, setEngine] = useState<EngineState>("idle");
   const [busy, setBusy] = useState<string | null>(null);
   const [output, setOutput] = useState<Output>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [engineError, setEngineError] = useState<string | null>(null);
   const lane = useRef<RunnerLane | null>(null);
+  const alive = useRef(true);
 
   useEffect(() => {
-    if (!language) return;
+    alive.current = true;
     const l = new RunnerLane(language, timeoutMs);
     lane.current = l;
     const off = l.onState(setEngine);
     void l.prepare(); // préchargement en arrière-plan
     return () => {
+      alive.current = false;
       off();
-      l.dispose();
+      l.dispose(); // rejette la requête en cours (EngineError)
       lane.current = null;
     };
   }, [language, timeoutMs]);
-
-  if (!language) {
-    return (
-      <section aria-labelledby={`${uid}-t`} className="flex flex-col gap-3">
-        <h2 id={`${uid}-t`} className="sr-only">
-          Vérification automatique
-        </h2>
-        <p className="text-[14px] text-ink-3">
-          {mode.kind === "preparing"
-            ? "Vérification en préparation — revenez plus tard."
-            : "Pas de vérification automatique pour cet exercice."}
-        </p>
-        {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} canVerify={false} />}
-      </section>
-    );
-  }
 
   const loading = engine === "loading";
   const disabled = loading || busy !== null;
 
   async function run() {
-    if (!lane.current || !language) return;
+    if (!lane.current) return;
     setBusy("Exécution…");
     setOutput(null);
     setEngineError(null);
     try {
       const result = await lane.current.run(code, stdin);
-      setOutput({ kind: "run", result });
+      if (alive.current) setOutput({ kind: "run", result });
     } catch (e) {
-      setEngineError(engineErrorText(e));
+      if (alive.current) setEngineError(engineErrorText(e));
     } finally {
-      setBusy(null);
+      if (alive.current) setBusy(null);
     }
   }
 
   async function verify() {
-    if (!lane.current || !check || mode.kind !== "ready") return;
+    if (!lane.current || !check || kind !== "ready") return;
+    const l = lane.current;
     setOutput(null);
     setSaveError(null);
     setEngineError(null);
@@ -149,26 +245,27 @@ export function CodeExercise({
     try {
       for (let i = 0; i < check.tests.length; i++) {
         setBusy(`Vérification : test ${i + 1} sur ${check.tests.length}…`);
-        const r = await lane.current.run(code, check.tests[i].input);
+        const r = await l.run(code, check.tests[i].input);
         results.push(r);
         if ((!r.ok && r.phase === "compile") || r.timedOut) break; // inutile d'aller plus loin
       }
+      if (!alive.current) return; // démonté : ni verdict ni enregistrement
+      const verdict = computeVerdict(check.tests, results);
+      setOutput({ kind: "verdict", verdict });
+      setBusy("Enregistrement…"); // boutons désactivés jusqu'à la fin de l'enregistrement
+      const saved = await saveAttemptAction(exerciseId, language, code, verdict.passed);
+      if (!alive.current) return;
+      if (saved.error) setSaveError(saved.error);
+      else router.refresh(); // statut de progression mis à jour (En cours / Maîtrisé)
     } catch (e) {
       // Panne du moteur : pas de verdict, rien n'est enregistré.
-      setEngineError(engineErrorText(e));
-      return;
+      if (alive.current) setEngineError(engineErrorText(e));
     } finally {
-      setBusy(null);
+      if (alive.current) setBusy(null);
     }
-    const verdict = computeVerdict(check.tests, results);
-    setOutput({ kind: "verdict", verdict });
-    const saved = await saveAttemptAction(exerciseId, mode.language, code, verdict.passed);
-    if (saved.error) setSaveError(saved.error);
-    else router.refresh(); // statut de progression mis à jour (En cours / Maîtrisé)
   }
 
   function reset() {
-    if (!language) return;
     if (code !== STARTER_TEMPLATES[language] && !window.confirm("Remplacer votre code par le gabarit de départ ?")) return;
     setCode(STARTER_TEMPLATES[language]);
   }
@@ -179,22 +276,32 @@ export function CodeExercise({
         <h2 id={`${uid}-t`} className="text-[1.1rem] font-semibold">
           Votre programme
         </h2>
-        <span className="rounded-full border border-line-strong bg-sunken px-2.5 py-0.5 font-mono text-[12.5px] text-ink-2">
-          {LANGUAGE_LABELS[language]}
-        </span>
-        {mode.kind === "ready" && check && !check.verified && (
+        {practice ? (
+          <>
+            <label htmlFor={`${uid}-lang`} className="sr-only">
+              Langage
+            </label>
+            <LanguageSelect id={`${uid}-lang`} value={language} onChange={practice.onLanguage} />
+          </>
+        ) : (
+          <span className="rounded-full border border-line-strong bg-sunken px-2.5 py-0.5 font-mono text-[12.5px] text-ink-2">
+            {LANGUAGE_LABELS[language]}
+          </span>
+        )}
+        {kind === "ready" && check && !check.verified && (
           <span className="rounded-full border border-line-strong px-2.5 py-0.5 text-[12.5px] text-ink-2">
             Tests générés par IA — non vérifiés
           </span>
         )}
       </div>
 
-      {mode.kind === "preparing" && (
+      {kind === "preparing" && (
         <p className="rounded-md bg-sunken px-3 py-2 text-[14px] text-ink-2">
-          Vérification en préparation — revenez plus tard. Vous pouvez déjà écrire et exécuter votre programme.
+          Vérification en préparation — revenez plus tard. Vous pouvez déjà écrire et exécuter votre programme
+          {practice ? " (ce code n'est pas enregistré)" : ""}.
         </p>
       )}
-      {mode.kind === "none" && (
+      {kind === "none" && (
         <p className="rounded-md bg-sunken px-3 py-2 text-[14px] text-ink-2">
           Pas de vérification automatique pour cet exercice. Vous pouvez exécuter votre programme et le comparer à la correction.
         </p>
@@ -225,7 +332,7 @@ export function CodeExercise({
         <button type="button" className="btn" disabled={disabled} onClick={run}>
           Exécuter
         </button>
-        {mode.kind === "ready" && (
+        {kind === "ready" && (
           <button type="button" className="btn btn-primary" disabled={disabled} onClick={verify}>
             Vérifier
           </button>
@@ -258,8 +365,8 @@ export function CodeExercise({
         )}
       </div>
 
-      {mode.kind === "ready" && check && <ReportButton exerciseId={exerciseId} />}
-      {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} canVerify={mode.kind === "ready"} />}
+      {kind === "ready" && check && <ReportButton exerciseId={exerciseId} />}
+      {isAdmin && check && <AdminTools exerciseId={exerciseId} check={check} canVerify={kind === "ready"} />}
     </section>
   );
 }
@@ -283,6 +390,10 @@ function Pre({ children, tone = "plain", label }: { children: React.ReactNode; t
 }
 
 function RunOutput({ result }: { result: RunResult }) {
+  if (result.timedOut && result.phase === "compile") {
+    // Compilation trop longue (message fourni par le runner), pas une boucle infinie.
+    return <p className="text-[14px] font-medium text-danger">{result.stderr}</p>;
+  }
   if (result.timedOut) {
     return <p className="text-[14px] font-medium text-danger">{TIMEOUT_TEXT} — le programme a été arrêté.</p>;
   }

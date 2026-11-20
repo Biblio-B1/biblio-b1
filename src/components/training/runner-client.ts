@@ -15,6 +15,8 @@ const COMPILE_BUDGET_MS = 30_000;
 
 const STALLED = Symbol("stalled");
 
+export const COMPILE_TIMEOUT_TEXT = `Compilation trop longue (plus de ${COMPILE_BUDGET_MS / 1000} s) : le compilateur a été arrêté.`;
+
 /** Panne du moteur (chargement impossible, worker planté) : rien à voir avec le code étudiant. */
 export class EngineError extends Error {}
 
@@ -31,6 +33,8 @@ export class RunnerLane {
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<(s: EngineState) => void>();
   private disposed = false;
+  /** Interrompt la requête en cours (préparation ou exécution) ; utilisé par dispose(). */
+  private abortInFlight: (() => void) | null = null;
   state: EngineState = "idle";
   /** Le moteur a déjà été chargé une fois (un rechargement après délai dépassé est plus rapide). */
   loadedOnce = false;
@@ -64,8 +68,11 @@ export class RunnerLane {
     });
   }
 
+  /** Ferme le worker ; la requête en cours est rejetée (EngineError), les suivantes aussi. */
   dispose() {
     this.disposed = true;
+    this.abortInFlight?.();
+    this.abortInFlight = null;
     this.worker?.terminate();
     this.worker = null;
     this.warm = false;
@@ -79,7 +86,7 @@ export class RunnerLane {
   }
 
   private ensureWorker(): Worker {
-    if (this.disposed) throw new Error("Moteur d'exécution fermé.");
+    if (this.disposed) throw new EngineError("moteur fermé");
     if (!this.worker) {
       this.worker = createWorker();
       this.warm = false;
@@ -106,6 +113,7 @@ export class RunnerLane {
       const w = this.ensureWorker();
       const id = this.nextId++;
       const done = (ok: boolean) => {
+        this.abortInFlight = null;
         clearTimeout(timer);
         w.removeEventListener("message", onMessage);
         w.removeEventListener("error", onError);
@@ -120,6 +128,7 @@ export class RunnerLane {
       };
       const onError = () => done(false);
       const timer = setTimeout(() => done(false), LOAD_TIMEOUT_MS);
+      this.abortInFlight = () => done(false);
       w.addEventListener("message", onMessage);
       w.addEventListener("error", onError);
       const req: BrowserWorkerRequest = { id, type: "prepare", lang: this.lang };
@@ -152,6 +161,7 @@ export class RunnerLane {
       const finish = (r: RunResult | typeof STALLED | EngineError, kill: boolean) => {
         if (settled) return;
         settled = true;
+        this.abortInFlight = null;
         clearTimeout(loadTimer);
         clearTimeout(runTimer);
         w.removeEventListener("message", onMessage);
@@ -173,7 +183,9 @@ export class RunnerLane {
 
       const arm = (ms: number) => {
         clearTimeout(runTimer);
-        runTimer = setTimeout(() => finish(fail(timeoutMessage(this.timeoutMs), true), true), ms);
+        // Compilation trop longue ≠ boucle infinie : message distinct (phase `compile`).
+        const msg = phase === "compile" ? COMPILE_TIMEOUT_TEXT : timeoutMessage(this.timeoutMs);
+        runTimer = setTimeout(() => finish(fail(msg, true), true), ms);
       };
 
       const onMessage = (e: MessageEvent<BrowserWorkerResponse>) => {
@@ -205,6 +217,7 @@ export class RunnerLane {
         warm ? STALL_MS : LOAD_TIMEOUT_MS,
       );
 
+      this.abortInFlight = () => finish(new EngineError("exécution interrompue"), true);
       w.addEventListener("message", onMessage);
       w.addEventListener("error", onError);
       const req: BrowserWorkerRequest = { id, lang: this.lang, code, stdin };
