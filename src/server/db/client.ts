@@ -6,6 +6,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { env } from "../env";
 import * as schema from "./schema";
 import { seedSubjects } from "../subjects";
+import { ensureIndex } from "../search";
 
 export type Db = BetterSQLite3Database<typeof schema> & {
   $client: Database.Database;
@@ -45,6 +46,7 @@ export function getDb(): Db {
     fs.mkdirSync(storage, { recursive: true });
     const db = open(new Database(path.join(storage, "data.db")));
     seedSubjects(db); // matières par défaut, idempotent (slug unique)
+    ensureIndex(db); // rattrapage : index de recherche vide alors que des documents existent
     globalForDb.__bb1Db = db;
   }
   return globalForDb.__bb1Db;

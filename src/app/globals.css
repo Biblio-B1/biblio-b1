@@ -256,3 +256,11 @@ body {
   /* Garde la page blanche (lisibilité) mais adoucit l'éblouissement. */
   filter: brightness(0.92);
 }
+
+/* --- Recherche : correspondances surlignees ------------------------------ */
+.snippet mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}

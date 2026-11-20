@@ -11,6 +11,7 @@
     "start": "next start",
     "import": "tsx scripts/import.ts",
     "prune": "tsx scripts/prune.ts",
+    "reindex": "tsx scripts/reindex.ts",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate"
   },

@@ -39,7 +39,7 @@ export function ThreadView({ item, viewer, revalidate }: { item: ThreadItem; vie
   const isAdmin = viewer.role === "admin";
   const canModerate = isAdmin || thread.authorId === viewer.id; // épingler, synthèse, supprimer le fil
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4" aria-label={thread.question}>
+    <section id={`thread-${thread.id}`} className="flex scroll-mt-20 flex-col gap-3 rounded-lg border border-line bg-surface p-4" aria-label={thread.question}>
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start">
         <div className="min-w-0 flex-1">
           <h3 className="break-words text-[16px] font-semibold">{thread.question}</h3>
