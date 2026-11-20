@@ -95,7 +95,7 @@ describe("prepareUpload / confirmDraft", () => {
     expect(d.suggestedType).toBe("exercise");
     expect(d.title).toBe("ECE - Algo et C - TP6");
     expect(d.duplicateOfId).toBeNull();
-  });
+  }, 20_000); // premier chargement de pdf.js : lent quand toute la suite tourne en parallèle
 
   it("sans indice : aucune matière proposée", async () => {
     const d = await prepareUpload(db, Buffer.from("zz"), "scan.jpg", owner, root);

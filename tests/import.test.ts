@@ -266,7 +266,7 @@ describe("runImport (dépôt prof + dossier local)", () => {
     expect(db.select().from(documents).all()).toHaveLength(all.length);
     const again = db.select().from(documents).all();
     expect(again.find((d) => d.sourcePath?.endsWith("TD1 (corrigé).pdf"))!.correctionOfId).toBe(by("TD1.pdf").id);
-  });
+  }, 20_000); // git + génération de PDF : lent quand toute la suite tourne en parallèle
 
   it("dépôt injoignable : erreur signalée, l'import local continue", async () => {
     const db2 = createTestDb();
