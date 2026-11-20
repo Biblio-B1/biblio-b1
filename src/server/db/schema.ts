@@ -184,3 +184,74 @@ export const importExclusions = sqliteTable("import_exclusions", {
     .default(sql`(unixepoch('subsec') * 1000)`),
   deletedBy: text("deleted_by"), // id utilisateur (sans FK : survit à la suppression du compte), null = système
 });
+
+export const CHECK_STATUSES = ["pending", "running", "ready", "no_code", "unsupported", "failed"] as const;
+export const CHECK_LANGUAGES = ["c", "python", "javascript"] as const;
+export const REFERENCE_SOURCES = ["prof", "ai"] as const;
+
+/** Pré-calcul d'un exercice exécutable : code de référence et tests (1 ligne par exercice). */
+export const exerciseChecks = sqliteTable(
+  "exercise_checks",
+  {
+    exerciseId: text("exercise_id")
+      .primaryKey()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    status: text("status", { enum: CHECK_STATUSES }).notNull().default("pending"),
+    language: text("language", { enum: CHECK_LANGUAGES }),
+    referenceCode: text("reference_code"),
+    referenceSource: text("reference_source", { enum: REFERENCE_SOURCES }),
+    tests: text("tests", { mode: "json" })
+      .$type<{ input: string; expected: string; visible: boolean }[]>()
+      .notNull()
+      .default(sql`'[]'`),
+    verified: integer("verified", { mode: "boolean" }).notNull().default(false),
+    verifiedBy: text("verified_by"), // id utilisateur (sans FK : survit à la suppression du compte)
+    model: text("model"),
+    attempts: integer("attempts").notNull().default(0),
+    error: text("error"),
+    createdAt: createdAt(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch('subsec') * 1000)`),
+  },
+  (t) => [index("exercise_checks_status_idx").on(t.status, t.updatedAt)],
+);
+
+/** Signalement d'un test faux par un utilisateur. */
+export const checkReports = sqliteTable(
+  "check_reports",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exerciseId: text("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    message: text("message").notNull(),
+    resolved: integer("resolved", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [index("check_reports_exercise_idx").on(t.exerciseId)],
+);
+
+/** Dernier code de l'étudiant par exercice. */
+export const codeAttempts = sqliteTable(
+  "code_attempts",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exerciseId: text("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    language: text("language", { enum: CHECK_LANGUAGES }).notNull(),
+    code: text("code").notNull(),
+    passed: integer("passed", { mode: "boolean" }).notNull().default(false),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch('subsec') * 1000)`),
+  },
+  (t) => [uniqueIndex("code_attempts_user_exercise_idx").on(t.userId, t.exerciseId)],
+);

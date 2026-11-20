@@ -4,6 +4,7 @@ import { exercises } from "./db/schema";
 import type { Document } from "./documents";
 import { splitExercises } from "./extract/exercises";
 import { detectLang, groupKey, isCorrection } from "./import/pairing";
+import { enqueueCheck } from "./checks";
 import { indexExercise } from "./search";
 
 /** Énoncé dont on extrait les exercices : type exercice/annale, pas un corrigé. */
@@ -39,6 +40,7 @@ export function createExercises(db: Db, doc: Document, relPath: string): number 
       .returning()
       .get();
     indexExercise(db, row);
+    enqueueCheck(db, row.id);
   }
   return parts.length;
 }
