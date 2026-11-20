@@ -51,6 +51,7 @@ cp .env.example .env
 | `C_PROF_REPO_URL` | Dépôt GitHub des cours du professeur, cloné puis importé par `npm run import`. | `https://github.com/S-L-A-K-E-R/C_courses` |
 | `LOCAL_COURSES_PATH` | Dossier local de cours importé par `npm run import` : chaque sous-dossier de premier niveau devient une matière. Lu seulement, jamais modifié. | `./sources/local` |
 | `COOKIE_SECURE` | `true` pour marquer le cookie de session « Secure » (obligatoire derrière HTTPS). Laissez `false` en HTTP sur le réseau local, sinon la connexion échoue. | `false` |
+| `CALENDAR_ENCRYPTION_KEY` | Clé hexadécimale de 32 octets pour chiffrer les URL privées des flux iCalendar liés par les membres. Sans cette clé, la liaison au calendrier est désactivée. | _(vide)_ |
 
 Une chaîne vide dans `.env` équivaut à variable non définie.
 
@@ -62,6 +63,16 @@ Une chaîne vide dans `.env` équivaut à variable non définie.
 4. Les matières se gèrent sous `/admin/subjects`.
 
 Deux rôles seulement : `admin` et `member`.
+
+### Emploi du temps Boostcamp
+
+La rubrique `/timetable` peut lire un lien HTTPS de proxy iCalendar (`.ical`/`.ics`) configuré pour fournir le calendrier Boostcamp. À la première connexion, le membre ouvre Boostcamp puis colle l'URL du proxy. Elle ne demande jamais le mot de passe Boostcamp et ne prétend pas faire un SSO. Le lien du proxy est un secret : il est chiffré dans SQLite avec AES-256-GCM et la clé `CALENDAR_ENCRYPTION_KEY`. Générez une clé avec :
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Configurez cette clé sur le serveur avant que les membres ne lient leur calendrier et conservez-la dans un endroit sûr : sans elle, les abonnements déjà enregistrés ne pourront plus être déchiffrés. Les événements sont actualisés à l'ouverture de la page, au plus une fois toutes les cinq minutes, ou à la demande. Ce mécanisme est une synchronisation par lecture du proxy, pas une mise à jour push en temps réel ; le proxy doit renvoyer les occurrences des événements (les règles récurrentes `RRULE` ne sont pas développées).
 
 ## Importer des cours
 

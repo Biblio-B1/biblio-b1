@@ -13,6 +13,10 @@ export const envSchema = z.object({
   COOKIE_SECURE: z.enum(["true", "false"]).default("false"),
   // Réservé : les sessions sont des jetons aléatoires hachés, ce secret n'est pas utilisé.
   SESSION_SECRET: z.string().default(DEV_SESSION_SECRET),
+  CALENDAR_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, "clé hexadécimale de 32 octets attendue")
+    .optional(),
   // Adresse publique de l'application (liens d'invitation), sans « / » final.
   APP_URL: z
     .url({ protocol: /^https?$/, error: "URL http(s) attendue, ex. http://192.168.1.20:3000" })

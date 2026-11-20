@@ -44,6 +44,15 @@ export const sessions = sqliteTable("sessions", {
   createdAt: createdAt(),
 });
 
+export const boostcampCalendarLinks = sqliteTable("boostcamp_calendar_links", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  encryptedUrl: text("encrypted_url").notNull(),
+  eventsJson: text("events_json").notNull().default("[]"),
+  syncedAt: integer("synced_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export const invites = sqliteTable("invites", {
   id: id(),
   tokenHash: text("token_hash").notNull().unique(),

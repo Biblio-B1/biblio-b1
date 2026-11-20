@@ -3,7 +3,7 @@ import { createTestDb } from "@/server/db/client";
 import { documents } from "@/server/db/schema";
 
 const TABLES = [
-  "users", "sessions", "invites", "subjects", "documents",
+  "users", "sessions", "boostcamp_calendar_links", "invites", "subjects", "documents",
   "exercises", "progress", "threads", "posts", "search_index",
 ];
 
