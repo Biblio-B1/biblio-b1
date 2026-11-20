@@ -5,6 +5,7 @@ import { codeAttempts, documents, exerciseChecks, exercises, users } from "@/ser
 import { createExercises } from "@/server/exercises";
 import {
   claimNextPending,
+  countChecksByStatus,
   enqueueAllMissing,
   enqueueCheck,
   getAttempt,
@@ -208,5 +209,22 @@ describe("tentatives", () => {
 
   it("getAttempt renvoie null sans tentative", () => {
     expect(getAttempt(db, member, mkEx(1))).toBeNull();
+  });
+});
+
+describe("countChecksByStatus", () => {
+  it("compte par statut et les exercices sans ligne", () => {
+    const a = mkEx(901);
+    const b = mkEx(902);
+    mkEx(903);
+    enqueueCheck(db, a);
+    enqueueCheck(db, b);
+    db.update(exerciseChecks).set({ status: "ready" }).where(eq(exerciseChecks.exerciseId, b)).run();
+    const c = countChecksByStatus(db);
+    expect(c.pending).toBe(1);
+    expect(c.ready).toBe(1);
+    expect(c.failed).toBe(0);
+    expect(c.missing).toBe(1);
+    expect(c.total).toBe(3);
   });
 });

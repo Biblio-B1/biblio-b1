@@ -1,0 +1,27 @@
+# Unité systemd « utilisateur » du service de pré-calcul des exercices (Ollama), à installer sur le Chromebook.
+# Installation :
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/biblio-b1-solver.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now biblio-b1-solver
+# Prérequis : OLLAMA_URL=http://<IP-du-PC>:11434 dans le .env du dossier de travail.
+# Si le PC est éteint, le service attend (60 s, délai doublé jusqu'à 15 min) et reprend tout seul.
+# Une configuration refusée (modèle introuvable, .env invalide) fait sortir en code 1 : Restart=always
+# relance alors toutes les 30 s ; consultez `journalctl --user -u biblio-b1-solver`.
+[Unit]
+Description=Biblio B1 - pré-calcul des vérifications d'exercices (Ollama)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/biblio-b1
+Environment=NODE_ENV=production
+# Même schéma nvm que biblio-b1.service (npm absent du PATH de systemd sous nvm).
+ExecStart=/bin/bash -c '. "$HOME/.nvm/nvm.sh" && exec npm run solver'
+Restart=always
+RestartSec=30
+# 143 = 128 + SIGTERM : `systemctl stop` n'est pas un échec.
+SuccessExitStatus=143
+
+[Install]
+WantedBy=default.target

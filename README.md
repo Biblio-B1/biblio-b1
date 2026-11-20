@@ -93,19 +93,76 @@ Reconstruire l'index de recherche (après un import ancien ou pour réparer) :
 npm run reindex
 ```
 
-## Vérification automatique des exercices (`npm run solver`)
+## Exercices exécutables
 
-Le service de pré-calcul prépare, pour chaque exercice en file, un jeu de vérification : langage (C, Python ou JavaScript), solution de référence et 4 à 6 tests (entrée → sortie attendue), le premier visible des étudiants. La correction du professeur sert de référence si elle contient du C qui compile ; sinon le modèle Ollama (`OLLAMA_MODEL`) écrit la solution. Les sorties attendues sont toujours calculées en exécutant la référence (deux fois, pour écarter les solutions non déterministes) avec les mêmes moteurs WebAssembly que le navigateur.
+### Ce que voient les étudiants
+Sur la page d'un exercice de programmation, un éditeur de code (C, Python ou JavaScript) permet d'écrire, d'exécuter et de **vérifier** sa solution sans quitter le site. Le code s'exécute **dans le navigateur de l'étudiant** (WebAssembly), jamais sur le serveur. Au premier usage, le navigateur télécharge les moteurs une seule fois puis les garde en cache : ≈ 27 Mo pour le C, ≈ 6 Mo pour Python (JavaScript : rien).
+
+### Comment fonctionne la vérification
+Un modèle d'IA local (Ollama) **pré-calcule** pour chaque exercice un jeu de vérification : langage, solution de référence et 4 à 6 tests (entrée → sortie attendue), le premier étant visible. La correction du professeur sert de référence si c'est du C qui compile ; sinon le modèle écrit la solution. Les sorties attendues sont toujours **calculées en exécutant la référence** (deux fois, pour écarter les solutions non déterministes) avec les mêmes moteurs que le navigateur. Ce pré-calcul se fait hors ligne : les étudiants n'attendent jamais le modèle.
+
+- Tant que les tests n'ont pas été relus par un administrateur, l'exercice affiche le badge **« non vérifiés »** (tests écrits par l'IA, donc faillibles).
+- Les étudiants peuvent **signaler** des tests erronés ; les signalements apparaissent côté administrateur.
+- Les administrateurs peuvent corriger les tests et les marquer comme validés (le badge disparaît, et le solveur n'y touche plus).
+- Exercice sans calcul vérifiable (question de cours, schéma…) : pas d'éditeur de vérification. Exercice pas encore traité : « en préparation ».
+
+### Le service de pré-calcul (`npm run solver`)
+Pour chaque exercice en file, le service obtient langage, référence et entrées de test, puis les sorties attendues.
 
 ```sh
 npm run solver                         # boucle longue (service)
 npm run solver -- --once               # un exercice puis arrêt
 npm run solver -- --limit 10           # au plus 10 exercices
 npm run solver -- --exercise <id>      # (re)calculer un exercice précis
-npm run solver -- --retry-failed       # remettre en file les échecs
+npm run solver -- --enqueue-missing    # met en file les exercices sans vérification
+npm run solver -- --retry-failed       # remet en file les échecs
+npm run solver:status                  # compte par statut (lecture seule)
 ```
 
-Au démarrage, les exercices sans vérification sont mis en file (`--enqueue-missing` le fait aussi explicitement) et les traitements interrompus depuis plus de 30 min sont repris. Si Ollama est injoignable, les exercices restent en file et le service réessaie (60 s, puis délai doublé jusqu'à 15 min). Sur CPU, compter plusieurs minutes par exercice.
+Au démarrage, les exercices sans vérification sont mis en file (`--enqueue-missing` le fait aussi explicitement) et les traitements interrompus depuis plus de 30 min sont repris. Si Ollama est injoignable, les exercices restent en file et le service réessaie (60 s, puis délai doublé jusqu'à 15 min). Un modèle introuvable (`OLLAMA_MODEL` erroné, `ollama pull` oublié) arrête le service avec un message clair (code 1). Ctrl+C est sans danger : la ligne en cours est rendue à la file et le travail reprend où il s'était arrêté. `solver:status` affiche le nombre d'exercices `ready`, `no_code`, `unsupported`, `failed`, `running`, `pending` et non encore mis en file.
+
+### Préparer le PC (Windows, avec Ollama)
+Le modèle est trop lourd pour le Chromebook : il tourne sur un PC de la maison.
+
+1. Installez [Ollama](https://ollama.com) puis téléchargez le modèle (≈ 17 Go) :
+   ```powershell
+   ollama pull qwen3.8:27b
+   ```
+2. Pour que le Chromebook puisse l'appeler, exposez Ollama sur le réseau local : variable d'environnement **utilisateur** `OLLAMA_HOST` = `0.0.0.0` (Paramètres Windows → « variables d'environnement », ou `setx OLLAMA_HOST 0.0.0.0`), puis quittez et relancez Ollama.
+3. Autorisez le port 11434 en entrée, **profil réseau Privé uniquement** (PowerShell en administrateur) :
+   ```powershell
+   New-NetFirewallRule -DisplayName "Ollama (LAN)" -Direction Inbound -Protocol TCP -LocalPort 11434 -Action Allow -Profile Private
+   ```
+   Le réseau doit être déclaré « Privé » dans Windows.
+4. Relevez l'adresse IP du PC avec `ipconfig` (ligne « Adresse IPv4 »). Idéalement, réservez-la dans la box (bail DHCP fixe).
+
+### Pré-calcul initial
+Il faut compter ≈ 3 min par exercice sur CPU, soit **≈ 18 h pour ~350 exercices** (beaucoup d'exercices `no_code` sont plus rapides). Le travail est **reprenable** : on peut l'interrompre (Ctrl+C) et le relancer à volonté.
+
+Recommandé : faire le pré-calcul **sur une copie du dépôt sur le PC**, puis copier la base vers le Chromebook.
+
+```sh
+# sur le PC, dans la copie du dépôt (après npm install et un npm run import)
+npm run solver -- --enqueue-missing    # laissez tourner ; Ctrl+C pour arrêter, relancer pour reprendre
+npm run solver:status                  # avancement, depuis un autre terminal
+npm run solver -- --retry-failed       # une fois fini : retenter les échecs
+```
+
+Deux façons d'amener le résultat sur le Chromebook :
+
+1. **Copier `storage/data.db` du PC vers le Chromebook (recommandé).** Arrêtez le site sur le Chromebook (`systemctl --user stop biblio-b1 biblio-b1-solver`), copiez `storage/data.db` (et, si des fichiers ont changé, tout le dossier `storage/`), supprimez les éventuels `data.db-wal` / `data.db-shm` du Chromebook, puis redémarrez. **Cela écrase les données du Chromebook** (comptes, progression, fils, dépôts) : faites-le **avant l'ouverture à la promo**, ou fusionnez à la main avec prudence. Les tests ne dépendent que des exercices ; les identifiants doivent donc venir du même import.
+2. **Pré-calculer directement pour le Chromebook**, plus tard, en laissant le service du Chromebook appeler Ollama sur le PC via `OLLAMA_URL` (voir ci-dessous). Aucune copie, mais le PC doit rester allumé ≈ 18 h, et les nouveaux exercices seront traités au fil de l'eau.
+
+### Sur le Chromebook
+1. Dans `.env` : `OLLAMA_URL=http://<IP-du-PC>:11434` (et `OLLAMA_MODEL` si vous changez de modèle). Testez : `curl http://<IP-du-PC>:11434/api/tags`.
+2. Installez l'unité systemd du solveur :
+   ```sh
+   cp deploy/biblio-b1-solver.service ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   systemctl --user enable --now biblio-b1-solver
+   journalctl --user -u biblio-b1-solver -f     # journaux
+   ```
+3. Quand le PC est éteint, les exercices restent « en préparation » et le service réessaie ; ils sont traités dès que le PC revient. Les nouveaux exercices importés ensuite sont mis en file automatiquement au redémarrage du service.
 
 ## Production
 

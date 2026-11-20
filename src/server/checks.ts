@@ -49,6 +49,23 @@ export function enqueueAllMissing(db: Db): number {
     .run().changes;
 }
 
+/** Nombre de lignes par statut (tous les statuts présents, 0 inclus) + exercices sans ligne. */
+export function countChecksByStatus(db: Db): Record<CheckStatus | "missing" | "total", number> {
+  const out = { pending: 0, running: 0, ready: 0, no_code: 0, unsupported: 0, failed: 0, missing: 0, total: 0 };
+  const rows = db.$client.prepare("SELECT status, COUNT(*) AS n FROM exercise_checks GROUP BY status").all() as {
+    status: CheckStatus;
+    n: number;
+  }[];
+  for (const r of rows) if (r.status in out) out[r.status] = r.n;
+  out.total = (db.$client.prepare("SELECT COUNT(*) AS n FROM exercises").get() as { n: number }).n;
+  out.missing = (
+    db.$client.prepare("SELECT COUNT(*) AS n FROM exercises WHERE id NOT IN (SELECT exercise_id FROM exercise_checks)").get() as {
+      n: number;
+    }
+  ).n;
+  return out;
+}
+
 export function getCheck(db: Db, exerciseId: string): ExerciseCheck | null {
   return db.select().from(exerciseChecks).where(eq(exerciseChecks.exerciseId, exerciseId)).get() ?? null;
 }
