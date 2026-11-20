@@ -72,7 +72,7 @@ La rubrique `/timetable` peut lire un lien HTTPS de proxy iCalendar (`.ical`/`.i
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Configurez cette clé sur le serveur avant que les membres ne lient leur calendrier et conservez-la dans un endroit sûr : sans elle, les abonnements déjà enregistrés ne pourront plus être déchiffrés. Les événements sont actualisés à l'ouverture de la page, au plus une fois toutes les cinq minutes, ou à la demande. Ce mécanisme est une synchronisation par lecture du proxy, pas une mise à jour push en temps réel ; le proxy doit renvoyer les occurrences des événements (les règles récurrentes `RRULE` ne sont pas développées).
+Configurez cette clé sur le serveur avant que les membres ne lient leur calendrier et conservez-la dans un endroit sûr : sans elle, les abonnements déjà enregistrés ne pourront plus être déchiffrés. L'interface propose une vue hebdomadaire, une vue jour sur mobile et le détail des événements (matière, salle, intervenant, description, statut et date de modification quand le flux les fournit). La page interroge automatiquement le proxy chaque minute lorsqu'elle reste ouverte; une synchronisation manuelle est aussi disponible. C'est une actualisation périodique, pas une mise à jour push. Le proxy doit renvoyer les occurrences des événements (les règles récurrentes `RRULE` ne sont pas développées). Le flux iCalendar ne synchronise pas les devoirs, récapitulatifs de cours ou PDF ; ces données nécessitent un contrat d'API ou de proxy officiel distinct.
 
 ## Importer des cours
 

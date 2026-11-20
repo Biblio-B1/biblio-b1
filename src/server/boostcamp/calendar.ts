@@ -8,19 +8,14 @@ import { z } from "zod";
 import { env } from "@/server/env";
 import type { Db } from "@/server/db/client";
 import { boostcampCalendarLinks } from "@/server/db/schema";
+import type { ScheduleEvent } from "@/lib/calendar-view";
 
 const MAX_FEED_BYTES = 1_000_000;
 const MAX_EVENTS = 500;
-const CACHE_MS = 5 * 60_000;
+const CACHE_MS = 50_000;
 const CALENDAR_ZONE = "Europe/Paris";
 
-export type CalendarEvent = {
-  uid: string;
-  title: string;
-  start: string;
-  end: string;
-  allDay: boolean;
-};
+export type CalendarEvent = ScheduleEvent;
 
 const eventsSchema = z.array(
   z.object({
@@ -29,10 +24,21 @@ const eventsSchema = z.array(
     start: z.string().datetime(),
     end: z.string().datetime(),
     allDay: z.boolean(),
+    status: z.enum(["confirmed", "tentative", "cancelled"]).default("confirmed"),
+    categories: z.array(z.string()).default([]),
+    location: z.string().optional(),
+    description: z.string().optional(),
+    organizer: z.string().optional(),
+    lastModified: z.string().datetime().optional(),
   }),
 );
 
-export class CalendarError extends Error {}
+export class CalendarError extends Error {
+  constructor(message: string, readonly code?: "reauth_required") {
+    super(message);
+    this.name = "CalendarError";
+  }
+}
 
 function encryptionKey(): Buffer {
   const key = env.CALENDAR_ENCRYPTION_KEY;
@@ -131,6 +137,10 @@ async function fetchCalendar(url: URL): Promise<string> {
       (response) => {
         if (response.statusCode !== 200) {
           response.resume();
+          if (response.statusCode === 401 || response.statusCode === 403 || response.statusCode === 410) {
+            reject(new CalendarError("Le lien du proxy a expiré ou n’est plus autorisé. Collez un nouveau lien iCalendar.", "reauth_required"));
+            return;
+          }
           reject(new CalendarError("Boostcamp n’a pas fourni le calendrier (réponse HTTP invalide)."));
           return;
         }
@@ -220,7 +230,7 @@ export function parseCalendar(ics: string): CalendarEvent[] {
     if (line === "END:VEVENT") {
       if (!current) continue;
       const startProp = current.get("DTSTART");
-      if (!startProp || current.get("STATUS")?.value.toUpperCase() === "CANCELLED") {
+      if (!startProp) {
         current = null;
         continue;
       }
@@ -238,12 +248,38 @@ export function parseCalendar(ics: string): CalendarEvent[] {
       if (endMs < startMs) throw new CalendarError("Le calendrier contient une durée invalide.");
       const uid = current.get("UID")?.value ?? `event-${events.length}`;
       const title = unescapeIcsText(current.get("SUMMARY")?.value ?? "Événement sans titre").slice(0, 300);
+      const categories = unescapeIcsText(current.get("CATEGORIES")?.value ?? "")
+        .split(",")
+        .map((category) => category.trim())
+        .filter(Boolean)
+        .slice(0, 10);
+      const location = unescapeIcsText(current.get("LOCATION")?.value ?? "").slice(0, 300);
+      const description = unescapeIcsText(current.get("DESCRIPTION")?.value ?? "").slice(0, 4000);
+      const organizerProp = current.get("ORGANIZER");
+      const organizer = unescapeIcsText(
+        organizerProp?.params.get("CN") ?? organizerProp?.value.replace(/^mailto:/i, "") ?? "",
+      ).slice(0, 200);
+      const modifiedProp = current.get("LAST-MODIFIED");
+      const lastModified = modifiedProp
+        ? new Date(parseIcsDate(modifiedProp.value, modifiedProp.params.get("TZID"))).toISOString()
+        : undefined;
+      const status = current.get("STATUS")?.value.toUpperCase() === "CANCELLED"
+        ? "cancelled"
+        : current.get("STATUS")?.value.toUpperCase() === "TENTATIVE"
+          ? "tentative"
+          : "confirmed";
       events.push({
         uid: uid.slice(0, 300),
         title,
         start: new Date(startMs).toISOString(),
         end: new Date(endMs).toISOString(),
         allDay,
+        status,
+        categories,
+        ...(location ? { location } : {}),
+        ...(description ? { description } : {}),
+        ...(organizer ? { organizer } : {}),
+        ...(lastModified ? { lastModified } : {}),
       });
       if (events.length > MAX_EVENTS) throw new CalendarError("Le calendrier contient trop d’événements.");
       current = null;

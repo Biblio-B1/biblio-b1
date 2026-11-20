@@ -20,6 +20,11 @@ describe("parseCalendar", () => {
       "DTEND;TZID=Europe/Paris:20261123T103000",
       "SUMMARY:Cours de programmation qui continue",
       "  sur la ligne suivante",
+      "CATEGORIES:Programmation C",
+      "LOCATION:Salle 2.14",
+      "ORGANIZER;CN=Dr Ada:mailto:ada@example.test",
+      "DESCRIPTION:Apporter le support de cours",
+      "LAST-MODIFIED:20261122T150000Z",
       "END:VEVENT",
       "BEGIN:VEVENT",
       "UID:cancelled",
@@ -29,14 +34,21 @@ describe("parseCalendar", () => {
       "END:VCALENDAR",
     ].join("\r\n"));
 
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({
       uid: "class-1",
       title: "Cours de programmation qui continue sur la ligne suivante",
       start: "2026-11-23T08:00:00.000Z",
       end: "2026-11-23T09:30:00.000Z",
       allDay: false,
+      categories: ["Programmation C"],
+      location: "Salle 2.14",
+      organizer: "Dr Ada",
+      description: "Apporter le support de cours",
+      lastModified: "2026-11-22T15:00:00.000Z",
+      status: "confirmed",
     });
+    expect(events[1]).toMatchObject({ uid: "cancelled", status: "cancelled" });
   });
 
   it("gère les événements sur une journée entière", () => {
