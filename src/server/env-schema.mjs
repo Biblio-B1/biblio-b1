@@ -8,6 +8,8 @@ export const envSchema = z.object({
   ADMIN_INVITE_CODE: z.string().default(""),
   C_PROF_REPO_URL: z.string().min(1).default("https://github.com/S-L-A-K-E-R/C_courses"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  HOST: z.string().default("127.0.0.1"),
+  HOSTNAME: z.string().default("127.0.0.1"),
   STORAGE_PATH: z.string().min(1).default("./storage"),
   LOCAL_COURSES_PATH: z.string().min(1).default("./sources/local"),
   COOKIE_SECURE: z.enum(["true", "false"]).default("false"),

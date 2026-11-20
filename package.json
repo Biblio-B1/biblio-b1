@@ -8,7 +8,7 @@
   "scripts": {
     "postinstall": "node scripts/copy-pdf-worker.mjs && node scripts/copy-runtimes.mjs",
     "predev": "node scripts/copy-pdf-worker.mjs && node scripts/copy-runtimes.mjs",
-    "dev": "next dev",
+    "dev": "next dev -H 127.0.0.1",
     "prebuild": "node scripts/copy-pdf-worker.mjs && node scripts/copy-runtimes.mjs",
     "build": "next build",
     "start": "node scripts/start.mjs",

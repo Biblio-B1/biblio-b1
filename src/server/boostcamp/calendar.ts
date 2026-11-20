@@ -10,7 +10,7 @@ import { z } from "zod";
 import { env } from "@/server/env";
 import type { Db } from "@/server/db/client";
 import { boostcampCalendarLinks } from "@/server/db/schema";
-import type { ScheduleEvent } from "@/lib/calendar-view";
+import { cleanEventDescription, type ScheduleEvent } from "@/lib/calendar-view";
 
 const MAX_FEED_BYTES = 1_000_000;
 const MAX_EVENTS = 500;
@@ -280,7 +280,7 @@ export function parseCalendar(ics: string): CalendarEvent[] {
         .filter(Boolean)
         .slice(0, 10);
       const location = unescapeIcsText(current.get("LOCATION")?.value ?? "").slice(0, 300);
-      const description = unescapeIcsText(current.get("DESCRIPTION")?.value ?? "").slice(0, 4000);
+      const description = cleanEventDescription(unescapeIcsText(current.get("DESCRIPTION")?.value ?? "")).slice(0, 4000);
       const organizerProp = current.get("ORGANIZER");
       const organizer = unescapeIcsText(
         organizerProp?.params.get("CN") ?? organizerProp?.value.replace(/^mailto:/i, "") ?? "",
@@ -331,7 +331,15 @@ export function parseCalendar(ics: string): CalendarEvent[] {
 function readStoredEvents(raw: string): CalendarEvent[] {
   const parsed = eventsSchema.safeParse(JSON.parse(raw));
   if (!parsed.success) throw new CalendarError("Les événements enregistrés sont invalides. Synchronisez à nouveau.");
-  return parsed.data;
+  return parsed.data.map((event) => {
+    if (!event.description) return event;
+    const cleaned = cleanEventDescription(event.description);
+    if (!cleaned) {
+      const { description: _removed, ...rest } = event;
+      return rest;
+    }
+    return { ...event, description: cleaned };
+  });
 }
 
 async function readAndStore(db: Db, userId: string, encryptedUrl: string): Promise<CalendarEvent[]> {

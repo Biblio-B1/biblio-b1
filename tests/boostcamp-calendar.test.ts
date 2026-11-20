@@ -72,6 +72,22 @@ describe("parseCalendar", () => {
     });
   });
 
+  it("supprime le bloc HTML 'Contenu pédagogique de cette séance' des descriptions", () => {
+    const events = parseCalendar([
+      "BEGIN:VCALENDAR",
+      "BEGIN:VEVENT",
+      "UID:clean-1",
+      "DTSTART:20261124T083000Z",
+      "DTEND:20261124T103000Z",
+      "SUMMARY:Data",
+      "DESCRIPTION:Matière : Infrastructures et Systèmes pour la Data\\nSalle : EM215\\n\\nContenu pédagogique de cette séance : \\n<span style=\"font-weight:bold;\">contenu</span><br /><div class=\"teams\"></div><div class=\"sws\">SoWeSign</div><div class=\"hp\">Svp, ajoutez vos documents ici...</div>\\n",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n"));
+
+    expect(events[0].description).toBe("Matière : Infrastructures et Systèmes pour la Data\nSalle : EM215");
+  });
+
   it("refuse les réponses qui ne sont pas un calendrier", () => {
     expect(() => parseCalendar("<html>login required</html>")).toThrow(/iCalendar valide/);
   });

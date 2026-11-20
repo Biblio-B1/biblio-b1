@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconChevron, IconHomework } from "@/components/layout/Icons";
 import {
   allDayEventsForDay,
+  cleanEventDescription,
   dateKeyInParis,
   homeworksForEvent,
   labelDate,
@@ -245,21 +246,25 @@ export function CalendarView({
     return values.hour * 60 + values.minute;
   })() : undefined;
 
+  const lastTodayRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     const update = () => {
       const current = new Date();
       const day = dateKeyInParis(current);
+      const prevToday = lastTodayRef.current;
+      lastTodayRef.current = day;
       setToday(day);
       setNow(current);
-      if (mondayOfWeek(day) !== weekStart) {
-        setWeekStart(mondayOfWeek(day));
-        setSelectedDay(day);
+      if (prevToday && prevToday !== day) {
+        setWeekStart((ws) => (ws === mondayOfWeek(prevToday) ? mondayOfWeek(day) : ws));
+        setSelectedDay((sd) => (sd === prevToday ? day : sd));
       }
     };
     update();
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
-  }, [weekStart]);
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => router.refresh(), 60_000);
@@ -496,6 +501,7 @@ function EventDetails({
   const time = event.allDay ? "Toute la journée" : eventTime(event.start, event.end);
   const subject = matchEventSubject(event, subjects);
   const due = homeworksForEvent(event, dayKey, subjects, homeworks);
+  const cleanedDescription = event.description ? cleanEventDescription(event.description) : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -583,10 +589,10 @@ function EventDetails({
               <dd>{event.organizer}</dd>
             </>
           )}
-          {event.description && (
+          {cleanedDescription && (
             <>
               <dt className="text-ink-3">Description</dt>
-              <dd className="whitespace-pre-wrap">{event.description}</dd>
+              <dd className="whitespace-pre-wrap">{cleanedDescription}</dd>
             </>
           )}
         </dl>

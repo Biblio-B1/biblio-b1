@@ -17,8 +17,9 @@ try {
 }
 
 const port = process.env.PORT || "3000";
+const host = process.env.HOST || process.env.HOSTNAME || "127.0.0.1";
 const nextBin = createRequire(import.meta.url).resolve("next/dist/bin/next");
-const child = spawn(process.execPath, [nextBin, "start", "-p", port], { stdio: "inherit", env: process.env });
+const child = spawn(process.execPath, [nextBin, "start", "-H", host, "-p", port], { stdio: "inherit", env: process.env });
 let forwarded = null;
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => {
