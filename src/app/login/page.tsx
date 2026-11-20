@@ -14,11 +14,18 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage() {
   if (await getCurrentUser()) redirect("/");
   return (
-    <AuthShell title="Connexion" intro="L'inscription se fait uniquement sur invitation.">
+    <AuthShell title="Connexion">
       <ActionForm action={loginAction} submitLabel="Se connecter">
         <Field label="E-mail ou pseudo" name="identifier" autoComplete="username" />
         <Field label="Mot de passe" name="password" type="password" autoComplete="current-password" />
       </ActionForm>
+      <p className="text-sm text-ink-2">
+        Pas encore de compte ?{" "}
+        <Link href="/signup" className="text-ink underline underline-offset-2">
+          Créer un compte
+        </Link>{" "}
+        (validé par l&apos;administrateur).
+      </p>
       {setupAvailable(getDb()) && (
         <p className="text-sm text-ink-2">
           Aucun administrateur n&apos;existe encore :{" "}

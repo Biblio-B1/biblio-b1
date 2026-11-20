@@ -35,6 +35,9 @@ export function getUserBySessionToken(db: Db, token: string): User | null {
     db.delete(sessions).where(eq(sessions.id, id)).run();
     return null;
   }
+  // Compte en attente de validation : aucune session ne donne accès (défense en profondeur,
+  // la connexion est déjà refusée par loginAction).
+  if (row.user.status !== "active") return null;
   return row.user;
 }
 

@@ -9,11 +9,13 @@ const SRC_APP = path.resolve(import.meta.dirname, "../src/app");
 // Actions publiques documentées (aucune session requise par nature) :
 // - loginAction : connexion ;
 // - registerAction : inscription via un jeton d'invitation (le jeton est vérifié) ;
+// - signupAction : demande de compte libre (compte créé en attente, sans session ni accès) ;
 // - setupAction : création du premier admin (code ADMIN_INVITE_CODE, fermée ensuite) ;
 // - logoutAction : déconnexion (supprime la session courante, s'il y en a une).
 const PUBLIC_ACTIONS = new Set([
   "(auth)/actions.ts#loginAction",
   "(auth)/actions.ts#registerAction",
+  "(auth)/actions.ts#signupAction",
   "(auth)/actions.ts#setupAction",
   "(auth)/actions.ts#logoutAction",
 ]);

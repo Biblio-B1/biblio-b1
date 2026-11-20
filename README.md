@@ -50,6 +50,7 @@ cp .env.example .env
 | `STORAGE_PATH` | Dossier de stockage : base SQLite, fichiers déposés, clone du dépôt du professeur. | `./storage` |
 | `C_PROF_REPO_URL` | Dépôt GitHub des cours du professeur, cloné puis importé par `npm run import`. | `https://github.com/S-L-A-K-E-R/C_courses` |
 | `LOCAL_COURSES_PATH` | Dossier local de cours importé par `npm run import` : chaque sous-dossier de premier niveau devient une matière. Lu seulement, jamais modifié. | `./sources/local` |
+| `NTFY_TOPIC` | Topic [ntfy](https://ntfy.sh) secret pour être notifié des demandes de compte (voir « Inscription avec validation »). Vide = pas de notification. | _(vide)_ |
 | `COOKIE_SECURE` | `true` pour marquer le cookie de session « Secure » (obligatoire derrière HTTPS). Laissez `false` en HTTP sur le réseau local, sinon la connexion échoue. | `false` |
 | `OLLAMA_URL` | Adresse d'Ollama pour le service de pré-calcul (`npm run solver`). Sur le Chromebook : `http://<IP-du-PC>:11434` (sur le PC, lancer Ollama avec `OLLAMA_HOST=0.0.0.0` et ouvrir le port 11434 du pare-feu Windows au réseau local). | `http://127.0.0.1:11434` |
 | `OLLAMA_MODEL` | Modèle Ollama local utilisé pour écrire les solutions de référence et les entrées de test. | `qwen3.8:27b` |
@@ -66,6 +67,18 @@ Une chaîne vide dans `.env` équivaut à variable non définie.
 4. Les matières se gèrent sous `/admin/subjects`.
 
 Deux rôles seulement : `admin` et `member`.
+
+### Inscription avec validation
+
+En plus des invitations (accès direct), chacun peut demander un compte depuis `/signup` (lien « Créer un compte » sur la page de connexion). Le compte est créé **en attente** : impossible de se connecter tant qu'un administrateur ne l'a pas accepté dans **Administration → Demandes de compte** (`/admin/users`, une pastille indique le nombre de demandes). Refuser supprime la demande. Au plus 50 demandes peuvent attendre en même temps.
+
+**Notification sur le téléphone** : installez l'application gratuite [ntfy](https://ntfy.sh) (Android, iPhone ou navigateur), abonnez-vous à un topic, et mettez ce topic dans `.env` :
+
+```
+NTFY_TOPIC=biblio-b1-<suite-aléatoire>   # 16 à 64 caractères : lettres, chiffres, - et _
+```
+
+Le nom du topic est un secret : quiconque le connaît lit les notifications (pseudo et e-mail du demandeur). Générez-le avec `node -e "console.log('biblio-b1-' + require('node:crypto').randomBytes(12).toString('hex'))"`. Toucher la notification ouvre la page de validation (définissez `APP_URL`). `NTFY_URL` (défaut `https://ntfy.sh`) permet d'utiliser votre propre serveur ntfy.
 
 ### Emploi du temps Boostcamp
 

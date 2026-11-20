@@ -8,6 +8,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // ces pages appellent getCurrentUser() et masquent ce qui exige un compte.
 const PUBLIC = [
   /^\/login$/,
+  /^\/signup$/,
   /^\/setup$/,
   /^\/invite\/[^/]+$/,
   /^\/runtimes\//,

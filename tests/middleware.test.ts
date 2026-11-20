@@ -16,6 +16,7 @@ describe("middleware", () => {
     const withCookie = new NextRequest("http://x.test/api/search", { headers: { cookie: "bb1_session=abc" } });
     expect(middleware(withCookie).headers.get("x-middleware-next")).toBe("1");
     expect(middleware(new NextRequest("http://x.test/login")).headers.get("x-middleware-next")).toBe("1");
+    expect(middleware(new NextRequest("http://x.test/signup")).headers.get("x-middleware-next")).toBe("1");
   });
 
   it("moteurs WASM (/runtimes/) publics : jamais de redirection (mise en cache immutable)", () => {

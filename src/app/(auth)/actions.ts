@@ -23,6 +23,9 @@ import {
   registrationSchema,
   revokeInvite,
 } from "@/server/auth/invites";
+import { countPendingUsers, requestAccount, SIGNUP_ERRORS } from "@/server/auth/signup";
+import { env } from "@/server/env";
+import { notifyAdmin } from "@/server/notify";
 import { currentInviteBase } from "@/server/invite-base";
 import { inviteLink } from "@/server/invite-link";
 
@@ -51,6 +54,9 @@ export async function loginAction(_prev: State, fd: FormData): Promise<State> {
   const hash = user?.passwordHash ?? (await (dummyHash ??= hashPassword("dummy-password")));
   const ok = await verifyPassword(hash, password);
   if (!user || !ok) return { error: "Identifiants incorrects." };
+  if (user.status !== "active") {
+    return { error: "Votre compte attend la validation d'un administrateur. Réessayez une fois qu'il l'aura accepté." };
+  }
   const { token, expiresAt } = createSession(db, user.id);
   await setSessionCookie(token, expiresAt);
   redirect("/");
@@ -80,6 +86,28 @@ export async function registerAction(token: string, _prev: State, fd: FormData):
   const session = createSession(db, res.value.id);
   await setSessionCookie(session.token, session.expiresAt);
   redirect("/");
+}
+
+/** Inscription libre : compte créé en attente, l'administrateur est notifié (ntfy) puis valide. */
+export async function signupAction(_prev: State, fd: FormData): Promise<State> {
+  const parsed = registrationInput(fd);
+  if (!parsed.success) return { error: firstIssue(parsed.error) };
+  const db = getDb();
+  const res = await requestAccount(db, parsed.data);
+  if (!res.ok) return { error: SIGNUP_ERRORS[res.error] };
+  revalidatePath("/admin/users");
+  const pending = countPendingUsers(db);
+  const base = env.APP_URL ?? (await currentInviteBase()).base;
+  await notifyAdmin({
+    title: "Biblio B1 : nouvelle demande de compte",
+    message: `${res.value.name} (${res.value.email}) demande un accès.${pending > 1 ? ` ${pending} demandes en attente.` : ""}`,
+    click: `${base}/admin/users`,
+    tags: ["bust_in_silhouette"],
+  });
+  return {
+    message:
+      "Demande envoyée. Un administrateur doit valider votre compte : vous pourrez vous connecter dès qu'il l'aura accepté.",
+  };
 }
 
 export async function setupAction(_prev: State, fd: FormData): Promise<State> {

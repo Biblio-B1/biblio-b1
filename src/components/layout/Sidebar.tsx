@@ -16,6 +16,8 @@ type Props = {
   unclassified: number;
   /** null : visiteur sans compte (bibliothèque publique seulement). */
   user: { name: string; role: "admin" | "member" } | null;
+  /** Demandes de compte en attente (administrateur uniquement). */
+  pendingUsers?: number;
 };
 
 function NavLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
@@ -32,7 +34,7 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
   );
 }
 
-function SidebarContent({ subjects, unclassified, user }: Props) {
+function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Props) {
   const pathname = usePathname();
   const is = (p: string) => pathname === p;
   return (
@@ -99,6 +101,17 @@ function SidebarContent({ subjects, unclassified, user }: Props) {
           <p className="px-2 pb-1 text-[12.5px] font-medium text-ink-3">Administration</p>
           <NavLink href="/admin/subjects" active={is("/admin/subjects")}>
             <IconSettings /> Matières et règles
+          </NavLink>
+          <NavLink href="/admin/users" active={is("/admin/users")}>
+            <IconUsers /> <span className="flex-1">Demandes de compte</span>
+            {pendingUsers > 0 && (
+              <span
+                aria-label={`${pendingUsers} en attente`}
+                className="rounded-full bg-primary px-1.5 text-[12px] leading-5 font-semibold text-on-primary tabular-nums"
+              >
+                {pendingUsers}
+              </span>
+            )}
           </NavLink>
           <NavLink href="/admin/invites" active={is("/admin/invites")}>
             <IconUsers /> Invitations

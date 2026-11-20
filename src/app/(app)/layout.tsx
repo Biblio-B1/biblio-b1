@@ -4,6 +4,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { getCurrentUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { countBySubject } from "@/server/library";
+import { countPendingUsers } from "@/server/auth/signup";
 import { listSubjects } from "@/server/subjects";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }));
   return (
     <div className="flex min-h-dvh">
-      <Sidebar subjects={subjects} unclassified={counts.get(null) ?? 0} user={user} />
+      <Sidebar
+        subjects={subjects}
+        unclassified={counts.get(null) ?? 0}
+        user={user}
+        pendingUsers={user?.role === "admin" ? countPendingUsers(db) : 0}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <Suspense fallback={<div className="h-14 border-b border-line" />}>
           <TopBar signedIn={user !== null} />

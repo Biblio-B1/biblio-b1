@@ -19,6 +19,7 @@ const createdAt = () =>
     .default(sql`(unixepoch('subsec') * 1000)`);
 
 export const ROLES = ["admin", "member"] as const;
+export const USER_STATUSES = ["active", "pending"] as const;
 export const DOC_TYPES = ["course", "photo", "exercise", "exam", "note"] as const;
 export const DOC_SOURCES = ["upload", "local", "github"] as const;
 export const PROGRESS_STATUSES = ["todo", "doing", "mastered"] as const;
@@ -32,6 +33,8 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ROLES }).notNull().default("member"),
+  // pending : inscription libre en attente de validation par un administrateur (pas de connexion).
+  status: text("status", { enum: USER_STATUSES }).notNull().default("active"),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("users_name_lower_idx").on(sql`lower(${t.name})`)]);
 

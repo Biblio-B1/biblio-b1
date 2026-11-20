@@ -26,6 +26,15 @@ export const envSchema = z.object({
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, "clé hexadécimale de 32 octets attendue")
     .optional(),
+  // Notifications à l'administrateur (nouvelle demande de compte) via ntfy. Le topic est un
+  // secret (quiconque le connaît lit les messages) : long et aléatoire. Vide = pas d'envoi.
+  NTFY_TOPIC: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{16,64}$/, "16 à 64 caractères parmi lettres, chiffres, « - » et « _ »")
+    .optional(),
+  NTFY_URL: z
+    .url({ protocol: /^https?$/, error: "URL http(s) attendue, ex. https://ntfy.sh" })
+    .default("https://ntfy.sh"),
   // Adresse publique de l'application (liens d'invitation), sans « / » final.
   APP_URL: z
     .url({ protocol: /^https?$/, error: "URL http(s) attendue, ex. http://192.168.1.20:3000" })
