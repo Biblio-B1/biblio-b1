@@ -2,6 +2,7 @@ import { and, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "./db/client";
 import {
+  CHECK_LANGUAGES as LANGUAGES,
   checkReports,
   codeAttempts,
   exerciseChecks,
@@ -24,13 +25,13 @@ export type CheckActor = { id: string; role: "admin" | "member" };
 const testsSchema = z
   .array(
     z.object({
-      input: z.string().max(10_000),
-      expected: z.string().max(100_000),
+      input: z.string().max(10_000, "Entrée trop longue (10 000 caractères max)"),
+      expected: z.string().max(100_000, "Sortie attendue trop longue (100 000 caractères max)"),
       visible: z.boolean(),
     }),
   )
-  .min(1)
-  .max(20)
+  .min(1, "Au moins un test est requis")
+  .max(20, "20 tests maximum")
   .refine((t) => t.some((x) => x.visible), "Au moins un test doit être visible");
 
 /** Met l'exercice en file (`pending`) s'il n'a pas encore de ligne ; idempotent. */
@@ -102,7 +103,18 @@ export function saveCheckResult(db: Db, exerciseId: string, result: CheckResult)
   if (result.referenceSource !== undefined) set.referenceSource = result.referenceSource;
   if (result.tests !== undefined) set.tests = result.tests;
   if (result.model !== undefined) set.model = result.model;
-  db.update(exerciseChecks).set(set).where(eq(exerciseChecks.exerciseId, exerciseId)).run();
+  // Garde : un résultat tardif n'écrase ni des tests vérifiés par un admin, ni une ligne
+  // qui n'est plus `running` (libérée puis reprise, ou supprimée).
+  db.update(exerciseChecks)
+    .set(set)
+    .where(
+      and(
+        eq(exerciseChecks.exerciseId, exerciseId),
+        eq(exerciseChecks.status, "running"),
+        eq(exerciseChecks.verified, false),
+      ),
+    )
+    .run();
 }
 
 function requireAdmin(actor: CheckActor): string {
@@ -131,9 +143,14 @@ export function updateTests(db: Db, exerciseId: string, tests: CheckTest[], admi
     .run();
 }
 
-/** Signale un test faux. */
+/** Signale un test faux. Erreurs : `not_found`, `invalid`. */
 export function reportCheck(db: Db, exerciseId: string, userId: string, message: string): void {
-  const m = z.string().trim().min(1).max(2000).parse(message);
+  const r = z.string().trim().min(1, "Message vide").max(2000, "Message trop long").safeParse(message);
+  if (!r.success) throw new Error("invalid");
+  const m = r.data;
+  if (!getCheck(db, exerciseId) && !db.select({ id: exercises.id }).from(exercises).where(eq(exercises.id, exerciseId)).get()) {
+    throw new Error("not_found");
+  }
   db.insert(checkReports).values({ userId, exerciseId, message: m }).run();
 }
 
@@ -146,8 +163,15 @@ export function saveAttempt(
   code: string,
   passed: boolean,
 ): void {
+  if (
+    typeof code !== "string" ||
+    code.length > 100_000 ||
+    !(LANGUAGES as readonly string[]).includes(language)
+  ) {
+    throw new Error("invalid");
+  }
   if (!db.select({ id: exercises.id }).from(exercises).where(eq(exercises.id, exerciseId)).get()) {
-    throw new Error("Exercice introuvable");
+    throw new Error("not_found");
   }
   db.transaction((tx) => {
     const t = tx as unknown as Db;

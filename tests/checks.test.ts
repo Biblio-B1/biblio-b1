@@ -119,12 +119,32 @@ describe("file d'attente", () => {
   it("saveCheckResult enregistre les tests", () => {
     const a = mkEx(1);
     enqueueCheck(db, a);
+    claimNextPending(db);
     saveCheckResult(db, a, { status: "ready", language: "python", referenceCode: "print(1)", referenceSource: "ai", tests, model: "m" });
     const c = getCheck(db, a)!;
     expect(c.status).toBe("ready");
     expect(c.tests).toEqual(tests);
     expect(c.verified).toBe(false);
     saveCheckResult(db, "inconnu", { status: "failed" }); // exercice supprimé : sans erreur
+  });
+
+  it("un résultat tardif n'écrase pas des tests vérifiés", () => {
+    const a = mkEx(1);
+    enqueueCheck(db, a);
+    claimNextPending(db);
+    updateTests(db, a, tests, { id: admin, role: "admin" });
+    saveCheckResult(db, a, { status: "ready", tests: [{ input: "9", expected: "9", visible: true }] });
+    const c = getCheck(db, a)!;
+    expect(c.tests).toEqual(tests);
+    expect(c.verified).toBe(true);
+  });
+
+  it("un résultat sur une ligne non running est ignoré", () => {
+    const a = mkEx(1);
+    enqueueCheck(db, a); // pending, jamais pris
+    saveCheckResult(db, a, { status: "ready", tests });
+    expect(getCheck(db, a)!.status).toBe("pending");
+    expect(getCheck(db, a)!.tests).toEqual([]);
   });
 });
 
@@ -155,7 +175,8 @@ describe("administration et signalement", () => {
     const a = mkEx(1);
     enqueueCheck(db, a);
     reportCheck(db, a, member, "Le test 2 est faux");
-    expect(() => reportCheck(db, a, member, "  ")).toThrow();
+    expect(() => reportCheck(db, a, member, "  ")).toThrow("invalid");
+    expect(() => reportCheck(db, "inconnu", member, "x")).toThrow("not_found");
   });
 });
 
@@ -176,6 +197,13 @@ describe("tentatives", () => {
     setStatus(db, member, a, "mastered");
     saveAttempt(db, member, a, "c", "int main(){}", false);
     expect(getProgress(db, member).get(a)).toBe("mastered");
+  });
+
+  it("saveAttempt valide code, langage et exercice", () => {
+    const a = mkEx(1);
+    expect(() => saveAttempt(db, member, a, "python", "x".repeat(100_001), false)).toThrow("invalid");
+    expect(() => saveAttempt(db, member, a, "ruby" as never, "x", false)).toThrow("invalid");
+    expect(() => saveAttempt(db, member, "inconnu", "python", "x", false)).toThrow("not_found");
   });
 
   it("getAttempt renvoie null sans tentative", () => {
