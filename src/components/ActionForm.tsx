@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 export type FormState = { error?: string; message?: string; link?: string } | null;
 
@@ -36,13 +36,21 @@ export function ActionForm({
 }
 
 function CopyLink({ link }: { link: string }) {
+  // Modifiable : l'administrateur peut corriger l'adresse (ex. localhost -> IP) avant de copier.
+  const [value, setValue] = useState(link);
+  useEffect(() => setValue(link), [link]);
   return (
     <div className="flex gap-2">
-      <input readOnly value={link} aria-label="Lien d'invitation" className="input h-9 min-w-0 flex-1 font-mono text-[13px]" />
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        aria-label="Lien d'invitation"
+        className="input h-9 min-w-0 flex-1 font-mono text-[13px]"
+      />
       <button
         type="button"
         className="btn shrink-0"
-        onClick={() => navigator.clipboard?.writeText(link)}
+        onClick={() => navigator.clipboard?.writeText(value)}
       >
         Copier le lien
       </button>

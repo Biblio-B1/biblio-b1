@@ -6,7 +6,7 @@
 #   systemctl --user enable --now biblio-b1
 #   loginctl enable-linger "$USER"     # démarre aussi sans session ouverte
 # Adaptez WorkingDirectory si le dépôt n'est pas dans ~/biblio-b1.
-# La configuration (PORT, SESSION_SECRET, …) est lue dans le fichier .env du dossier de travail.
+# La configuration (PORT, ADMIN_INVITE_CODE, APP_URL, …) est lue dans le fichier .env du dossier de travail.
 [Unit]
 Description=Biblio B1 (bibliothèque d'étude de la promo)
 After=network.target
@@ -21,6 +21,9 @@ Environment=NODE_ENV=production
 ExecStart=/bin/bash -c '. "$HOME/.nvm/nvm.sh" && exec npm start'
 Restart=on-failure
 RestartSec=5
+# 143 = 128 + SIGTERM : un arrêt via `systemctl stop` n'est pas compté comme un échec.
+# Une configuration refusée (.env) fait sortir en code 1 : l'unité passe en « failed ».
+SuccessExitStatus=143
 
 [Install]
 WantedBy=default.target

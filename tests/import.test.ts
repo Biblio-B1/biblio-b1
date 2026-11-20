@@ -7,7 +7,10 @@ import { simpleGit } from "simple-git";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, type Db } from "@/server/db/client";
-import { documents, exercises, subjects } from "@/server/db/schema";
+import { documents, exercises, importExclusions, subjects, threads, users } from "@/server/db/schema";
+import { getProgress, setStatus } from "@/server/progress";
+import { createThread } from "@/server/threads";
+import { search } from "@/server/search";
 import { seedSubjects } from "@/server/subjects";
 import { saveImported } from "@/server/storage";
 import { expandZips, scanDir } from "@/server/import/scan";
@@ -332,6 +335,73 @@ describe("runImport (dépôt prof + dossier local)", () => {
     const third = await importTree(db4, opts);
     expect(third.exercises).toBe(0);
     expect(db4.select().from(exercises).all()).toHaveLength(2);
+  });
+
+  it("fichier modifié à la source : document remplacé (pas de doublon), progression et fils conservés", async () => {
+    const db6 = createTestDb();
+    seedSubjects(db6);
+    const user = db6.insert(users).values({ name: "u", email: "u@x.fr", passwordHash: "h" }).returning().get();
+    const root = path.join(tmp, "updated");
+    const storage = path.join(tmp, "storage6");
+    const rel = "Algorithmique et Prog C/TD1.pdf";
+    put(root, rel, await makePdf([
+      "Exercice 1 : Somme", "Ecrire un programme qui calcule la somme des entiers.",
+      "Exercice 2 : Produit", "Ecrire un programme qui calcule le produit des entiers.",
+      "Exercice 3 : Moyenne", "Ecrire un programme qui calcule la moyenne.",
+    ]));
+    put(root, "Algorithmique et Prog C/TD1 (corrigé).pdf", await makePdf([
+      "Exercice 1 : Somme", "int s = 0; for (int i = 1; i <= n; i++) s += i;",
+    ]));
+    const opts = { root, source: "local" as const, storage, mode: "folders" as const };
+    const first = await importTree(db6, opts);
+    expect(first.added).toBe(2);
+    const old = db6.select().from(documents).all().find((d) => d.sourcePath === rel)!;
+    const oldEx = db6.select().from(exercises).where(eq(exercises.documentId, old.id)).all();
+    const ex = (n: number) => oldEx.find((e) => e.number === n)!;
+    setStatus(db6, user.id, ex(1).id, "mastered");
+    setStatus(db6, user.id, ex(3).id, "doing");
+    const docThread = createThread(db6, { targetType: "document", targetId: old.id, title: "Question sur le TD", body: "?", kind: "question", authorId: user.id });
+    const exThread = createThread(db6, { targetType: "exercise", targetId: ex(2).id, title: "Question sur le produit", body: "?", kind: "question", authorId: user.id });
+    const lostThread = createThread(db6, { targetType: "exercise", targetId: ex(3).id, title: "Question sur la moyenne", body: "?", kind: "question", authorId: user.id });
+
+    // Le professeur met à jour le fichier : l'exercice 3 disparaît, le texte change.
+    put(root, rel, await makePdf([
+      "Exercice 1 : Somme", "Ecrire un programme qui calcule la somme des entiers de 1 a n (version 2).",
+      "Exercice 2 : Produit", "Ecrire un programme qui calcule le produit des entiers de 1 a n.",
+    ]));
+    const second = await importTree(db6, opts);
+    expect(second.failed).toBe(0);
+    expect(second.added).toBe(0);
+    expect(second.updated).toBe(1);
+
+    const docs = db6.select().from(documents).all().filter((d) => d.sourcePath === rel);
+    expect(docs).toHaveLength(1);
+    const fresh = docs[0];
+    expect(fresh.id).not.toBe(old.id);
+    expect(fresh.sha256).not.toBe(old.sha256);
+    expect(fresh.text).toContain("version 2");
+    expect(fs.existsSync(path.join(storage, old.filePath))).toBe(false);
+    expect(db6.select().from(importExclusions).all()).toHaveLength(0);
+
+    const newEx = db6.select().from(exercises).where(eq(exercises.documentId, fresh.id)).all();
+    expect(newEx.map((e) => e.number).sort()).toEqual([1, 2]);
+    expect(db6.select().from(exercises).where(eq(exercises.documentId, old.id)).all()).toHaveLength(0);
+    const nex = (n: number) => newEx.find((e) => e.number === n)!;
+    expect(getProgress(db6, user.id).get(nex(1).id)).toBe("mastered");
+    expect(nex(1).solution).toContain("s += i"); // corrigé ré-apparié
+
+    const thread = (id: string) => db6.select().from(threads).where(eq(threads.id, id)).get()!;
+    expect(thread(docThread.id)).toMatchObject({ targetType: "document", targetId: fresh.id });
+    expect(thread(exThread.id)).toMatchObject({ targetType: "exercise", targetId: nex(2).id });
+    expect(thread(lostThread.id)).toMatchObject({ targetType: "document", targetId: fresh.id });
+    expect(search(db6, { q: "moyenne" }).find((h) => h.refId === lostThread.id)?.href).toBe(`/doc/${fresh.id}#thread-${lostThread.id}`);
+
+    const corr = db6.select().from(documents).all().find((d) => d.sourcePath?.endsWith("(corrigé).pdf"))!;
+    expect(corr.correctionOfId).toBe(fresh.id);
+
+    const third = await importTree(db6, opts);
+    expect(third.updated).toBe(0);
+    expect(third.added).toBe(0);
   });
 
   it("dossier au nom de plus de 60 caractères : une seule matière, même après plusieurs imports", async () => {

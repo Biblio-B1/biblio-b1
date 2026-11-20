@@ -2,26 +2,28 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, type Db } from "../db/client";
-import { documents, exercises, importExclusions } from "../db/schema";
+import { documents, exercises, importExclusions, posts, progress, threads } from "../db/schema";
 import { classify, normalize } from "../classify";
-import { createDocument, type Document } from "../documents";
+import { createDocument, deleteDocument, type Document } from "../documents";
 import { env } from "../env";
+import { createExercises, wantsExercises } from "../exercises";
 import { extractText } from "../extract/text";
 import { splitExercises } from "../extract/exercises";
-import { indexExercise } from "../search";
+import { indexExercise, indexThread } from "../search";
 import { MAX_UPLOAD_BYTES, resolveStoragePath, saveImported } from "../storage";
 import { createSubject, listSubjects, slugify, type Subject } from "../subjects";
 import { titleFromFileName } from "../uploads";
 import { syncRepo } from "./github";
-import { detectLang, groupKey, inferTags, inferType, isCorrection, pairCorrections } from "./pairing";
+import { inferTags, inferType, pairCorrections } from "./pairing";
 import { expandZips, scanDir } from "./scan";
 
 /** Matière imposée à tout le dépôt du professeur. */
 export const PROF_REPO_SUBJECT = "Algorithmique et Prog C";
 
-export type ImportStats = { added: number; skipped: number; exercises: number; failed: number };
+/** `updated` : fichiers modifiés à la source (même chemin, contenu différent), document remplacé. */
+export type ImportStats = { added: number; updated: number; skipped: number; exercises: number; failed: number };
 
 export type ImportTreeOptions = {
   root: string;
@@ -35,7 +37,7 @@ export type ImportTreeOptions = {
   subjectName?: string;
 };
 
-const zero = (): ImportStats => ({ added: 0, skipped: 0, exercises: 0, failed: 0 });
+const zero = (): ImportStats => ({ added: 0, updated: 0, skipped: 0, exercises: 0, failed: 0 });
 
 /** Longueur max d'un nom de matière (cf. subjectInputSchema). */
 const MAX_SUBJECT_NAME = 60;
@@ -58,41 +60,56 @@ type Rec = { doc: Document; relPath: string };
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** Énoncé dont on extrait les exercices : type exercice/annale, pas un corrigé. */
-function wantsExercises(doc: Document, relPath: string): boolean {
-  return (doc.type === "exercise" || doc.type === "exam") && !isCorrection(relPath);
-}
-
 function hasExercises(db: Db, documentId: string): boolean {
   return !!db.select({ id: exercises.id }).from(exercises).where(eq(exercises.documentId, documentId)).limit(1).get();
 }
 
-/** Insère les exercices découpés dans le texte du document ; renvoie leur nombre. */
-function createExercises(db: Db, doc: Document, relPath: string): number {
-  const parts = splitExercises(doc.text);
-  if (!parts.length) return 0;
-  const lang = detectLang(path.posix.basename(relPath), doc.text);
-  const base = groupKey(relPath);
-  const seen = new Map<number, number>();
-  for (const ex of parts) {
-    const k = (seen.get(ex.number) ?? 0) + 1;
-    seen.set(ex.number, k);
-    const row = db
-      .insert(exercises)
-      .values({
-        documentId: doc.id,
-        number: ex.number,
-        title: ex.title.slice(0, 300),
-        statement: ex.body || ex.title,
-        lang,
-        groupKey: `${base}#${ex.number}${k > 1 ? `-${k}` : ""}`,
-        subjectId: doc.subjectId,
-      })
-      .returning()
-      .get();
-    indexExercise(db, row);
+/**
+ * Remplace `old` (même source et chemin, contenu modifié) par `fresh` : la progression passe aux
+ * nouveaux exercices de même numéro (titre identique en priorité), les fils de discussion sont
+ * re-ciblés (exercice correspondant, sinon le nouveau document), puis l'ancien document est supprimé
+ * sans exclusion d'import. À appeler dans la transaction qui crée `fresh` et ses exercices.
+ */
+function replaceDocument(db: Db, old: Document, fresh: Document, storage: string): void {
+  const oldEx = db.select().from(exercises).where(eq(exercises.documentId, old.id)).orderBy(asc(exercises.number), asc(exercises.groupKey)).all();
+  const pool = db.select().from(exercises).where(eq(exercises.documentId, fresh.id)).orderBy(asc(exercises.number), asc(exercises.groupKey)).all();
+  const match = new Map<string, string>(); // ancien id -> nouvel id
+  // Deux passes : même numéro + même titre, puis même numéro seul.
+  for (const sameTitle of [true, false]) {
+    for (const e of oldEx) {
+      if (match.has(e.id)) continue;
+      const i = pool.findIndex((n) => n.number === e.number && (!sameTitle || n.title === e.title));
+      if (i >= 0) match.set(e.id, pool.splice(i, 1)[0].id);
+    }
   }
-  return parts.length;
+  for (const [oldId, newId] of match) {
+    const rows = db.select().from(progress).where(eq(progress.exerciseId, oldId)).all();
+    for (const r of rows) {
+      db.insert(progress).values({ ...r, exerciseId: newId }).onConflictDoNothing().run();
+    }
+  }
+  const moved: string[] = [];
+  for (const t of db.select().from(threads).where(and(eq(threads.targetType, "document"), eq(threads.targetId, old.id))).all()) {
+    db.update(threads).set({ targetId: fresh.id }).where(eq(threads.id, t.id)).run();
+    moved.push(t.id);
+  }
+  const oldIds = oldEx.map((e) => e.id);
+  const exThreads = oldIds.length
+    ? db.select().from(threads).where(and(eq(threads.targetType, "exercise"), inArray(threads.targetId, oldIds))).all()
+    : [];
+  for (const t of exThreads) {
+    const to = match.get(t.targetId);
+    db.update(threads)
+      .set(to ? { targetId: to } : { targetType: "document", targetId: fresh.id })
+      .where(eq(threads.id, t.id))
+      .run();
+    moved.push(t.id);
+  }
+  deleteDocument(db, old.id, { id: null, role: "admin" }, storage, { recordExclusion: false });
+  for (const id of moved) {
+    const t = db.select().from(threads).where(eq(threads.id, id)).get()!;
+    indexThread(db, t, db.select().from(posts).where(eq(posts.threadId, id)).orderBy(asc(posts.createdAt)).all());
+  }
 }
 
 /** Exécute `fn` dans une transaction SQLite (better-sqlite3 : synchrone, annulée si `fn` lève). */
@@ -101,7 +118,9 @@ function inTransaction<T>(db: Db, fn: () => T): T {
 }
 
 /**
- * Importe une arborescence (lecture seule) ; idempotent grâce au sha256 unique.
+ * Importe une arborescence (lecture seule) ; idempotent grâce au sha256 unique. Un fichier dont le
+ * chemin est déjà connu (même source) mais dont le contenu a changé remplace l'ancien document
+ * (progression et fils conservés, cf. replaceDocument) : compté dans `updated`.
  * Chaque nouveau document est créé avec ses exercices dans une même transaction ; un document
  * déjà présent sans exercices (import interrompu) les reçoit au passage suivant.
  */
@@ -157,6 +176,11 @@ export async function importTree(db: Db, opts: ImportTreeOptions): Promise<Impor
         } else {
           subjectId = classify({ fileName, path: f.relPath, text }, listSubjects(db)).subjectId;
         }
+        const previous = db
+          .select()
+          .from(documents)
+          .where(and(eq(documents.source, opts.source), eq(documents.sourcePath, f.relPath)))
+          .get();
         const { doc, count } = inTransaction(db, () => {
           const created = createDocument(db, {
             title: titleFromFileName(fileName),
@@ -171,12 +195,14 @@ export async function importTree(db: Db, opts: ImportTreeOptions): Promise<Impor
             sourcePath: f.relPath,
             tags: inferTags(f.relPath),
           });
-          return {
-            doc: created,
-            count: wantsExercises(created, f.relPath) ? createExercises(db, created, f.relPath) : 0,
-          };
+          const count = wantsExercises(created, f.relPath) ? createExercises(db, created, f.relPath) : 0;
+          if (previous) replaceDocument(db, previous, created, opts.storage);
+          return { doc: created, count };
         });
-        stats.added++;
+        if (previous) {
+          stats.updated++;
+          recs.delete(previous.id);
+        } else stats.added++;
         stats.exercises += count;
         recs.set(doc.id, { doc, relPath: f.relPath });
       } catch (e) {
@@ -231,6 +257,7 @@ export type RunImportOptions = {
 
 export type RunImportResult = {
   added: number;
+  updated: number;
   skipped: number;
   exercises: number;
   github: ImportStats;
@@ -261,6 +288,7 @@ export async function runImport(opts: RunImportOptions): Promise<RunImportResult
   }
   return {
     added: github.added + local.added,
+    updated: github.updated + local.updated,
     skipped: github.skipped + local.skipped,
     exercises: github.exercises + local.exercises,
     github,

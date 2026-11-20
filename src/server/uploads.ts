@@ -9,6 +9,7 @@ import { createDocument, type Document } from "./documents";
 import { createDraft, deleteDraft, draftFilePath, readDraft, updateDraft } from "./drafts";
 import { extractText } from "./extract/text";
 import { env } from "./env";
+import { createExercises, wantsExercises } from "./exercises";
 import { resolveStoragePath, saveUpload } from "./storage";
 import { listSubjects } from "./subjects";
 
@@ -106,18 +107,23 @@ export function confirmDraft(
   const saved = saveUpload(found.buf, found.draft.fileName, root);
   let doc: Document;
   try {
-    doc = createDocument(db, {
-      title: item.title,
-      type: item.type,
-      subjectId: item.subjectId,
-      subjectConfirmed: true,
-      filePath: saved.filePath,
-      mime: saved.mime,
-      sha256: saved.sha256,
-      text: found.draft.text ?? "",
-      source: "upload",
-      authorId: ownerId,
-    });
+    // Document et exercices (énoncé exercice/annale) dans une même transaction.
+    doc = db.$client.transaction(() => {
+      const created = createDocument(db, {
+        title: item.title,
+        type: item.type,
+        subjectId: item.subjectId,
+        subjectConfirmed: true,
+        filePath: saved.filePath,
+        mime: saved.mime,
+        sha256: saved.sha256,
+        text: found.draft.text ?? "",
+        source: "upload",
+        authorId: ownerId,
+      });
+      if (wantsExercises(created, found.draft.fileName)) createExercises(db, created, found.draft.fileName);
+      return created;
+    })();
   } catch (e) {
     // Pas de fichier orphelin ; le brouillon reste pour une nouvelle tentative.
     fs.rmSync(resolveStoragePath(saved.filePath, root), { force: true });

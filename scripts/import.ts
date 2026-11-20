@@ -1,7 +1,8 @@
 /**
  * `npm run import` : synchronise le dépôt du professeur (storage/sources/c_courses), l'importe
  * (matière « Algorithmique et Prog C »), puis importe LOCAL_COURSES_PATH (un dossier = une matière).
- * Idempotent : un second passage n'ajoute rien (sha256).
+ * Idempotent : un second passage n'ajoute rien (sha256) ; un fichier modifié à la source remplace
+ * l'ancien document (« mis à jour »), progression et fils de discussion conservés.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -23,12 +24,12 @@ console.log(`Dossier local       : ${localRoot}${fs.existsSync(localRoot) ? "" :
 
 const r = await runImport({ db, repoUrl: env.C_PROF_REPO_URL, localRoot, storage: env.STORAGE_PATH });
 
-const line = (label: string, s: { added: number; skipped: number; exercises: number; failed: number }) =>
-  console.log(`  ${label.padEnd(8)} ajoutés ${s.added}, déjà présents/ignorés ${s.skipped}, exercices ${s.exercises}, échecs ${s.failed}`);
+const line = (label: string, s: { added: number; updated: number; skipped: number; exercises: number; failed: number }) =>
+  console.log(`  ${label.padEnd(8)} ajoutés ${s.added}, mis à jour ${s.updated}, déjà présents/ignorés ${s.skipped}, exercices ${s.exercises}, échecs ${s.failed}`);
 console.log("\nRésumé de l'import");
 line("github", r.github);
 line("local", r.local);
-console.log(`  total    ajoutés ${r.added}, ignorés ${r.skipped}, exercices ${r.exercises}`);
+console.log(`  total    ajoutés ${r.added}, mis à jour ${r.updated}, ignorés ${r.skipped}, exercices ${r.exercises}`);
 
 const perSubject = db.$client
   .prepare(

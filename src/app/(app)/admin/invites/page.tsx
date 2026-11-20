@@ -2,6 +2,7 @@ import { ActionForm, Field } from "@/components/ActionForm";
 import { getDb } from "@/server/db/client";
 import { listInvites } from "@/server/auth/invites";
 import { requireUser } from "@/server/auth/session";
+import { currentInviteBase } from "@/server/invite-base";
 import { createInviteAction, revokeInviteAction } from "@/app/(auth)/actions";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ const fmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "s
 
 export default async function InvitesPage() {
   await requireUser("admin");
+  const { local } = await currentInviteBase();
   const rows = listInvites(getDb());
   const now = Date.now();
   const statusOf = (r: (typeof rows)[number]) =>
@@ -25,6 +27,14 @@ export default async function InvitesPage() {
   return (
     <div className="flex flex-col gap-8">
       <h1 className="page-title">Invitations</h1>
+      {local && (
+        <p role="alert" className="max-w-2xl rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger">
+          Ce lien utilise une adresse locale : vos camarades ne pourront pas l&apos;ouvrir. Définissez{" "}
+          <code>APP_URL</code> dans le fichier <code>.env</code> (par exemple{" "}
+          <code>http://&lt;IP-du-Chromebook&gt;:3000</code>) puis redémarrez, ou corrigez l&apos;adresse du lien
+          avant de le copier.
+        </p>
+      )}
       <section className="max-w-sm">
         <h2 className="mb-3 text-[15px] font-semibold">Nouvelle invitation</h2>
         <ActionForm action={createInviteAction} submitLabel="Créer l'invitation">

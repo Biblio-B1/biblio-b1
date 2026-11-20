@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -23,6 +23,8 @@ import {
   registrationSchema,
   revokeInvite,
 } from "@/server/auth/invites";
+import { currentInviteBase } from "@/server/invite-base";
+import { inviteLink } from "@/server/invite-link";
 
 type State = { error?: string; message?: string; link?: string } | null;
 
@@ -113,13 +115,11 @@ export async function createInviteAction(_prev: State, fd: FormData): Promise<St
   });
   if (!parsed.success) return { error: firstIssue(parsed.error) };
   const { token } = createInvite(getDb(), { createdBy: admin.id, ...parsed.data });
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const { base } = await currentInviteBase();
   revalidatePath("/admin/invites");
   return {
     message: "Invitation créée. Copiez le lien maintenant, il ne sera plus affiché.",
-    link: `${proto}://${host}/invite/${token}`,
+    link: inviteLink(token, base),
   };
 }
 

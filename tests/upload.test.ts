@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
-import { users } from "@/server/db/schema";
+import { eq } from "drizzle-orm";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+import { exercises, users } from "@/server/db/schema";
+import { search } from "@/server/search";
 import { listSubjects, seedSubjects } from "@/server/subjects";
 import { listDocuments } from "@/server/documents";
 import { cleanupDrafts, createDraft, readDraft } from "@/server/drafts";
@@ -145,6 +148,40 @@ describe("prepareUpload / confirmDraft", () => {
     const files = fs.existsSync(uploads) ? fs.readdirSync(uploads, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()) : [];
     expect(files).toHaveLength(0);
     expect(readDraft(d.tmpId, owner, root)).not.toBeNull();
+  });
+
+  it("PDF d'exercices confirmé : exercices créés (même transaction) et indexés ; pas pour un corrigé ni un cours", async () => {
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const page = pdf.addPage([595, 842]);
+    [
+      "TD3 - Tableaux",
+      "Exercice 1 : Maximum",
+      "Ecrire une fonction qui renvoie le maximum zarbitude d'un tableau.",
+      "Exercice 2 : Inversion",
+      "Ecrire une fonction qui inverse un tableau en place.",
+    ].forEach((l, i) => page.drawText(l, { x: 50, y: 780 - i * 20, size: 12, font }));
+    const buf = Buffer.from(await pdf.save());
+    const progC = listSubjects(db).find((s) => s.slug === "algorithmique-et-prog-c")!;
+
+    const d = await prepareUpload(db, buf, "TD3.pdf", owner, root);
+    const doc = confirmDraft(db, { tmpId: d.tmpId, subjectId: progC.id, title: "TD3", type: "exercise" }, owner, root);
+    const rows = db.select().from(exercises).where(eq(exercises.documentId, doc.id)).all();
+    expect(rows.map((e) => e.number).sort()).toEqual([1, 2]);
+    expect(rows.every((e) => e.subjectId === progC.id)).toBe(true);
+    const hits = search(db, { q: "zarbitude" });
+    expect(hits.some((h) => h.entity === "exercise" && rows.some((r) => r.id === h.refId))).toBe(true);
+
+    // Corrigé (même contenu modifié) ou cours : aucun exercice.
+    const page2 = pdf.addPage([595, 842]);
+    page2.drawText("variante", { x: 50, y: 780, size: 12, font });
+    const corr = await prepareUpload(db, Buffer.from(await pdf.save()), "TD3 (corrigé).pdf", owner, root);
+    const corrDoc = confirmDraft(db, { tmpId: corr.tmpId, subjectId: progC.id, title: "Corrigé", type: "exercise" }, owner, root);
+    expect(db.select().from(exercises).where(eq(exercises.documentId, corrDoc.id)).all()).toHaveLength(0);
+    page2.drawText("autre", { x: 50, y: 700, size: 12, font });
+    const course = await prepareUpload(db, Buffer.from(await pdf.save()), "cours.pdf", owner, root);
+    const courseDoc = confirmDraft(db, { tmpId: course.tmpId, subjectId: progC.id, title: "Cours", type: "course" }, owner, root);
+    expect(db.select().from(exercises).where(eq(exercises.documentId, courseDoc.id)).all()).toHaveLength(0);
   });
 
   it("confirmItemSchema valide les entrées", async () => {

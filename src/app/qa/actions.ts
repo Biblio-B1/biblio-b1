@@ -103,8 +103,10 @@ export async function addPostAction(_prev: QAState, fd: FormData): Promise<QASta
 
 const idSchema = z.object({ id: z.uuid(), revalidate: z.string().startsWith("/").max(200) });
 
-async function run(fd: FormData, fn: (id: string, actor: Awaited<ReturnType<typeof requireUser>>) => void): Promise<void> {
-  const user = await requireUser();
+type Actor = Awaited<ReturnType<typeof requireUser>>;
+
+/** `user` : obtenu par l'action elle-même via requireUser() (vérifié par tests/server-actions-auth). */
+function run(fd: FormData, user: Actor, fn: (id: string, actor: Actor) => void): void {
   const parsed = idSchema.safeParse({ id: fd.get("id"), revalidate: fd.get("revalidate") });
   if (!parsed.success) return;
   try {
@@ -116,17 +118,17 @@ async function run(fd: FormData, fn: (id: string, actor: Awaited<ReturnType<type
 }
 
 export async function pinPostAction(fd: FormData): Promise<void> {
-  await run(fd, (id, u) => pinPost(getDb(), id, u.id));
+  run(fd, await requireUser(), (id, u) => pinPost(getDb(), id, u.id));
 }
 export async function unpinPostAction(fd: FormData): Promise<void> {
-  await run(fd, (id, u) => unpinPost(getDb(), id, u.id));
+  run(fd, await requireUser(), (id, u) => unpinPost(getDb(), id, u.id));
 }
 export async function markSynthesisAction(fd: FormData): Promise<void> {
-  await run(fd, (id, u) => void markSynthesis(getDb(), id, u.id));
+  run(fd, await requireUser(), (id, u) => void markSynthesis(getDb(), id, u.id));
 }
 export async function deletePostAction(fd: FormData): Promise<void> {
-  await run(fd, (id, u) => deletePost(getDb(), id, u));
+  run(fd, await requireUser(), (id, u) => deletePost(getDb(), id, u));
 }
 export async function deleteThreadAction(fd: FormData): Promise<void> {
-  await run(fd, (id, u) => deleteThread(getDb(), id, u));
+  run(fd, await requireUser(), (id, u) => deleteThread(getDb(), id, u));
 }

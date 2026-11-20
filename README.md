@@ -44,26 +44,21 @@ cp .env.example .env
 | Variable | Rôle | Défaut |
 | --- | --- | --- |
 | `ADMIN_INVITE_CODE` | Code secret demandé sur `/setup` pour créer le premier administrateur. **Obligatoire en production** (vide ou `change-me` : le serveur refuse de démarrer). | _(vide)_ |
-| `SESSION_SECRET` | Chaîne aléatoire longue. **Obligatoire en production** (la valeur par défaut est refusée). Générez-la avec `openssl rand -hex 32`. | valeur de dev |
+| `APP_URL` | Adresse publique de l'application, **sans `/` final** (ex. `http://192.168.1.20:3000`), utilisée pour les liens d'invitation. Sans elle, les liens reprennent l'adresse du navigateur de l'administrateur : depuis `localhost` ou `penguin.linux.test`, ils ne marchent pas pour les camarades (`/admin/invites` affiche alors un avertissement ; le lien reste modifiable avant copie). | _(adresse de la requête)_ |
+| `SESSION_SECRET` | **Réservé, non utilisé actuellement** : les sessions sont des jetons aléatoires dont seule l'empreinte est stockée, aucun secret n'est nécessaire. Peut rester à sa valeur par défaut. | valeur de dev |
 | `PORT` | Port d'écoute. | `3000` |
 | `STORAGE_PATH` | Dossier de stockage : base SQLite, fichiers déposés, clone du dépôt du professeur. | `./storage` |
 | `C_PROF_REPO_URL` | Dépôt GitHub des cours du professeur, cloné puis importé par `npm run import`. | `https://github.com/S-L-A-K-E-R/C_courses` |
 | `LOCAL_COURSES_PATH` | Dossier local de cours importé par `npm run import` : chaque sous-dossier de premier niveau devient une matière. Lu seulement, jamais modifié. | `./sources/local` |
 | `COOKIE_SECURE` | `true` pour marquer le cookie de session « Secure » (obligatoire derrière HTTPS). Laissez `false` en HTTP sur le réseau local, sinon la connexion échoue. | `false` |
 
-Exemple :
-
-```sh
-openssl rand -hex 32     # à coller dans SESSION_SECRET
-```
-
 Une chaîne vide dans `.env` équivaut à variable non définie.
 
 ## Premier lancement
 
-1. Ouvrez l'application, par exemple <http://localhost:3000>. Tant qu'aucun compte n'existe, `/login` renvoie vers **`/setup`**.
+1. Ouvrez l'application, par exemple <http://localhost:3000>. Tant qu'aucun compte n'existe, `/login` affiche un lien vers **`/setup`** (ou ouvrez directement `/setup`).
 2. Saisissez le `ADMIN_INVITE_CODE` du `.env`, votre nom, e-mail et mot de passe : vous êtes administrateur. `/setup` se ferme ensuite.
-3. **Inviter des membres** : menu *Invitations* (`/admin/invites`) → créez une invitation (nombre d'utilisations, durée), copiez le lien `/invite/<jeton>` et envoyez-le à la promo. Une invitation peut être révoquée ; un lien expiré, révoqué ou épuisé est refusé.
+3. **Inviter des membres** : menu *Invitations* (`/admin/invites`) → créez une invitation (nombre d'utilisations, durée), copiez le lien `/invite/<jeton>` et envoyez-le à la promo. Définissez `APP_URL` (adresse joignable par les camarades, par exemple `http://<IP-ChromeOS>:3000`) pour que le lien soit correct ; sinon corrigez l'adresse dans le champ avant de copier. Une invitation peut être révoquée ; un lien expiré, révoqué ou épuisé est refusé.
 4. Les matières se gèrent sous `/admin/subjects`.
 
 Deux rôles seulement : `admin` et `member`.
@@ -77,7 +72,8 @@ npm run import
 - clone/met à jour le dépôt `C_PROF_REPO_URL` (toutes ses ressources vont dans la matière « Algorithmique et Prog C ») ;
 - lit `LOCAL_COURSES_PATH` : **un dossier de premier niveau = une matière**, les fichiers à la racine sont classés automatiquement (à confirmer ensuite dans l'interface) ;
 - extrait le texte, découpe les exercices, apparie les corrigés aux énoncés ;
-- est idempotent (empreinte sha256) : relancer ne crée aucun doublon.
+- est idempotent (empreinte sha256) : relancer ne crée aucun doublon ;
+- un fichier **modifié** à la source (même chemin, contenu différent) remplace l'ancien document (compté « mis à jour ») : la progression est reportée sur les exercices de même numéro et les fils de questions/réponses sont conservés (rattachés à l'exercice correspondant, sinon au document).
 
 Nettoyage des fichiers parasites déjà importés (captures, miniatures, dossiers d'outils…) :
 
@@ -85,6 +81,8 @@ Nettoyage des fichiers parasites déjà importés (captures, miniatures, dossier
 npm run prune -- --dry-run   # affiche ce qui serait supprimé, sans rien modifier
 npm run prune                # supprime documents exclus et matières vides
 ```
+
+Attention : `npm run prune` supprime **toute matière vide absente de la liste par défaut**, y compris une matière qu'un administrateur vient de créer sous `/admin/subjects` et qui n'a encore aucun document. Vérifiez avec `--dry-run` d'abord.
 
 Reconstruire l'index de recherche (après un import ancien ou pour réparer) :
 
@@ -99,7 +97,7 @@ npm run build
 npm start        # charge .env puis écoute sur PORT (scripts/start.mjs)
 ```
 
-En production (`NODE_ENV=production`, positionné par `next start`), `SESSION_SECRET` et `ADMIN_INVITE_CODE` doivent être définis, sinon le démarrage échoue avec un message explicite.
+En production (`NODE_ENV=production`, positionné par `next start`), `ADMIN_INVITE_CODE` doit être défini (ni vide ni `change-me`) et toutes les variables doivent être valides (ex. `APP_URL` sans `/` final) : sinon `npm start` s'arrête aussitôt (code de sortie 1) avec un message explicite, et le service systemd passe en échec (`systemctl --user status biblio-b1`, `journalctl --user -u biblio-b1`).
 
 ### Démarrage automatique (systemd, unité utilisateur)
 
@@ -133,18 +131,31 @@ KEEP=30 scripts/backup.sh       # conserver 30 archives au lieu de 14
 
 L'archive contient `storage/` : la base `data.db` (copie cohérente via `sqlite3 .backup`, ou `VACUUM INTO` avec Node si `sqlite3` est absent, serveur en marche) et les fichiers déposés. Le clone du dépôt du professeur n'est pas sauvegardé : `npm run import` le retélécharge.
 
-Pour automatiser, ajoutez une ligne à `crontab -e` :
+Pour automatiser, ajoutez une ligne à `crontab -e`. cron ne charge ni `~/.bashrc` ni nvm : `node` n'y est pas dans le `PATH`, donc **installez `sqlite3`** (`sudo apt install sqlite3`, utilisé en priorité) :
 
 ```cron
 30 3 * * * cd ~/biblio-b1 && mkdir -p backups && scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
+Sans `sqlite3`, chargez nvm dans la ligne cron pour que le repli Node fonctionne :
+
+```cron
+30 3 * * * . "$HOME/.nvm/nvm.sh" && cd ~/biblio-b1 && mkdir -p backups && scripts/backup.sh >> backups/backup.log 2>&1
+```
+
 **Restauration** :
+
+L'archive contient un dossier `storage/` ; restaurez-le à l'emplacement de `STORAGE_PATH` (ici lu dans `.env`, `./storage` par défaut) :
 
 ```sh
 systemctl --user stop biblio-b1
-mv storage storage.old                      # garder l'existant au cas où
-tar -xzf backups/biblio-b1-XXXXXXXX-XXXXXX.tar.gz   # recrée ./storage
+STORAGE=$(sed -n 's/^STORAGE_PATH=//p' .env | tail -n 1); STORAGE=${STORAGE:-./storage}
+mv "$STORAGE" "$STORAGE.old"                 # garder l'existant au cas où
+mkdir -p /tmp/bb1-restore
+tar -xzf backups/biblio-b1-XXXXXXXX-XXXXXX.tar.gz -C /tmp/bb1-restore
+mv /tmp/bb1-restore/storage "$STORAGE"
+rmdir /tmp/bb1-restore
+npm run import                              # re-clone le dépôt du professeur (non sauvegardé)
 systemctl --user start biblio-b1
 ```
 
@@ -166,7 +177,8 @@ Les migrations de base s'appliquent automatiquement au démarrage.
 
 - **`better-sqlite3` : « Could not locate the bindings file » / erreur de module natif** (après changement de version de Node) : `npm rebuild better-sqlite3` ; vérifiez que `build-essential` et `python3` sont installés.
 - **`EADDRINUSE` : port déjà utilisé** : un autre processus occupe le port. `ss -ltnp | grep 3000` pour l'identifier, ou changez `PORT` dans `.env`. Si le service systemd tourne déjà, ne lancez pas `npm start` en parallèle.
-- **« Configuration de production refusée »** : définissez `SESSION_SECRET` (`openssl rand -hex 32`) et `ADMIN_INVITE_CODE` dans `.env`.
+- **« Configuration de production refusée »** / **« Configuration invalide »** : définissez `ADMIN_INVITE_CODE` dans `.env` (ni vide ni `change-me`) et corrigez la variable citée dans le message.
+- **Les liens d'invitation ne s'ouvrent pas chez les camarades** : ils pointent vers `localhost` ou `penguin.linux.test` ; définissez `APP_URL` dans `.env` puis redémarrez.
 - **Connexion impossible en HTTP** : vérifiez `COOKIE_SECURE=false`.
 - **Le service ne trouve pas `npm`** (nvm) : l'unité source `~/.nvm/nvm.sh` avant de lancer `npm start` (`~/.bashrc` n'est pas lu en shell non interactif). Si nvm est installé ailleurs, ou pour viser une version précise, mettez le chemin absolu : `ExecStart=/home/<vous>/.nvm/versions/node/<version>/bin/npm start` (la version active : `nvm which default`, puis remplacez `/bin/node` par `/bin/npm`) ; puis `systemctl --user daemon-reload && systemctl --user restart biblio-b1`.
 - **Uploads refusés** : formats `.pdf .md .c .h .py .txt .jpg .jpeg .png .webp .docx .pptx`, 50 Mo maximum.
