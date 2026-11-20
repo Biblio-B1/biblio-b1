@@ -51,12 +51,30 @@ function fakeFetch(responses: (unknown | Error | ((body: Record<string, unknown>
     if (r instanceof Error) throw r;
     if (r === undefined) throw new Error("appel inattendu au modèle");
     const response = typeof r === "string" ? r : JSON.stringify(r);
-    return new Response(JSON.stringify({ model: "m", response, done: true }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return ndjsonResponse(response);
   }) as typeof fetch;
   return { impl, calls };
+}
+
+/**
+ * Réponse en flux comme Ollama (`stream: true`) : le texte découpé en morceaux de 7 caractères,
+ * une ligne NDJSON par morceau, puis `done: true` ; les octets sont envoyés par paquets de
+ * `byteChunk` (coupés au milieu des lignes, et des caractères UTF-8 multi-octets).
+ */
+function ndjsonResponse(text: string, opts: { done?: boolean; byteChunk?: number } = {}): Response {
+  const parts: string[] = [];
+  for (let i = 0; i < text.length; i += 7) parts.push(text.slice(i, i + 7));
+  let ndjson = parts.map((p) => `${JSON.stringify({ model: "m", response: p, done: false })}\n`).join("");
+  if (opts.done !== false) ndjson += `${JSON.stringify({ model: "m", response: "", done: true, eval_count: 3 })}\n`;
+  const bytes = new TextEncoder().encode(ndjson);
+  const size = opts.byteChunk ?? 13;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (let i = 0; i < bytes.length; i += size) controller.enqueue(bytes.slice(i, i + size));
+      controller.close();
+    },
+  });
+  return new Response(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } });
 }
 
 const deps = (fetchImpl: typeof fetch): SolveDeps => ({
@@ -114,13 +132,13 @@ describe("askModel", () => {
     const fetchImpl = (async (url: string, init: RequestInit) => {
       seenUrl = String(url);
       body = JSON.parse(String(init.body));
-      return new Response(JSON.stringify({ response: '{"ok":true}' }));
+      return ndjsonResponse('{"ok":true}');
     }) as unknown as typeof fetch;
     const schema = { type: "object", properties: { ok: { type: "boolean" } } };
     const out = await askModel("bonjour", schema, { url: "http://h:1/", model: "m", fetchImpl });
     expect(out).toEqual({ ok: true });
     expect(seenUrl).toBe("http://h:1/api/generate");
-    expect(body).toMatchObject({ model: "m", prompt: "bonjour", stream: false, think: false, format: schema });
+    expect(body).toMatchObject({ model: "m", prompt: "bonjour", stream: true, think: false, format: schema });
     expect(body.options).toMatchObject({ temperature: 0.2, num_ctx: 8192 });
   });
 
@@ -531,5 +549,85 @@ describe("prompt — budgets", () => {
     const short = buildSolvePrompt({ title: "t", statement: "court", subject: null, lang: "fr" }, { reason: "err", code: "CODE_PRECEDENT" });
     expect(short).toContain("CODE_PRECEDENT");
     expect(SOLVE_JSON_SCHEMA.properties.language).toMatchObject({ type: ["string", "null"] });
+  });
+});
+
+// --- Fix round 2 : flux NDJSON (stream: true) et délais d'undici ---------------------------
+
+describe("askModel — flux NDJSON", () => {
+  const call = (fetchImpl: typeof fetch) => askModel("x", {}, { url: "http://h:1", model: "m", fetchImpl });
+  const fixed = (res: () => Response) => (async () => res()) as unknown as typeof fetch;
+
+  it("accumule les morceaux coupés au milieu des lignes (et des caractères UTF-8) jusqu'à done", async () => {
+    const answer = { solution: 'printf("é à ç\\n");', tests: [{ input: "1 2", note: "cas limite — zéro" }] };
+    for (const byteChunk of [1, 5, 64, 100_000]) {
+      expect(await call(fixed(() => ndjsonResponse(JSON.stringify(answer), { byteChunk })))).toEqual(answer);
+    }
+  });
+
+  it("flux terminé sans done:true → erreur server (prise comptée)", async () => {
+    const e = (await call(fixed(() => ndjsonResponse('{"ok":true}', { done: false }))).catch((x: unknown) => x)) as OllamaCallError;
+    expect(e).toBeInstanceOf(OllamaCallError);
+    expect(e.kind).toBe("server");
+    expect(e.message).toMatch(/flux interrompu/);
+  });
+
+  it("ligne {error} dans le flux → erreur server", async () => {
+    const body = `${JSON.stringify({ response: "{", done: false })}\n${JSON.stringify({ error: "llama runner process has terminated" })}\n`;
+    const e = (await call(fixed(() => new Response(body))).catch((x: unknown) => x)) as OllamaCallError;
+    expect(e).toMatchObject({ kind: "server", message: expect.stringMatching(/runner process/) });
+  });
+
+  it("flux coupé en cours de lecture → server ; délai du corps d'undici → timeout", async () => {
+    const broken = (code?: string) =>
+      fixed(
+        () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(c) {
+                c.enqueue(new TextEncoder().encode(`${JSON.stringify({ response: "{", done: false })}\n`));
+                c.error(Object.assign(new TypeError("terminated"), { cause: Object.assign(new Error("other side closed"), { code }) }));
+              },
+            }),
+          ),
+      );
+    expect(await call(broken("UND_ERR_SOCKET")).catch((x: unknown) => x)).toMatchObject({ kind: "server" });
+    expect(await call(broken("UND_ERR_BODY_TIMEOUT")).catch((x: unknown) => x)).toMatchObject({ kind: "timeout" });
+  });
+
+  it("UND_ERR_HEADERS_TIMEOUT (fetch de Node, 300 s) → timeout, pas « injoignable »", async () => {
+    const f = (async () => {
+      throw Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("Headers Timeout Error"), { code: "UND_ERR_HEADERS_TIMEOUT" }),
+      });
+    }) as unknown as typeof fetch;
+    const e = (await call(f).catch((x: unknown) => x)) as OllamaCallError;
+    expect(e).toBeInstanceOf(OllamaCallError);
+    expect(e.kind).toBe("timeout");
+    expect(e.message).toMatch(/UND_ERR_HEADERS_TIMEOUT/);
+  });
+
+  it("seules les erreurs de connexion (ECONNREFUSED, ENOTFOUND, ECONNRESET…) sont « injoignable »", async () => {
+    const withCode = (code?: string) =>
+      (async () => {
+        throw Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(`x ${code}`), { code }) });
+      }) as unknown as typeof fetch;
+    for (const code of ["ECONNREFUSED", "ENOTFOUND", "ECONNRESET", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT"]) {
+      expect(await call(withCode(code)).catch((x: unknown) => x)).toBeInstanceOf(OllamaUnavailableError);
+    }
+    expect(await call(withCode("EPROTO")).catch((x: unknown) => x)).toMatchObject({ kind: "server" });
+    expect(await call(withCode(undefined)).catch((x: unknown) => x)).toMatchObject({ kind: "server" });
+  });
+
+  it("solveExercise : délai d'en-têtes d'undici → retry_later (compté), pas unavailable", async () => {
+    const id = mkEx();
+    const f = (async () => {
+      throw Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("Headers Timeout Error"), { code: "UND_ERR_HEADERS_TIMEOUT" }),
+      });
+    }) as unknown as typeof fetch;
+    const r = await solveExerciseDetailed(db, id, deps(f));
+    expect(r.outcome).toBe("retry_later");
+    expect(getCheck(db, id)).toMatchObject({ status: "pending", attempts: 1, error: expect.stringMatching(/délai du modèle dépassé/) });
   });
 });

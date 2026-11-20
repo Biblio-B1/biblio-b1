@@ -60,10 +60,47 @@ function describe(e: unknown): string {
   return e.message;
 }
 
+/** Codes d'erreur de l'erreur et de ses causes (undici : `cause.code`, parfois imbriquées). */
+function errorCodes(e: unknown): string[] {
+  const codes: string[] = [];
+  for (let cur = e, depth = 0; cur && typeof cur === "object" && depth < 5; depth++) {
+    const code = (cur as { code?: unknown }).code;
+    if (typeof code === "string") codes.push(code);
+    const errors = (cur as { errors?: unknown }).errors; // AggregateError (IPv4 + IPv6)
+    if (Array.isArray(errors)) for (const x of errors) codes.push(...errorCodes(x));
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return codes;
+}
+
+/** Délais d'undici (fetch de Node) : en-têtes (300 s par défaut) ou corps entre deux morceaux. */
+const TIMEOUT_CODES = new Set(["UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT"]);
+/**
+ * Connexion impossible avant toute réponse : l'exercice reste en file sans compter la prise.
+ * Outre ECONNREFUSED / ENOTFOUND / ECONNRESET, les codes « hôte injoignable » couvrent le cas
+ * prévu par la spécification d'un PC éteint sur le réseau local (Chromebook → PC).
+ */
+const UNREACHABLE_CODES = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "ECONNRESET",
+  "EAI_AGAIN",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EHOSTDOWN",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
+
+type StreamLine = { response?: unknown; done?: unknown; error?: unknown };
+
 /**
  * Envoie `prompt` au modèle et renvoie l'objet JSON produit (non validé : à passer à zod).
+ * Mode `stream: true` : Ollama envoie les en-têtes tout de suite puis des lignes NDJSON
+ * `{response, done}` ; les morceaux sont accumulés jusqu'à `done: true` (avec `stream: false`,
+ * aucun en-tête n'arrive avant la fin de la génération et le fetch de Node abandonne au bout
+ * de 300 s). Le délai global `timeoutMs` couvre tout l'appel.
  * Erreurs : `OllamaUnavailableError` (connexion impossible ou interruption), `OllamaCallError`
- * (modèle introuvable, délai dépassé, HTTP 5xx…), `ModelOutputError` (JSON invalide).
+ * (modèle introuvable, délai dépassé, HTTP 5xx, flux interrompu…), `ModelOutputError` (JSON invalide).
  */
 export async function askModel(prompt: string, schema: object, opts: AskOptions): Promise<unknown> {
   const doFetch = opts.fetchImpl ?? fetch;
@@ -71,15 +108,19 @@ export async function askModel(prompt: string, schema: object, opts: AskOptions)
   const timeoutMs = opts.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS;
   const timeout = AbortSignal.timeout(timeoutMs);
   const signal = opts.signal ? AbortSignal.any([timeout, opts.signal]) : timeout;
-  const failure = (e: unknown, during: string): Error => {
+  const failure = (e: unknown, during: "connexion" | "lecture"): Error => {
     if (opts.signal?.aborted) return new OllamaUnavailableError("Appel au modèle interrompu (arrêt du solveur).", { cause: e });
-    if (timeout.aborted) {
-      return new OllamaCallError("timeout", `délai du modèle dépassé (${Math.round(timeoutMs / 1000)} s)`, { cause: e });
+    const codes = errorCodes(e);
+    if (timeout.aborted || codes.some((c) => TIMEOUT_CODES.has(c))) {
+      const what = timeout.aborted ? `${Math.round(timeoutMs / 1000)} s` : codes.find((c) => TIMEOUT_CODES.has(c));
+      return new OllamaCallError("timeout", `délai du modèle dépassé (${what})`, { cause: e });
     }
-    if (during === "connexion") {
+    if (during === "connexion" && codes.some((c) => UNREACHABLE_CODES.has(c))) {
       return new OllamaUnavailableError(`Ollama injoignable à ${opts.url} : ${describe(e)}`, { cause: e });
     }
-    return new OllamaCallError("server", `erreur du modèle : réponse interrompue (${describe(e)})`, { cause: e });
+    return new OllamaCallError("server", `erreur du modèle : ${during === "connexion" ? "échec de la requête" : "réponse interrompue"} (${describe(e)})`, {
+      cause: e,
+    });
   };
   let res: Response;
   try {
@@ -89,7 +130,7 @@ export async function askModel(prompt: string, schema: object, opts: AskOptions)
       body: JSON.stringify({
         model: opts.model,
         prompt,
-        stream: false,
+        stream: true,
         think: false,
         format: schema,
         options: { temperature: 0.2, num_ctx: 8192, num_predict: 3000 },
@@ -99,13 +140,13 @@ export async function askModel(prompt: string, schema: object, opts: AskOptions)
   } catch (e) {
     throw failure(e, "connexion");
   }
-  let raw: string;
-  try {
-    raw = await res.text();
-  } catch (e) {
-    throw failure(e, "lecture");
-  }
   if (!res.ok) {
+    let raw = "";
+    try {
+      raw = await res.text();
+    } catch {
+      /* corps illisible : le statut suffit */
+    }
     const body = raw.slice(0, 500);
     if (res.status === 404 || (res.status === 400 && /model/i.test(raw))) {
       throw new OllamaCallError("config", `modèle « ${opts.model} » refusé par Ollama (HTTP ${res.status}) : ${body}`, {
@@ -115,18 +156,58 @@ export async function askModel(prompt: string, schema: object, opts: AskOptions)
     }
     throw new OllamaCallError("server", `erreur du modèle (HTTP ${res.status}) : ${body}`, { httpStatus: res.status, body });
   }
-  let envelope: { response?: unknown };
+  if (!res.body) throw new OllamaCallError("server", "erreur du modèle : réponse d'Ollama sans corps");
+
+  // Lecture du flux NDJSON : une ligne = un objet { response, done } (ou { error }).
+  let text = "";
+  let done = false;
+  let pending = "";
+  const handleLine = (line: string) => {
+    if (line.trim() === "" || done) return;
+    let obj: StreamLine;
+    try {
+      obj = JSON.parse(line) as StreamLine;
+    } catch {
+      throw new OllamaCallError("server", `erreur du modèle : ligne du flux illisible : ${line.slice(0, 300)}`, { body: line.slice(0, 500) });
+    }
+    if (typeof obj.error === "string") {
+      throw new OllamaCallError("server", `erreur du modèle : ${obj.error.slice(0, 500)}`, { body: obj.error.slice(0, 500) });
+    }
+    if (typeof obj.response === "string") text += obj.response;
+    if (obj.done === true) done = true;
+  };
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
   try {
-    envelope = JSON.parse(raw) as { response?: unknown };
-  } catch {
-    throw new OllamaCallError("server", `erreur du modèle : réponse d'Ollama illisible : ${raw.slice(0, 300)}`, { body: raw.slice(0, 500) });
+    while (!done) {
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch (e) {
+        throw failure(e, "lecture");
+      }
+      if (chunk.done) {
+        pending += decoder.decode();
+        break;
+      }
+      pending += decoder.decode(chunk.value, { stream: true });
+      let nl: number;
+      while ((nl = pending.indexOf("\n")) >= 0) {
+        handleLine(pending.slice(0, nl));
+        pending = pending.slice(nl + 1);
+      }
+    }
+    handleLine(pending); // dernière ligne sans saut de ligne final
+  } finally {
+    reader.cancel().catch(() => {});
   }
-  if (typeof envelope.response !== "string") {
-    throw new ModelOutputError("Réponse du modèle vide.");
+  if (!done) {
+    throw new OllamaCallError("server", "erreur du modèle : flux interrompu avant la fin de la génération (done absent)");
   }
+  if (text.trim() === "") throw new ModelOutputError("Réponse du modèle vide.");
   try {
-    return JSON.parse(envelope.response) as unknown;
+    return JSON.parse(text) as unknown;
   } catch {
-    throw new ModelOutputError(`JSON invalide : ${envelope.response.slice(0, 300)}`);
+    throw new ModelOutputError(`JSON invalide : ${text.slice(0, 300)}`);
   }
 }
