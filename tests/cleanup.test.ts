@@ -57,9 +57,10 @@ describe("exclusions", () => {
 });
 
 describe("matières par défaut", () => {
-  it("ne contient plus data-analysis (10 matières)", () => {
-    expect(DEFAULT_SUBJECTS).toHaveLength(10);
+  it("ne contient plus data-analysis ni shift-s-1 (9 matières)", () => {
+    expect(DEFAULT_SUBJECTS).toHaveLength(9);
     expect(DEFAULT_SUBJECTS.some((s) => s.slug === "data-analysis")).toBe(false);
+    expect(DEFAULT_SUBJECTS.some((s) => s.slug === "shift-s-1-decoder-pour-agir")).toBe(false);
   });
 
   it("import local : pas de matière pour un dossier vide ou exclu", async () => {

@@ -20,6 +20,25 @@ export type CalendarDaySegment = {
   laneCount: number;
 };
 
+export type CalendarSubject = {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  rules?: unknown;
+};
+
+export type CalendarHomework = {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  title: string;
+  dueDate: string;
+  englishGroup?: string | null;
+  attachmentPath?: string | null;
+  attachmentName?: string | null;
+};
+
 const TIME_ZONE = "Europe/Paris";
 
 function zonedParts(date: Date): Record<string, number> {
@@ -172,4 +191,154 @@ export function timeLabel(minutes: number): string {
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function normalizeCalendarText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[-_'’/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractSubjectLine(event: Pick<ScheduleEvent, "title" | "description">): string {
+  const desc = event.description ?? "";
+  const match = /(?:^|\n)\s*Mati[eè]re\s*:\s*([^\n]+)/i.exec(desc);
+  if (match?.[1]) return match[1].trim();
+  return event.title;
+}
+
+const STOP_WORDS = new Set([
+  "et", "de", "des", "du", "la", "le", "les", "pour", "en", "a", "l", "b1", "n1", "gr1", "gr2",
+]);
+
+function significantTokens(text: string): string[] {
+  return normalizeCalendarText(text)
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
+}
+
+function isRuleObject(r: unknown): r is { pathPatterns?: string[] } {
+  return !!r && typeof r === "object" && "pathPatterns" in r && Array.isArray((r as { pathPatterns: unknown }).pathPatterns);
+}
+
+/**
+ * Associe un événement d'emploi du temps (Boostcamp) à sa matière pour appliquer
+ * la couleur correspondante et afficher les devoirs associés.
+ */
+export function matchEventSubject(
+  event: Pick<ScheduleEvent, "title" | "categories" | "description">,
+  subjects: CalendarSubject[],
+): CalendarSubject | undefined {
+  if (!subjects.length) return undefined;
+  const primaryRaw = extractSubjectLine(event);
+  const primary = normalizeCalendarText(primaryRaw);
+  const titleNorm = normalizeCalendarText(event.title);
+  const texts = [primary, titleNorm, ...(event.categories ?? []).map(normalizeCalendarText)].filter(Boolean);
+  const combined = texts.join(" ");
+
+  let best: CalendarSubject | undefined;
+  let bestScore = 0;
+
+  for (const s of subjects) {
+    let score = 0;
+    const sName = normalizeCalendarText(s.name);
+    const sSlug = normalizeCalendarText(s.slug);
+
+    if (primary && (primary === sName || primary === sSlug)) score += 100;
+    else if (sName && (primary.includes(sName) || titleNorm.includes(sName))) score += 50;
+
+    if (isRuleObject(s.rules) && s.rules.pathPatterns) {
+      for (const pattern of s.rules.pathPatterns) {
+        try {
+          const re = new RegExp(pattern, "i");
+          if (re.test(primaryRaw) || re.test(event.title) || re.test(primary)) {
+            score += 25;
+          }
+        } catch {
+          // ignore invalid regex
+        }
+      }
+    }
+
+    // Règles explicites pour les intitulés Boostcamp qui abrègent ou modifient le nom du dossier
+    if (s.slug === "infra-data" || (sName.includes("infra") && sName.includes("data"))) {
+      if (
+        /\binfrastructures?\b.*\bdata\b/.test(combined) ||
+        /\bpour la data\b/.test(combined) ||
+        /\binfra\s+data\b/.test(combined) ||
+        (/\bdata\b/.test(combined) && !/\bdataanalysis\b|\btechaway\b/.test(combined))
+      ) {
+        score += 35;
+      }
+    }
+    if (s.slug === "techaway-dataanalysis" || sName.includes("techaway")) {
+      if (/\btechaway\b|\bdataanalysis\b/.test(combined)) score += 45;
+    }
+    if (s.slug === "algorithmique-et-prog-c" || sName.includes("prog c")) {
+      if (/\bprog(rammation)?\s+c\b|\balgorithmique\b/.test(combined)) score += 30;
+    }
+    if (s.slug === "developpement-web-front-end" || sName.includes("front end")) {
+      if (/\bfront\s*end\b|\bdeveloppement web\b/.test(combined)) score += 30;
+    }
+    if (s.slug === "anglais-professionnel-technique-avance" || sName.includes("anglais")) {
+      if (/\banglais\b|\benglish\b/.test(combined)) score += 30;
+    }
+    if (s.slug === "comm-posture-professionnelle" || sName.includes("posture")) {
+      if (/\bposture professionnelle\b|\bcommunication\b/.test(combined)) score += 30;
+    }
+    if (s.slug === "linux-environnement-ia" || sName.includes("linux")) {
+      if (/\blinux\b|\benvironnement.*ia\b/.test(combined)) score += 30;
+    }
+    if (s.slug === "mathematiques-pour-info" || sName.includes("mathematiques")) {
+      if (/\bmathematiques?\b|\bmaths?\b/.test(combined)) score += 30;
+    }
+    if (s.slug === "presentations-b1" || sName.includes("presentations")) {
+      if (/\bpresentations?\b/.test(combined)) score += 25;
+    }
+
+    // Repli par chevauchement de mots-clés pour toute matière ajoutée par l'administrateur
+    const sTokens = significantTokens(`${s.name} ${s.slug}`);
+    const eTokens = significantTokens(primary || titleNorm);
+    if (sTokens.length > 0 && eTokens.length > 0) {
+      let matched = 0;
+      for (const st of sTokens) {
+        if (eTokens.some((et) => et === st || (st.length >= 4 && et.startsWith(st)) || (et.length >= 4 && st.startsWith(et)))) {
+          matched++;
+        }
+      }
+      if (matched >= 2 || (sTokens.length === 1 && matched === 1)) {
+        score += matched * 10;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+
+  return bestScore >= 20 ? best : undefined;
+}
+
+/** Devoirs prévus à la date `dayKey` pour la matière du cours `event`. */
+export function homeworksForEvent(
+  event: Pick<ScheduleEvent, "title" | "categories" | "description">,
+  dayKey: string,
+  subjects: CalendarSubject[],
+  homeworks: CalendarHomework[],
+): CalendarHomework[] {
+  if (!homeworks.length || !subjects.length) return [];
+  const subject = matchEventSubject(event, subjects);
+  if (!subject) return [];
+  return homeworks.filter((hw) => hw.subjectId === subject.id && hw.dueDate === dayKey);
+}
+
+/** Devoirs à rendre au cours de la semaine prochaine (lundi à dimanche suivants). */
+export function homeworksForNextWeek<T extends { dueDate: string }>(homeworks: T[], todayKey: string): T[] {
+  const nextMonday = shiftDateKey(mondayOfWeek(todayKey), 7);
+  const nextSunday = shiftDateKey(nextMonday, 6);
+  return homeworks.filter((hw) => hw.dueDate >= nextMonday && hw.dueDate <= nextSunday);
 }

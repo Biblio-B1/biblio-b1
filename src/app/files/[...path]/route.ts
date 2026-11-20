@@ -3,7 +3,7 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
-import { documents } from "@/server/db/schema";
+import { documents, homeworks } from "@/server/db/schema";
 import { contentDisposition, resolveServedFile } from "@/server/files";
 import { mimeFromExtension } from "@/server/storage";
 
@@ -27,12 +27,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
   const ext = path.extname(abs).toLowerCase();
   const mime = mimeFromExtension(ext) ?? "application/octet-stream";
   const relPath = segments.join("/");
-  const doc = getDb()
+  const db = getDb();
+  const doc = db
     .select({ title: documents.title })
     .from(documents)
     .where(eq(documents.filePath, relPath))
     .get();
-  const downloadName = `${(doc?.title ?? "fichier").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 150)}${ext}`;
+  const hw = !doc
+    ? db
+        .select({ title: homeworks.attachmentName })
+        .from(homeworks)
+        .where(eq(homeworks.attachmentPath, relPath))
+        .get()
+    : undefined;
+  const rawName = doc?.title ?? hw?.title ?? "fichier";
+  const baseName = rawName.endsWith(ext) ? rawName.slice(0, -ext.length) : rawName;
+  const downloadName = `${(baseName || "fichier").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 150)}${ext}`;
   const wantsDownload = new URL(req.url).searchParams.has("download");
   const inline = INLINE.has(mime) && !wantsDownload;
 

@@ -3,6 +3,7 @@ import { createTestDb, type Db } from "@/server/db/client";
 import {
   createSubject,
   DEFAULT_SUBJECTS,
+  deleteSubject,
   formatKeywordLines,
   listSubjects,
   parseKeywordLines,
@@ -70,5 +71,7 @@ describe("createSubject", () => {
     const b = createSubject(db, { name: "Réseaux  Télécoms", color: "#0ea5e9", pathPatterns: [], keywords: {} });
     expect(b.slug).toBe("reseaux-telecoms-2");
     expect(listSubjects(db)).toHaveLength(DEFAULT_SUBJECTS.length + 2);
+    deleteSubject(db, b.id);
+    expect(listSubjects(db)).toHaveLength(DEFAULT_SUBJECTS.length + 1);
   });
 });

@@ -193,3 +193,28 @@ export const importExclusions = sqliteTable("import_exclusions", {
     .default(sql`(unixepoch('subsec') * 1000)`),
   deletedBy: text("deleted_by"), // id utilisateur (sans FK : survit à la suppression du compte), null = système
 });
+
+export const homeworks = sqliteTable(
+  "homeworks",
+  {
+    id: id(),
+    subjectId: text("subject_id")
+      .notNull()
+      .references(() => subjects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    dueDate: text("due_date").notNull(), // YYYY-MM-DD
+    englishGroup: text("english_group"),
+    attachmentPath: text("attachment_path"),
+    attachmentName: text("attachment_name"),
+    attachmentMime: text("attachment_mime"),
+    attachmentSize: integer("attachment_size"),
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("homeworks_due_date_idx").on(t.dueDate),
+    index("homeworks_subject_idx").on(t.subjectId),
+  ],
+);

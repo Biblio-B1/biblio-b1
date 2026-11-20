@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
+import { subjects as subjectsTable } from "@/server/db/schema";
 import { classify } from "@/server/classify";
 import { listSubjects, seedSubjects, DEFAULT_SUBJECTS } from "@/server/subjects";
 
@@ -27,10 +28,17 @@ describe("classify", () => {
         "linux-environnement-ia",
         "mathematiques-pour-info",
         "presentations-b1",
-        "shift-s-1-decoder-pour-agir",
         "techaway-dataanalysis",
       ],
     );
+  });
+
+  it("seedSubjects supprime Shift B1 / Shift(s) 1 s'il est encore présent", () => {
+    db.insert(
+      subjectsTable,
+    ).values({ name: "Shift B1", slug: "shift-b1", color: "#ca8a04", rules: { pathPatterns: [], keywords: {} } }).run();
+    seedSubjects(db);
+    expect(listSubjects(db).some((s) => s.slug === "shift-b1" || s.slug === "shift-s-1-decoder-pour-agir")).toBe(false);
   });
 
   it("reconnaît prog-c par le nom de fichier", () => {
@@ -103,7 +111,7 @@ describe("classify", () => {
     expect(classify({ fileName: "a.txt", text: "essay" }, subjects).subjectId).toBeNull();
   });
 
-  it("les 10 matières portent exactement les noms des dossiers de cours", () => {
+  it("les 9 matières portent exactement les noms des dossiers de cours", () => {
     expect(DEFAULT_SUBJECTS.map((s) => s.name)).toEqual([
       "Algorithmique et Prog C",
       "Anglais professionnel & technique avancé",
@@ -113,7 +121,6 @@ describe("classify", () => {
       "Linux & environnement IA",
       "Mathématiques pour Info",
       "Présentations B1",
-      "Shift(s) 1 - Décoder pour agir",
       "Techaway dataanalysis",
     ]);
   });
@@ -122,7 +129,6 @@ describe("classify", () => {
     const slug = (i: Parameters<typeof classify>[0]) => slugOf(classify(i, subjects).subjectId);
     expect(slug({ fileName: "Seance 1.pdf", path: "cours/Présentations B1/Seance 1.pdf" })).toBe("presentations-b1");
     expect(slug({ fileName: "x.pdf", path: "COMM-POSTURE PROFESSIONNELLE\\x.pdf" })).toBe("comm-posture-professionnelle");
-    expect(slug({ fileName: "x.pdf", path: "a/shift-s-1-decoder-pour-agir/x.pdf" })).toBe("shift-s-1-decoder-pour-agir");
     // Le bonus de dossier l'emporte sur des mots-clés d'une autre matière.
     const r = classify({ fileName: "m.txt", path: "infra-data/m.txt", text: "grep chmod bash" }, subjects);
     expect(slugOf(r.subjectId)).toBe("infra-data");

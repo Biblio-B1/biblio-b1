@@ -2,13 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   allDayEventsForDay,
   dateKeyInParis,
+  homeworksForEvent,
+  homeworksForNextWeek,
+  matchEventSubject,
   mondayOfWeek,
   shiftDateKey,
   timedEventsForDay,
   visibleHourRange,
   weekDateKeys,
+  type CalendarHomework,
   type ScheduleEvent,
 } from "@/lib/calendar-view";
+import { createTestDb } from "@/server/db/client";
+import { listSubjects, seedSubjects } from "@/server/subjects";
 
 const event = (uid: string, start: string, end: string): ScheduleEvent => ({
   uid,
@@ -61,5 +67,42 @@ describe("calendar view helpers", () => {
     expect(allDayEventsForDay([allDay], "2026-11-23")).toEqual([allDay]);
     expect(allDayEventsForDay([allDay], "2026-11-24")).toEqual([]);
     expect(visibleHourRange([late], ["2026-11-23"])).toEqual({ start: 8, end: 24 });
+  });
+
+  it("matches Boostcamp event titles to subjects and attaches due homeworks", () => {
+    const db = createTestDb();
+    seedSubjects(db);
+    const subjects = listSubjects(db);
+
+    const cases: [string, string][] = [
+      ["Algorithmique et programmation C - M. VANDAMME SIMON - CRS", "algorithmique-et-prog-c"],
+      ["Soutien Programmation C - M. VANDAMME SIMON - CRS-CV", "algorithmique-et-prog-c"],
+      ["fermé - Anglais professionnel & technique intermédiaire - Mme LISOWSKI", "anglais-professionnel-technique-avance"],
+      ["Communication & posture professionnelle - Mme COUDERT CAROLE", "comm-posture-professionnelle"],
+      ["Développement web Front -End - M. TAALBI RABAH - CRS", "developpement-web-front-end"],
+      ["fermé - Infrastructures et Systèmes pour la Data - KONATE DOTEMIN - CRS", "infra-data"],
+      ["Linux & environnement de développement IA - M. ABDELLAOUI LÉO", "linux-environnement-ia"],
+      ["Mathématiques pour l'informatique - M. KADI", "mathematiques-pour-info"],
+      ["Soutien mathématiques - M. KADI", "mathematiques-pour-info"],
+      ["TECHAWAY-DATAANALYSIS-N1 - BOUVERET GRIMAUD - CRS-TD-CV", "techaway-dataanalysis"],
+    ];
+    for (const [title, expectedSlug] of cases) {
+      const matched = matchEventSubject({ title }, subjects);
+      expect(matched?.slug, title).toBe(expectedSlug);
+    }
+
+    expect(matchEventSubject({ title: "Férié" }, subjects)).toBeUndefined();
+
+    const dataSub = subjects.find((s) => s.slug === "infra-data")!;
+    const hws: CalendarHomework[] = [
+      { id: "h1", subjectId: dataSub.id, subjectName: dataSub.name, title: "Requête SQL", dueDate: "2026-11-24" },
+      { id: "h2", subjectId: dataSub.id, subjectName: dataSub.name, title: "Autre jour", dueDate: "2026-11-25" },
+    ];
+    const dataEvent = event("data-1", "2026-11-24T08:00:00.000Z", "2026-11-24T10:00:00.000Z");
+    dataEvent.title = "Infrastructures et Systèmes pour la Data - KONATE DOTEMIN - CRS";
+    expect(homeworksForEvent(dataEvent, "2026-11-24", subjects, hws).map((h) => h.id)).toEqual(["h1"]);
+
+    expect(homeworksForNextWeek(hws, "2026-11-20").map((h) => h.id)).toEqual(["h1", "h2"]);
+    expect(homeworksForNextWeek([{ dueDate: "2026-11-22" }, { dueDate: "2026-11-30" }], "2026-11-20")).toEqual([]);
   });
 });

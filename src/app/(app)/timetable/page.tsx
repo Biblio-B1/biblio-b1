@@ -3,6 +3,8 @@ import { requireUser } from "@/server/auth/session";
 import { env } from "@/server/env";
 import { getCalendar, getStoredCalendar, CalendarError } from "@/server/boostcamp/calendar";
 import { getDb } from "@/server/db/client";
+import { listHomeworks } from "@/server/homeworks";
+import { listSubjects } from "@/server/subjects";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { linkCalendarAction, syncCalendarAction, unlinkCalendarAction } from "./actions";
 
@@ -11,6 +13,14 @@ export const metadata = { title: "Emploi du temps" };
 export default async function TimetablePage() {
   const user = await requireUser();
   const db = getDb();
+  const subjects = listSubjects(db).map((s) => ({
+    id: s.id,
+    name: s.name,
+    slug: s.slug,
+    color: s.color,
+    rules: s.rules,
+  }));
+  const homeworks = listHomeworks(db);
   const canLinkCalendar = Boolean(env.CALENDAR_ENCRYPTION_KEY);
   let calendar = getStoredCalendar(db, user.id);
   let syncError: string | undefined;
@@ -99,7 +109,7 @@ export default async function TimetablePage() {
               </form>
             </div>
           </div>
-          <CalendarView events={calendar.events} />
+          <CalendarView events={calendar.events} subjects={subjects} homeworks={homeworks} />
         </>
       )}
     </div>

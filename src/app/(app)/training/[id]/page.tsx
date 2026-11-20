@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { QAPanel } from "@/components/qa/QAPanel";
 import { Spine } from "@/components/layout/Spine";
+import { ExerciseCodeEditor } from "@/components/training/ExerciseCodeEditor";
 import { Reveal } from "@/components/training/Reveal";
 import { StatusPicker } from "@/components/training/StatusPicker";
 import { requireUser } from "@/server/auth/session";
@@ -83,6 +84,8 @@ export default async function ExercisePage({ params }: { params: Params }) {
       <article className="rounded-lg border border-line bg-surface px-5 py-6 md:px-10 md:py-8">
         <Plain text={ex.statement} />
       </article>
+
+      <ExerciseCodeEditor exerciseId={ex.id} lang={ex.lang} />
 
       {hints.length > 0 && (
         <Reveal showLabel="Afficher les indices" hideLabel="Masquer les indices">

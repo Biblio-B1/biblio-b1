@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "./db/client";
 import { subjects } from "./db/schema";
@@ -103,18 +103,18 @@ export const DEFAULT_SUBJECTS: DefaultSubject[] = [
     pathPatterns: ["\\bpresentation\\s+cursus\\b"],
     keywords: {},
   }),
-  subject("Shift(s) 1 - Décoder pour agir", "#ca8a04", {
-    pathPatterns: ["\\bshift\\(s\\)", "\\bshifts?\\s+1\\b"],
-    keywords: {},
-  }),
   subject("Techaway dataanalysis", "#4f46e5", {
     pathPatterns: ["\\btechaway\\b"],
     keywords: { techaway: 3 },
   }),
 ];
 
-/** Insère les matières par défaut ; idempotent (clé unique `slug`). */
+/** Anciennes matières supprimées à nettoyer automatiquement dans la base existante. */
+export const REMOVED_SUBJECT_SLUGS = ["shift-s-1-decoder-pour-agir", "shift-b1"] as const;
+
+/** Insère les matières par défaut et retire les matières supprimées ; idempotent (clé unique `slug`). */
 export function seedSubjects(db: Db): void {
+  db.delete(subjects).where(inArray(subjects.slug, [...REMOVED_SUBJECT_SLUGS])).run();
   for (const s of DEFAULT_SUBJECTS) {
     db.insert(subjects).values(s).onConflictDoNothing({ target: subjects.slug }).run();
   }
@@ -229,4 +229,9 @@ export function createSubject(db: Db, input: SubjectInput): Subject {
 
 export function getSubjectBySlug(db: Db, slug: string): Subject | undefined {
   return db.select().from(subjects).where(eq(subjects.slug, slug)).get();
+}
+
+export function deleteSubject(db: Db, id: string): void {
+  const row = db.delete(subjects).where(eq(subjects.id, id)).returning().get();
+  if (!row) throw new Error("Matière introuvable.");
 }

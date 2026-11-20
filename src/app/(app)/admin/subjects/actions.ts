@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { FormState } from "@/components/ActionForm";
 import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
-import { createSubject, parseKeywordLines, updateSubject, type SubjectInput } from "@/server/subjects";
+import { createSubject, deleteSubject, parseKeywordLines, updateSubject, type SubjectInput } from "@/server/subjects";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 
@@ -42,4 +42,14 @@ export async function createSubjectAction(_prev: FormState, fd: FormData): Promi
   }
   revalidatePath("/", "layout");
   return { message: "Matière ajoutée." };
+}
+
+export async function deleteSubjectAction(id: string): Promise<void> {
+  await requireUser("admin");
+  try {
+    deleteSubject(getDb(), id);
+  } catch {
+    return;
+  }
+  revalidatePath("/", "layout");
 }
