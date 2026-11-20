@@ -51,6 +51,9 @@ cp .env.example .env
 | `C_PROF_REPO_URL` | Dépôt GitHub des cours du professeur, cloné puis importé par `npm run import`. | `https://github.com/S-L-A-K-E-R/C_courses` |
 | `LOCAL_COURSES_PATH` | Dossier local de cours importé par `npm run import` : chaque sous-dossier de premier niveau devient une matière. Lu seulement, jamais modifié. | `./sources/local` |
 | `COOKIE_SECURE` | `true` pour marquer le cookie de session « Secure » (obligatoire derrière HTTPS). Laissez `false` en HTTP sur le réseau local, sinon la connexion échoue. | `false` |
+| `OLLAMA_URL` | Adresse d'Ollama pour le service de pré-calcul (`npm run solver`). Sur le Chromebook : `http://<IP-du-PC>:11434` (sur le PC, lancer Ollama avec `OLLAMA_HOST=0.0.0.0` et ouvrir le port 11434 du pare-feu Windows au réseau local). | `http://127.0.0.1:11434` |
+| `OLLAMA_MODEL` | Modèle Ollama local utilisé pour écrire les solutions de référence et les entrées de test. | `qwen3.8:27b` |
+| `SOLVER_TIMEOUT_MS` | Délai maximal (ms) d'une exécution de la solution de référence, compilation comprise. | `5000` |
 
 Une chaîne vide dans `.env` équivaut à variable non définie.
 
@@ -89,6 +92,20 @@ Reconstruire l'index de recherche (après un import ancien ou pour réparer) :
 ```sh
 npm run reindex
 ```
+
+## Vérification automatique des exercices (`npm run solver`)
+
+Le service de pré-calcul prépare, pour chaque exercice en file, un jeu de vérification : langage (C, Python ou JavaScript), solution de référence et 4 à 6 tests (entrée → sortie attendue), le premier visible des étudiants. La correction du professeur sert de référence si elle contient du C qui compile ; sinon le modèle Ollama (`OLLAMA_MODEL`) écrit la solution. Les sorties attendues sont toujours calculées en exécutant la référence (deux fois, pour écarter les solutions non déterministes) avec les mêmes moteurs WebAssembly que le navigateur.
+
+```sh
+npm run solver                         # boucle longue (service)
+npm run solver -- --once               # un exercice puis arrêt
+npm run solver -- --limit 10           # au plus 10 exercices
+npm run solver -- --exercise <id>      # (re)calculer un exercice précis
+npm run solver -- --retry-failed       # remettre en file les échecs
+```
+
+Au démarrage, les exercices sans vérification sont mis en file (`--enqueue-missing` le fait aussi explicitement) et les traitements interrompus depuis plus de 30 min sont repris. Si Ollama est injoignable, les exercices restent en file et le service réessaie (60 s, puis délai doublé jusqu'à 15 min). Sur CPU, compter plusieurs minutes par exercice.
 
 ## Production
 

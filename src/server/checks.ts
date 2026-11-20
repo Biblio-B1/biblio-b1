@@ -54,10 +54,11 @@ export function getCheck(db: Db, exerciseId: string): ExerciseCheck | null {
 }
 
 /**
- * Prend le plus ancien `pending` et le passe `running`. Un seul UPDATE gardé par
- * `status = 'pending'` : sûr aussi entre processus (solveur séparé du serveur web).
+ * Prend le plus ancien `pending`, le passe `running` (attempts + 1) et renvoie son id.
+ * Un seul UPDATE gardé par `status = 'pending'` : sûr aussi entre processus (solveur séparé
+ * du serveur web). Ne relit pas la ligne : utilisable même si elle est corrompue.
  */
-export function claimNextPending(db: Db): ExerciseCheck | null {
+export function claimNextPendingId(db: Db): string | null {
   const row = db.$client
     .prepare(
       `UPDATE exercise_checks
@@ -68,7 +69,68 @@ export function claimNextPending(db: Db): ExerciseCheck | null {
        RETURNING exercise_id AS id`,
     )
     .get() as { id: string } | undefined;
-  return row ? getCheck(db, row.id) : null;
+  return row?.id ?? null;
+}
+
+/** Prend le plus ancien `pending` et le passe `running` (voir `claimNextPendingId`). */
+export function claimNextPending(db: Db): ExerciseCheck | null {
+  const id = claimNextPendingId(db);
+  return id ? getCheck(db, id) : null;
+}
+
+/** Passe un exercice précis de `pending` à `running` (attempts + 1) ; false s'il n'était pas `pending`. */
+export function claimCheck(db: Db, exerciseId: string): boolean {
+  return (
+    db.$client
+      .prepare(
+        `UPDATE exercise_checks
+           SET status = 'running', attempts = attempts + 1, updated_at = unixepoch('subsec') * 1000
+         WHERE exercise_id = ? AND status = 'pending'`,
+      )
+      .run(exerciseId).changes > 0
+  );
+}
+
+/**
+ * Rend un `running` à la file sans compter la prise (Ollama injoignable, arrêt du solveur) :
+ * `pending`, attempts - 1.
+ */
+export function releaseCheck(db: Db, exerciseId: string): void {
+  db.$client
+    .prepare(
+      `UPDATE exercise_checks
+         SET status = 'pending', attempts = max(attempts - 1, 0), updated_at = unixepoch('subsec') * 1000
+       WHERE exercise_id = ? AND status = 'running'`,
+    )
+    .run(exerciseId);
+}
+
+/**
+ * Remet un exercice en file pour un nouveau calcul (`pending`, attempts = 0, erreur effacée),
+ * en le créant au besoin. Refusé (false) si ses tests ont été validés par un admin.
+ */
+export function requeueCheck(db: Db, exerciseId: string): boolean {
+  enqueueCheck(db, exerciseId);
+  return (
+    db.$client
+      .prepare(
+        `UPDATE exercise_checks
+           SET status = 'pending', attempts = 0, error = NULL, updated_at = unixepoch('subsec') * 1000
+         WHERE exercise_id = ? AND verified = 0`,
+      )
+      .run(exerciseId).changes > 0
+  );
+}
+
+/** Remet en file tous les `failed` (attempts = 0) ; renvoie leur nombre. */
+export function requeueFailed(db: Db): number {
+  return db.$client
+    .prepare(
+      `UPDATE exercise_checks
+         SET status = 'pending', attempts = 0, error = NULL, updated_at = unixepoch('subsec') * 1000
+       WHERE status = 'failed' AND verified = 0`,
+    )
+    .run().changes;
 }
 
 /** Remet en `pending` les `running` inactifs depuis plus de `olderThanMs` ; renvoie leur nombre. */

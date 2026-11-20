@@ -13,6 +13,13 @@ export const envSchema = z.object({
   COOKIE_SECURE: z.enum(["true", "false"]).default("false"),
   // Réservé : les sessions sont des jetons aléatoires hachés, ce secret n'est pas utilisé.
   SESSION_SECRET: z.string().default(DEV_SESSION_SECRET),
+  // Service de pré-calcul des vérifications (npm run solver) : Ollama local ou du PC.
+  OLLAMA_URL: z
+    .url({ protocol: /^https?$/, error: "URL http(s) attendue, ex. http://127.0.0.1:11434" })
+    .default("http://127.0.0.1:11434"),
+  OLLAMA_MODEL: z.string().min(1).default("qwen3.8:27b"),
+  // Délai maximal d'une exécution de la solution de référence (compilation comprise), en ms.
+  SOLVER_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(5000),
   // Adresse publique de l'application (liens d'invitation), sans « / » final.
   APP_URL: z
     .url({ protocol: /^https?$/, error: "URL http(s) attendue, ex. http://192.168.1.20:3000" })

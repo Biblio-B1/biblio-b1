@@ -10,6 +10,19 @@ describe("parseEnv", () => {
     expect(parseEnv({}).APP_URL).toBeUndefined();
   });
 
+  it("solveur : OLLAMA_URL, OLLAMA_MODEL, SOLVER_TIMEOUT_MS", () => {
+    expect(parseEnv({})).toMatchObject({
+      OLLAMA_URL: "http://127.0.0.1:11434",
+      OLLAMA_MODEL: "qwen3.8:27b",
+      SOLVER_TIMEOUT_MS: 5000,
+    });
+    expect(parseEnv({ OLLAMA_URL: "http://192.168.1.10:11434", SOLVER_TIMEOUT_MS: "8000" })).toMatchObject({
+      OLLAMA_URL: "http://192.168.1.10:11434",
+      SOLVER_TIMEOUT_MS: 8000,
+    });
+    expect(() => parseEnv({ OLLAMA_URL: "pas une url" })).toThrow(/OLLAMA_URL/);
+  });
+
   it("SESSION_SECRET est réservé : la valeur par défaut est acceptée, même en production", () => {
     expect(parseEnv({ NODE_ENV: "production", ...good, SESSION_SECRET: "dev-insecure-secret-change-me" }).ADMIN_INVITE_CODE).toBe("secret-code");
   });
