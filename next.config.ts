@@ -2,6 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["better-sqlite3", "@node-rs/argon2", "pdfjs-dist", "mammoth"],
+  async headers() {
+    return [
+      {
+        // Moteurs WASM (≈ 115 Mo) : chemins versionnés (/runtimes/<moteur>/<version>/…, cf.
+        // scripts/copy-runtimes.mjs), donc jamais modifiés en place → cache d'un an.
+        source: "/runtimes/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+    ];
+  },
   webpack: (config, { dev }) => {
     if (dev) {
       // Les fichiers déposés (storage/) et les sorties d'outils ne doivent pas relancer la compilation.

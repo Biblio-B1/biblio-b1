@@ -1,7 +1,8 @@
 // Point d'entrée navigateur (aucun import `node:`) — à importer depuis un Web Worker (Task 4).
-// Les runtimes sont servis par Next depuis public/runtimes/ (copiés par scripts/copy-runtimes.mjs) :
-//   /runtimes/clang/bundle.js   (+ llvm*.wasm, llvm-resources.tar, chargés relativement au bundle)
-//   /runtimes/pyodide/pyodide.mjs (+ pyodide.asm.wasm, python_stdlib.zip, pyodide-lock.json)
+// Les runtimes sont servis par Next depuis public/runtimes/ (copiés par scripts/copy-runtimes.mjs),
+// sous un dossier portant leur version (cache « immutable », cf. runtime-versions.ts) :
+//   /runtimes/clang/<version>/bundle.js   (+ llvm*.wasm, llvm-resources.tar, chargés relativement au bundle)
+//   /runtimes/pyodide/<version>/pyodide.mjs (+ pyodide.asm.wasm, python_stdlib.zip, pyodide-lock.json)
 //
 // Exemple de worker :
 //   import { attachWorkerProtocol, createBrowserEngine } from "@/lib/runners/browser.ts";
@@ -15,6 +16,7 @@
 import { prepareClang } from "./c.ts";
 import { createEngine, type Engine } from "./engine.ts";
 import type { WorkerRequest, WorkerResponse } from "./protocol.ts";
+import { runtimePath } from "./runtime-versions.ts";
 import type { ClangModule, Language, PyodideLike } from "./types.ts";
 
 export { createEngine } from "./engine.ts";
@@ -29,10 +31,11 @@ export type { Language, RunResult } from "./types.ts";
 const importUrl = (url: string): Promise<unknown> => import(/* webpackIgnore: true */ url);
 
 export function createBrowserEngine(baseUrl = "/runtimes"): Engine {
-  const base = baseUrl.replace(/\/$/, "");
+  const clangBase = runtimePath("clang", baseUrl);
+  const pyodideBase = runtimePath("pyodide", baseUrl);
   return createEngine({
     async clang() {
-      return prepareClang((await importUrl(`${base}/clang/bundle.js`)) as ClangModule);
+      return prepareClang((await importUrl(`${clangBase}/bundle.js`)) as ClangModule);
     },
     async pyodide() {
       // webpack transforme `new Worker(url, { type: "module" })` en worker classique (chunks
@@ -51,10 +54,10 @@ export function createBrowserEngine(baseUrl = "/runtimes"): Engine {
         };
       }
       try {
-        const mod = (await importUrl(`${base}/pyodide/pyodide.mjs`)) as {
+        const mod = (await importUrl(`${pyodideBase}/pyodide.mjs`)) as {
           loadPyodide(o: { indexURL: string }): Promise<PyodideLike>;
         };
-        return await mod.loadPyodide({ indexURL: `${base}/pyodide/` });
+        return await mod.loadPyodide({ indexURL: `${pyodideBase}/` });
       } finally {
         if (typeof saved === "function") g.importScripts = saved;
       }

@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Edge runtime : on ne vérifie que la présence du cookie.
 // La validation réelle de la session se fait dans requireUser()/getCurrentUser().
-const PUBLIC = [/^\/login$/, /^\/setup$/, /^\/invite\/[^/]+$/];
+// /runtimes/ : moteurs WASM libres (clang, Pyodide), fichiers statiques sans donnée privée ; publics
+// pour qu'aucune redirection vers /login ne soit mise en cache « immutable » (next.config.ts).
+const PUBLIC = [/^\/login$/, /^\/setup$/, /^\/invite\/[^/]+$/, /^\/runtimes\//];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
