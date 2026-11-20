@@ -72,7 +72,9 @@ export function sandboxReadPaths(): string[] {
  * --allow-addons, --allow-wasi, --allow-inspector.
  */
 export function sandboxArgs(): string[] {
-  return ["--permission", ...sandboxReadPaths().map((p) => `--allow-fs-read=${p}`)];
+  // --disable-sigusr1 (Node >= 22.14) : SIGUSR1 n'ouvre pas l'inspecteur de l'enfant.
+  const sigusr1 = process.allowedNodeEnvironmentFlags.has("--disable-sigusr1") ? ["--disable-sigusr1"] : [];
+  return ["--permission", ...sigusr1, ...sandboxReadPaths().map((p) => `--allow-fs-read=${p}`)];
 }
 
 const stderrTails = new WeakMap<ChildProcess, () => string>();

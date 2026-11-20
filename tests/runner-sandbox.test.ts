@@ -39,7 +39,7 @@ describe("options du bac à sable", () => {
   it("modèle de permissions, lecture limitée aux moteurs, aucune autre permission", () => {
     const args = sandboxArgs();
     expect(args[0]).toBe("--permission");
-    for (const a of args.slice(1)) expect(a).toMatch(/^--allow-fs-read=/);
+    for (const a of args.slice(1)) expect(a).toMatch(/^(--allow-fs-read=|--disable-sigusr1$)/);
     expect(args.join(" ")).not.toMatch(/allow-(fs-write|child-process|worker|addons|wasi|inspector)/);
     const reads = sandboxReadPaths().map((p) => path.resolve(p).toLowerCase());
     const forbidden = [repo, path.join(repo, "storage"), envFile, path.join(repo, "node_modules")].map((p) => p.toLowerCase());
@@ -171,4 +171,50 @@ describe("arrêt du solveur", () => {
     expect(p.status).toBe(0);
     expect(p.stdout.trim()).toBe("fini");
   }, LONG);
+});
+
+// Le modèle de permissions ne couvre pas tout `process` : `_debugProcess(pid)` active
+// l'inspecteur V8 d'un autre processus (le solveur, non isolé) et `kill` peut envoyer SIGUSR1
+// (même effet sous Linux) ou tuer le parent. Ces fonctions doivent être retirées et figées.
+describe("bac à sable — inspecteur et signaux", () => {
+  const PROBE_JS = `
+    const p = globalThis.process;
+    const out = [];
+    for (const n of ["_debugProcess", "_debugEnd", "kill", "_kill"]) {
+      let r;
+      try { p[n](p.ppid, 0); r = "APPEL-OK"; } catch (e) { r = "refusé"; }
+      out.push(n + ":" + r);
+    }
+    try { p.kill = () => 0; delete p._debugProcess; } catch {}
+    out.push("restauré:" + (typeof p._debugProcess === "function" && p._debugProcess.name !== "locked" ? "oui" : "non"));
+    console.log(out.join(" "));
+  `;
+
+  it("JavaScript : _debugProcess, _debugEnd, kill, _kill refusés et non restaurables", async () => {
+    const r = await runCode("javascript", PROBE_JS, "");
+    expect(r.stdout).not.toMatch(/APPEL-OK/);
+    expect(r.stdout).toMatch(/_debugProcess:refusé _debugEnd:refusé kill:refusé _kill:refusé/);
+    expect(r.stdout).toMatch(/restauré:non/);
+  }, LONG);
+
+  it("Python (from js import process) : mêmes fonctions refusées", async () => {
+    const code = [
+      "from js import process",
+      "res = []",
+      "for n in ['_debugProcess', 'kill']:",
+      "    try:",
+      "        getattr(process, n)(process.ppid, 0)",
+      "        res.append(n + ':APPEL-OK')",
+      "    except Exception:",
+      "        res.append(n + ':refusé')",
+      "print(' '.join(res))",
+    ].join("\n");
+    const r = await runCode("python", code, "");
+    expect(r.stdout).not.toMatch(/APPEL-OK/);
+    expect(r.stdout).toMatch(/_debugProcess:refusé kill:refusé/);
+  }, LONG);
+
+  it("l'enfant est lancé avec --disable-sigusr1 quand Node le permet", () => {
+    if (process.allowedNodeEnvironmentFlags.has("--disable-sigusr1")) expect(sandboxArgs()).toContain("--disable-sigusr1");
+  });
 });

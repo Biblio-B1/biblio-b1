@@ -21,6 +21,25 @@ if (typeof process.send !== "function") throw new Error("node-worker.ts doit êt
   proc.binding = (name: string) => (name === "constants" ? { fs: constants, os: os.constants } : denied(name));
 }
 
+// Le modèle de permissions ne couvre pas ces fonctions de `process` : `_debugProcess(pid)` active
+// l'inspecteur V8 d'un AUTRE processus (le solveur, non isolé : évasion complète via le réseau
+// local), `kill(pid, "SIGUSR1")` fait de même sous Linux et `kill(ppid)` tue le parent.
+// Retirées AVANT tout code exécuté, et figées (non modifiables, non supprimables).
+export const LOCKED_PROCESS_FUNCTIONS = ["_debugProcess", "_debugEnd", "kill", "_kill", "binding"] as const;
+for (const name of LOCKED_PROCESS_FUNCTIONS) {
+  const keep = name === "binding" ? (process as unknown as Record<string, unknown>).binding : null;
+  Object.defineProperty(process, name, {
+    value:
+      keep ??
+      function locked(): never {
+        throw new Error(`process.${name} n'est pas disponible dans le bac à sable`);
+      },
+    writable: false,
+    configurable: false,
+    enumerable: false,
+  });
+}
+
 const engine = createEngine({
   async clang() {
     return prepareClang((await import("@yowasp/clang")) as unknown as ClangModule);

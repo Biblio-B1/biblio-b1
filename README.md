@@ -127,9 +127,10 @@ Les solutions de référence écrites par le modèle sont du **code non fiable**
 - lecture limitée au code des moteurs (`src/lib/runners/` et les paquets `@yowasp/clang`, `pyodide`, `@bjorn3/browser_wasi_shim` de `node_modules`) : **ni `storage/` (base `data.db`, fichiers), ni `.env`**, ni le reste du dépôt ;
 - aucune écriture de fichier, aucun processus enfant, aucun worker, aucun module natif ;
 - environnement vide (les variables chargées depuis `.env` ne sont pas transmises) ;
-- arrêt forcé du processus au délai (`SOLVER_TIMEOUT_MS`), puis recréation.
+- arrêt forcé du processus au délai (`SOLVER_TIMEOUT_MS`), puis recréation ;
+- `process._debugProcess`, `_debugEnd`, `kill` et `_kill` retirés (et figés) avant toute exécution : le code ne peut ni ouvrir l'inspecteur V8 du solveur, ni envoyer de signal au parent ; l'enfant et les deux services systemd tournent avec `--disable-sigusr1`.
 
-Limites connues : le modèle de permissions de Node (≥ 22.18) ne filtre pas le **réseau** ; un programme malveillant pourrait donc émettre des requêtes vers le réseau local, sans toutefois disposer d'aucun secret à y envoyer. Faites tourner le solveur sous un compte sans privilèges particuliers. Le code des **étudiants**, lui, ne s'exécute jamais sur le serveur (seulement dans leur navigateur).
+Limites connues : un programme malveillant pourrait encore fausser les sorties attendues qu'il renvoie (elles restent « non vérifiées » jusqu'à validation par un admin) ; le modèle de permissions de Node (≥ 22.18) ne filtre pas le **réseau** ; un programme malveillant pourrait donc émettre des requêtes vers le réseau local, sans toutefois disposer d'aucun secret à y envoyer. Faites tourner le solveur sous un compte sans privilèges particuliers. Le code des **étudiants**, lui, ne s'exécute jamais sur le serveur (seulement dans leur navigateur).
 
 ### Préparer le PC (Windows, avec Ollama)
 Le modèle est trop lourd pour le Chromebook : il tourne sur un PC de la maison.
