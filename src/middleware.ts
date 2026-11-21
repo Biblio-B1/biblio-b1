@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC = [
   /^\/login$/,
   /^\/signup$/,
+  /^\/pending$/,
   /^\/setup$/,
   /^\/invite\/[^/]+$/,
   /^\/runtimes\//,

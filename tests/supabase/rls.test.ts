@@ -124,6 +124,15 @@ describe("compte actif", () => {
 });
 
 describe("administrateur", () => {
+  it("liste les demandes en attente avec leur e-mail ; un membre ne voit rien", async () => {
+    await t.as(adminId);
+    const r = await t.db.query<{ name: string; email: string }>("select name, email from public.pending_requests()");
+    expect(r.rows).toContainEqual({ name: "Nouveau", email: "nouveau@example.com" });
+    await t.as(activeId);
+    const m = await t.db.query("select * from public.pending_requests()");
+    expect(m.rows).toEqual([]);
+  });
+
   it("valide un compte en attente", async () => {
     const other = await t.signUp("autre@example.com", "Autre");
     await t.as(adminId);

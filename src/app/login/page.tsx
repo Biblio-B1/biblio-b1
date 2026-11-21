@@ -1,22 +1,56 @@
+"use client";
+
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { ActionForm, Field } from "@/components/ActionForm";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ActionForm, Field, type FormState } from "@/components/ActionForm";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthShell } from "@/components/layout/AuthShell";
-import { getDb } from "@/server/db/client";
-import { setupAvailable } from "@/server/auth/invites";
-import { getCurrentUser } from "@/server/auth/session";
-import { loginAction } from "../(auth)/actions";
+import { getSupabase } from "@/lib/supabase/client";
 
-export const metadata = { title: "Connexion" };
+export default function LoginPage() {
+  const { session, loading, markActive } = useAuth();
+  const router = useRouter();
+  const [expired, setExpired] = useState(false);
 
-export const dynamic = "force-dynamic";
+  useEffect(() => {
+    setExpired(new URLSearchParams(window.location.search).has("expire"));
+  }, []);
+  useEffect(() => {
+    if (!loading && session) router.replace("/");
+  }, [loading, session, router]);
 
-export default async function LoginPage() {
-  if (await getCurrentUser()) redirect("/");
+  async function login(_prev: FormState, fd: FormData): Promise<FormState> {
+    const email = String(fd.get("email") ?? "").trim().toLowerCase();
+    const password = String(fd.get("password") ?? "");
+    if (!email || !password) return { error: "Saisissez votre e-mail et votre mot de passe." };
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return {
+        error: /invalid login|invalid credentials/i.test(error.message)
+          ? "Identifiants incorrects."
+          : /rate limit/i.test(error.message)
+            ? "Trop de tentatives. Réessayez dans quelques minutes."
+            : "Connexion impossible pour le moment.",
+      };
+    }
+    markActive();
+    // Notification à l'administrateur ; un échec ne bloque jamais la connexion.
+    void supabase.functions.invoke("notify", { body: { event: "login" } }).catch(() => undefined);
+    router.replace("/");
+    return null;
+  }
+
   return (
     <AuthShell title="Connexion">
-      <ActionForm action={loginAction} submitLabel="Se connecter">
-        <Field label="E-mail ou pseudo" name="identifier" autoComplete="username" />
+      {expired && (
+        <p role="status" className="rounded-md border border-line bg-sunken p-2.5 text-sm text-ink-2">
+          Session expirée après 15 minutes sans activité. Reconnectez-vous.
+        </p>
+      )}
+      <ActionForm action={login} submitLabel="Se connecter">
+        <Field label="E-mail" name="email" type="email" autoComplete="email" />
         <Field label="Mot de passe" name="password" type="password" autoComplete="current-password" />
       </ActionForm>
       <p className="text-sm text-ink-2">
@@ -26,14 +60,6 @@ export default async function LoginPage() {
         </Link>{" "}
         (validé par l&apos;administrateur).
       </p>
-      {setupAvailable(getDb()) && (
-        <p className="text-sm text-ink-2">
-          Aucun administrateur n&apos;existe encore :{" "}
-          <Link href="/setup" className="text-ink underline underline-offset-2">
-            terminer l&apos;installation
-          </Link>
-        </p>
-      )}
     </AuthShell>
   );
 }

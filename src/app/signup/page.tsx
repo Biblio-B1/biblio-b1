@@ -1,25 +1,52 @@
+"use client";
+
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { ActionForm, Field } from "@/components/ActionForm";
+import { useRouter } from "next/navigation";
+import { ActionForm, Field, type FormState } from "@/components/ActionForm";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthShell } from "@/components/layout/AuthShell";
-import { getCurrentUser } from "@/server/auth/session";
-import { signupAction } from "../(auth)/actions";
+import { signupErrorMessage, validateSignup } from "@/lib/auth/signup-form";
+import { getSupabase } from "@/lib/supabase/client";
 
-export const metadata = { title: "Créer un compte" };
+export default function SignupPage() {
+  const { markActive } = useAuth();
+  const router = useRouter();
 
-export const dynamic = "force-dynamic";
+  async function signup(_prev: FormState, fd: FormData): Promise<FormState> {
+    const v = validateSignup({
+      email: String(fd.get("email") ?? ""),
+      name: String(fd.get("name") ?? ""),
+      password: String(fd.get("password") ?? ""),
+      confirm: String(fd.get("confirm") ?? ""),
+    });
+    if (!v.ok) return { error: v.error };
+    const supabase = getSupabase();
+    const { data, error } = await supabase.auth.signUp({
+      email: v.value.email,
+      password: v.value.password,
+      options: { data: { name: v.value.name } },
+    });
+    if (error) return { error: signupErrorMessage(error.message) };
+    if (!data.session) {
+      // Confirmation par e-mail encore active dans Supabase : la personne doit d'abord cliquer le lien.
+      return { message: "Demande enregistrée. Confirmez votre adresse e-mail, puis attendez la validation de l'administrateur." };
+    }
+    markActive();
+    void supabase.functions.invoke("notify", { body: { event: "signup" } }).catch(() => undefined);
+    router.replace("/pending");
+    return null;
+  }
 
-export default async function SignupPage() {
-  if (await getCurrentUser()) redirect("/");
   return (
     <AuthShell
       title="Créer un compte"
-      intro="Votre demande est envoyée à l'administrateur : vous pourrez vous connecter dès qu'il l'aura acceptée."
+      intro="Votre demande est envoyée à l'administrateur : vous aurez accès au site dès qu'il l'aura acceptée."
     >
-      <ActionForm action={signupAction} submitLabel="Envoyer la demande">
+      <ActionForm action={signup} submitLabel="Envoyer la demande">
         <Field label="E-mail" name="email" type="email" autoComplete="email" />
-        <Field label="Pseudo" name="pseudo" autoComplete="nickname" />
+        <Field label="Pseudo" name="name" autoComplete="nickname" />
         <Field label="Mot de passe (8 caractères min.)" name="password" type="password" autoComplete="new-password" />
+        <Field label="Confirmez le mot de passe" name="confirm" type="password" autoComplete="new-password" />
       </ActionForm>
       <p className="text-sm text-ink-2">
         Déjà un compte ?{" "}

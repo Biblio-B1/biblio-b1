@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { cookies } from "next/headers";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 import { THEME_COOKIE } from "@/lib/labels";
 import "./globals.css";
 
@@ -35,7 +36,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <head>
         {theme === undefined && <script dangerouslySetInnerHTML={{ __html: NO_COOKIE_SCRIPT }} />}
       </head>
-      <body className="min-h-dvh antialiased">{children}</body>
+      <body className="min-h-dvh antialiased">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

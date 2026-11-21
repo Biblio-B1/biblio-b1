@@ -57,6 +57,17 @@ $$;
 create trigger profiles_guard before update on public.profiles
   for each row execute function public.profiles_guard();
 
+-- Demandes de compte en attente, avec l'e-mail (stocké dans auth.users, illisible par le site) :
+-- réservé aux administrateurs, vide pour tout autre appelant.
+create function public.pending_requests()
+returns table (id uuid, name text, email text, created_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select p.id, p.name, u.email::text, p.created_at
+    from public.profiles p join auth.users u on u.id = p.id
+   where p.status = 'pending' and public.is_admin()
+   order by p.created_at
+$$;
+
 alter table public.profiles enable row level security;
 create policy profiles_select on public.profiles for select to authenticated
   using (id = auth.uid() or public.is_active());
