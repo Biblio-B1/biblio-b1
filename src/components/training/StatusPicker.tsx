@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setStatusAction } from "@/app/(app)/training/actions";
+import { setStatusAction } from "@/lib/api/training";
 import { PROGRESS_STATUS_LABELS, PROGRESS_STATUS_VALUES, type ProgressStatusValue } from "@/lib/labels";
 
 /** Trois boutons exclusifs ; mise à jour optimiste, retour arrière en cas d'erreur. */

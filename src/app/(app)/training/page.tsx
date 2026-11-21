@@ -1,18 +1,18 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Spine } from "@/components/layout/Spine";
 import { ExerciseCard } from "@/components/training/ExerciseCard";
+import { listSubjects } from "@/lib/api/library";
+import { getMyProgress, listAllExercises } from "@/lib/api/training";
+import { filterExercises, summarizeBySubject, withStatus, type Lang, type Summary } from "@/lib/api/training-core";
+import { useData } from "@/lib/api/use-data";
 import { PROGRESS_STATUS_LABELS, PROGRESS_STATUS_VALUES, parseStatus } from "@/lib/labels";
-import { requireUser } from "@/server/auth/session";
-import { getDb } from "@/server/db/client";
-import { LANGS } from "@/server/db/schema";
-import { listExercises, progressBySubject, type Lang, type Summary } from "@/server/progress";
-import { listSubjects } from "@/server/subjects";
 
-export const metadata = { title: "Entraînement" };
-
+const LANGS = ["fr", "en"] as const;
 const PAGE_SIZE = 50;
-
-type SP = Promise<{ subject?: string; status?: string; lang?: string; q?: string; page?: string }>;
 
 function Bar({ s }: { s: Summary }) {
   const pct = (n: number) => (s.total ? (n / s.total) * 100 : 0);
@@ -28,29 +28,27 @@ function Bar({ s }: { s: Summary }) {
   );
 }
 
-export default async function TrainingPage({ searchParams }: { searchParams: SP }) {
-  const user = await requireUser();
-  const sp = await searchParams;
-  const db = getDb();
-  const subjects = listSubjects(db);
-  const subject = subjects.find((s) => s.id === sp.subject);
-  const status = parseStatus(sp.status);
-  const lang = (LANGS as readonly string[]).includes(sp.lang ?? "") ? (sp.lang as Lang) : undefined;
-  const q = typeof sp.q === "string" ? sp.q.slice(0, 200).trim() || undefined : undefined;
-  const page = Math.min(Math.max(Number.parseInt(sp.page ?? "1", 10) || 1, 1), 1000);
+function Training() {
+  const sp = useSearchParams();
+  const router = useRouter();
+  const { data, error } = useData(async () => {
+    const [subjects, exercises, progress] = await Promise.all([listSubjects(), listAllExercises(), getMyProgress()]);
+    return { subjects, all: withStatus(exercises, progress) };
+  }, []);
+  if (error) return <p role="alert" className="text-danger">{error}</p>;
+  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  const { subjects, all } = data;
+  const subject = subjects.find((s) => s.id === sp.get("subject"));
+  const status = parseStatus(sp.get("status") ?? undefined);
+  const rawLang = sp.get("lang") ?? "";
+  const lang = (LANGS as readonly string[]).includes(rawLang) ? (rawLang as Lang) : undefined;
+  const q = sp.get("q")?.slice(0, 200).trim() || undefined;
+  const page = Math.min(Math.max(Number.parseInt(sp.get("page") ?? "1", 10) || 1, 1), 1000);
 
-  const rows = listExercises(db, {
-    userId: user.id,
-    subjectId: subject?.id,
-    status,
-    lang,
-    q,
-    limit: PAGE_SIZE + 1,
-    offset: (page - 1) * PAGE_SIZE,
-  });
-  const hasNext = rows.length > PAGE_SIZE;
-  const shown = rows.slice(0, PAGE_SIZE);
-  const bySubject = progressBySubject(db, user.id);
+  const rows = filterExercises(all, { subjectId: subject?.id, status, lang, q });
+  const hasNext = rows.length > page * PAGE_SIZE;
+  const shown = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const bySubject = summarizeBySubject(all);
   const byId = new Map(subjects.map((s) => [s.id, s]));
 
   const href = (over: Record<string, string | undefined>) => {
@@ -94,10 +92,14 @@ export default async function TrainingPage({ searchParams }: { searchParams: SP 
           })}
       </ul>
 
-      <form action="/training" className="flex gap-2">
-        {subject && <input type="hidden" name="subject" value={subject.id} />}
-        {status && <input type="hidden" name="status" value={status} />}
-        {lang && <input type="hidden" name="lang" value={lang} />}
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const value = String(new FormData(e.currentTarget).get("q") ?? "").trim();
+          router.push(href({ q: value || undefined, page: undefined }));
+        }}
+      >
         <input name="q" defaultValue={q} placeholder="Rechercher un exercice" aria-label="Rechercher un exercice" className="input h-9 min-w-0 flex-1" />
         <button className="btn h-9">Chercher</button>
       </form>
@@ -169,5 +171,13 @@ export default async function TrainingPage({ searchParams }: { searchParams: SP 
         </nav>
       )}
     </div>
+  );
+}
+
+export default function TrainingPage() {
+  return (
+    <Suspense fallback={null}>
+      <Training />
+    </Suspense>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import {
   reportCheckAction,
@@ -10,7 +9,8 @@ import {
   saveAttemptAction,
   updateTestsAction,
   verifyCheckAction,
-} from "@/app/(app)/training/check-actions";
+} from "@/lib/api/training";
+import { usePageRefresh } from "@/components/PageRefresh";
 import {
   checkMode,
   computeVerdict,
@@ -198,7 +198,7 @@ function CodeWorkspace({
   practice?: { onLanguage: (l: Language) => void };
 }) {
   const uid = useId();
-  const router = useRouter();
+  const router = usePageRefresh();
 
   const [code, setCode] = useState(() => initialCode(language, attempt));
   const visibleTest = check?.tests.find((t) => t.visible);
@@ -592,7 +592,7 @@ function ReportButton({ exerciseId }: { exerciseId: string }) {
 }
 
 function AdminTools({ exerciseId, check }: { exerciseId: string; check: CodeExerciseCheck }) {
-  const router = useRouter();
+  const router = usePageRefresh();
   const uid = useId();
   const [json, setJson] = useState(() => JSON.stringify(check.tests, null, 2));
   const [editing, setEditing] = useState(false);

@@ -24,7 +24,7 @@ describe("pages membres", () => {
   });
 
   // Conversions encore à faire (plan github.io + Supabase, tâche 8) : la liste doit finir vide.
-  const PENDING_CONVERSION = ["training/[id]/page.tsx"];
+  const PENDING_CONVERSION: string[] = [];
   it("aucune page à segment dynamique [param] (export statique github.io)", () => {
     const dynamicPages = pages(APP_DIR)
       .map((f) => path.relative(APP_DIR, f).split(path.sep).join("/"))
