@@ -2,7 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import { MarkdownView } from "@/components/viewers/MarkdownView";
-import type { QAState } from "@/app/qa/actions";
+import type { QAState } from "@/lib/api/threads";
 
 type Props = {
   action: (prev: QAState, fd: FormData) => Promise<QAState>;

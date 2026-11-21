@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { IconDownload } from "@/components/layout/Icons";
 import { Spine } from "@/components/layout/Spine";
 import { DeleteDocumentButton } from "@/components/library/DeleteDocumentButton";
+import { QAPanel } from "@/components/qa/QAPanel";
 import { CodeView } from "@/components/viewers/CodeView";
 import { ImageGallery } from "@/components/viewers/ImageGallery";
 import { MarkdownView } from "@/components/viewers/MarkdownView";
@@ -207,6 +208,7 @@ function DocView() {
       </header>
 
       <Viewer doc={doc} />
+      {profile && <QAPanel targetType="document" targetId={doc.id} viewer={{ id: profile.id, role: profile.role }} />}
     </div>
   );
 }

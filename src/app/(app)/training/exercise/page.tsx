@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Spine } from "@/components/layout/Spine";
 import { PageRefreshProvider } from "@/components/PageRefresh";
+import { QAPanel } from "@/components/qa/QAPanel";
 import { CodeExercise } from "@/components/training/CodeExercise";
 import { Reveal } from "@/components/training/Reveal";
 import { StatusPicker } from "@/components/training/StatusPicker";
@@ -115,6 +116,8 @@ function ExerciseView() {
         ) : (
           <p className="text-[14px] text-ink-3">Pas de correction disponible pour cet exercice.</p>
         )}
+
+        {profile && <QAPanel targetType="exercise" targetId={ex.id} viewer={{ id: profile.id, role: profile.role }} />}
       </div>
     </PageRefreshProvider>
   );
