@@ -3,12 +3,9 @@ import { z } from "zod";
 import type { Db } from "./db/client";
 import { subjects } from "./db/schema";
 
-export type SubjectRules = {
-  /** Expressions régulières (insensibles à la casse et aux accents) testées sur le chemin et le nom. */
-  pathPatterns: string[];
-  /** Mot-clé (sans accent, minuscule) -> poids. */
-  keywords: Record<string, number>;
-};
+import type { SubjectRules } from "@/lib/subject-rules";
+
+export type { SubjectRules };
 
 export type Subject = typeof subjects.$inferSelect;
 

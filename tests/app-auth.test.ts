@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-// Le middleware ne vérifie que la présence du cookie et un layout peut être
-// sauté lors d'une navigation RSC : chaque page (et generateMetadata qui lit
-// la base) du groupe (app) doit valider la session elle-même.
+// Pages membres (groupe (app)) : la coquille (layout) exige un compte validé via <RequireAuth> ; la
+// vraie barrière est la RLS de Supabase. Les pages encore rendues côté serveur (non converties)
+// doivent valider la session elles-mêmes avec requireUser().
 const APP_DIR = path.resolve(import.meta.dirname, "../src/app/(app)");
 
 function pages(dir: string): string[] {
@@ -15,33 +15,35 @@ function pages(dir: string): string[] {
   });
 }
 
-// Pages publiques (consultation des documents sans compte, demande de l'utilisateur) :
-// elles lisent la session avec getCurrentUser() et masquent ce qui exige un compte.
-const PUBLIC_PAGES = new Set(["library/page.tsx", "library/[subject]/page.tsx", "doc/[id]/page.tsx"]);
-const rel = (f: string) => path.relative(APP_DIR, f).split(path.sep).join("/");
+const isClient = (src: string) => /^\s*["']use client["']/.test(src);
 
-describe("pages publiques", () => {
-  it.each([...PUBLIC_PAGES])("%s lit la session avec getCurrentUser()", (r) => {
-    const src = fs.readFileSync(path.join(APP_DIR, r), "utf8");
-    const exported = src.match(/export (default )?async function \w+/g) ?? [];
-    expect(src).not.toMatch(/requireUser\(/);
-    expect((src.match(/await getCurrentUser\(/g) ?? []).length).toBeGreaterThanOrEqual(exported.length);
-  });
-});
-
-describe("pages authentifiées", () => {
-  const files = pages(APP_DIR).filter((f) => !PUBLIC_PAGES.has(rel(f)));
-
-  it("trouve les pages du groupe (app)", () => {
-    expect(files.length).toBeGreaterThanOrEqual(6);
+describe("pages membres", () => {
+  it("la coquille du groupe (app) exige un compte validé (RequireAuth)", () => {
+    const layout = fs.readFileSync(path.join(APP_DIR, "layout.tsx"), "utf8");
+    expect(layout).toMatch(/<RequireAuth>/);
   });
 
-  it.each(files.map((f) => [path.relative(APP_DIR, f), f]))("%s appelle requireUser()", (_rel, file) => {
+  // Conversions encore à faire (plan github.io + Supabase, tâche 8) : la liste doit finir vide.
+  const PENDING_CONVERSION = ["training/[id]/page.tsx"];
+  it("aucune page à segment dynamique [param] (export statique github.io)", () => {
+    const dynamicPages = pages(APP_DIR)
+      .map((f) => path.relative(APP_DIR, f).split(path.sep).join("/"))
+      .filter((r) => /\[[^\]]+\]/.test(r));
+    expect(dynamicPages).toEqual(PENDING_CONVERSION);
+  });
+
+  const serverPages = pages(APP_DIR).filter((f) => !isClient(fs.readFileSync(f, "utf8")));
+  it.each(serverPages.map((f) => [path.relative(APP_DIR, f), f]))("%s (serveur) appelle requireUser()", (_rel, file) => {
     const src = fs.readFileSync(file, "utf8");
     const exported = src.match(/export (default )?async function \w+/g) ?? [];
     const calls = src.match(/await requireUser\(/g) ?? [];
-    expect(calls.length).toBeGreaterThanOrEqual(1);
-    // une vérification par fonction exportée (page + generateMetadata)
-    expect(calls.length).toBeGreaterThanOrEqual(exported.length);
+    expect(calls.length).toBeGreaterThanOrEqual(Math.max(1, exported.length));
+  });
+
+  it("les pages admin converties passent par <RequireAuth admin>", () => {
+    for (const f of pages(path.join(APP_DIR, "admin"))) {
+      const src = fs.readFileSync(f, "utf8");
+      if (isClient(src)) expect(src, f).toMatch(/<RequireAuth admin>/);
+    }
   });
 });

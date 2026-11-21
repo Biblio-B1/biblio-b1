@@ -43,3 +43,11 @@ export const PROGRESS_STATUS_LABELS: Record<ProgressStatusValue, string> = {
 };
 export const parseStatus = (s?: string): ProgressStatusValue | undefined =>
   PROGRESS_STATUS_VALUES.includes(s as ProgressStatusValue) ? (s as ProgressStatusValue) : undefined;
+
+/** Filtre de titre simple (insensible à la casse et aux accents). */
+export function filterByTitle<T extends { title: string }>(docs: T[], q: string | undefined): T[] {
+  const norm = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const needle = norm(q?.trim() ?? "");
+  if (!needle) return docs;
+  return docs.filter((d) => norm(d.title).includes(needle));
+}

@@ -1,27 +1,33 @@
+"use client";
+
 import Link from "next/link";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { DocumentList } from "@/components/library/DocumentList";
 import { IconCamera, IconHomework, IconPen, IconUpload } from "@/components/layout/Icons";
+import { getMyCalendar } from "@/lib/api/calendar";
+import { listHomeworks } from "@/lib/api/homeworks";
+import { countBySubject, listDocuments, listSubjects } from "@/lib/api/library";
+import { useData } from "@/lib/api/use-data";
 import { homeworksForNextWeek, todayKeyInParis } from "@/lib/calendar-view";
-import { requireUser } from "@/server/auth/session";
-import { getStoredCalendar } from "@/server/boostcamp/calendar";
-import { getDb } from "@/server/db/client";
-import { listDocuments } from "@/server/documents";
-import { listHomeworks } from "@/server/homeworks";
-import { countBySubject } from "@/server/library";
-import { listSubjects } from "@/server/subjects";
+import { subjectHref } from "@/lib/routes";
 
-export const metadata = { title: "Tableau de bord" };
-
-export default async function Dashboard() {
-  const user = await requireUser();
-  const db = getDb();
-  const subjects = listSubjects(db);
-  const docs = listDocuments(db);
-  const counts = countBySubject(db);
-  const homeworks = listHomeworks(db);
+export default function Dashboard() {
+  const { profile } = useAuth();
+  const { data, error } = useData(async () => {
+    const [subjects, docs, counts, homeworks, calendar] = await Promise.all([
+      listSubjects(),
+      listDocuments({ limit: 9 }),
+      countBySubject(),
+      listHomeworks(),
+      getMyCalendar(),
+    ]);
+    return { subjects, docs, counts, homeworks, calendar };
+  }, []);
+  if (error) return <p role="alert" className="text-danger">{error}</p>;
+  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  const { subjects, docs, counts, homeworks, calendar } = data;
   const nextWeekHomeworks = homeworksForNextWeek(homeworks, todayKeyInParis());
-  const calendar = getStoredCalendar(db, user.id);
   const calendarSubjects = subjects.map((s) => ({
     id: s.id,
     name: s.name,
@@ -33,7 +39,7 @@ export default async function Dashboard() {
   return (
     <div className="flex flex-col gap-10">
       <section className="flex flex-col gap-4">
-        <h1 className="page-title">Bonjour {user.name}</h1>
+        <h1 className="page-title">Bonjour {profile?.name}</h1>
         <div className="flex flex-wrap gap-2">
           <Link href="/upload" className="btn btn-primary">
             <IconUpload size={16} /> Déposer des fichiers
@@ -65,7 +71,7 @@ export default async function Dashboard() {
           {subjects.map((s) => (
             <li key={s.id}>
               <Link
-                href={`/library/${s.slug}`}
+                href={subjectHref(s.slug)}
                 className="flex h-full flex-col justify-between gap-6 rounded-lg border border-line bg-surface p-3 transition-colors hover:border-line-strong"
                 style={{ boxShadow: `inset 4px 0 0 ${s.color}` }}
               >
@@ -118,8 +124,8 @@ export default async function Dashboard() {
               La bibliothèque est vide.{" "}
               <Link href="/upload" className="text-ink underline underline-offset-2">
                 Déposez un premier cours
-              </Link>{" "}
-              ou lancez <code className="font-mono text-[13px]">npm run import</code>.
+              </Link>
+              .
             </>
           }
         />

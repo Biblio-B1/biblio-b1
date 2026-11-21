@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Spine } from "@/components/layout/Spine";
 import { DOC_TYPE_LABELS, formatDate } from "@/lib/labels";
-import type { Document } from "@/server/documents";
-import type { Subject } from "@/server/subjects";
+import type { Document, Subject } from "@/lib/api/types";
+import { docHref } from "@/lib/routes";
 
 /** Liste de documents façon étagère : tranche colorée de la matière + titre + méta. */
 export function DocumentList({
@@ -24,7 +24,7 @@ export function DocumentList({
         const s = d.subjectId ? byId.get(d.subjectId) : undefined;
         return (
           <li key={d.id}>
-            <Link href={`/doc/${d.id}`} className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-sunken sm:px-4">
+            <Link href={docHref(d.id)} className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-sunken sm:px-4">
               <Spine color={s?.color ?? null} className="h-8" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium text-ink">{d.title}</span>
@@ -45,9 +45,10 @@ export function DocumentList({
   );
 }
 
-export function TypeFilter({ active, base, q }: { active?: string; base: string; q?: string }) {
+/** `extra` : paramètres à conserver (ex. { slug } pour une matière). */
+export function TypeFilter({ active, base, q, extra = {} }: { active?: string; base: string; q?: string; extra?: Record<string, string> }) {
   const href = (t?: string) => {
-    const p = new URLSearchParams();
+    const p = new URLSearchParams(extra);
     if (t) p.set("type", t);
     if (q) p.set("q", q);
     const s = p.toString();

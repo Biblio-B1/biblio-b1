@@ -1,44 +1,61 @@
+"use client";
+
 import { Suspense } from "react";
+import { RequireAuth } from "@/components/auth/RequireAuth";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
-import { getCurrentUser } from "@/server/auth/session";
-import { getDb } from "@/server/db/client";
-import { countBySubject } from "@/server/library";
-import { countPendingUsers } from "@/server/auth/signup";
-import { listSubjects } from "@/server/subjects";
-
-export const dynamic = "force-dynamic";
+import { countBySubject, listSubjects } from "@/lib/api/library";
+import { useData } from "@/lib/api/use-data";
+import { getSupabase } from "@/lib/supabase/client";
 
 /**
- * Coquille des pages : sidebar matières + barre du haut.
- * Pas de redirection ici : les pages publiques (bibliothèque, documents) s'affichent sans compte,
- * les autres pages appellent requireUser() elles-mêmes.
+ * Coquille des pages membres : toutes exigent un compte validé (RequireAuth ; la RLS protège de
+ * toute façon les données). Barre latérale des matières + barre du haut.
  */
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const current = await getCurrentUser();
-  const user = current ? { name: current.name, role: current.role } : null;
-  const db = getDb();
-  const counts = countBySubject(db);
-  const subjects = listSubjects(db).map((s) => ({
+function Shell({ children }: { children: React.ReactNode }) {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === "admin";
+  const nav = useData(async () => {
+    const [subjects, counts] = await Promise.all([listSubjects(), countBySubject()]);
+    let pending = 0;
+    if (isAdmin) {
+      const { data } = await getSupabase().rpc("pending_requests");
+      pending = (data as unknown[] | null)?.length ?? 0;
+    }
+    return { subjects, counts, pending };
+  }, [isAdmin]);
+
+  const subjects = (nav.data?.subjects ?? []).map((s) => ({
     slug: s.slug,
     name: s.name,
     color: s.color,
-    count: counts.get(s.id) ?? 0,
+    count: nav.data?.counts.get(s.id) ?? 0,
   }));
   return (
     <div className="flex min-h-dvh">
-      <Sidebar
-        subjects={subjects}
-        unclassified={counts.get(null) ?? 0}
-        user={user}
-        pendingUsers={user?.role === "admin" ? countPendingUsers(db) : 0}
-      />
+      <Suspense fallback={null}>
+        <Sidebar
+          subjects={subjects}
+          unclassified={nav.data?.counts.get(null) ?? 0}
+          user={profile ? { name: profile.name, role: profile.role } : null}
+          pendingUsers={nav.data?.pending ?? 0}
+        />
+      </Suspense>
       <div className="flex min-w-0 flex-1 flex-col">
         <Suspense fallback={<div className="h-14 border-b border-line" />}>
-          <TopBar signedIn={user !== null} />
+          <TopBar signedIn />
         </Suspense>
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
       </div>
     </div>
+  );
+}
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <RequireAuth>
+      <Shell>{children}</Shell>
+    </RequireAuth>
   );
 }

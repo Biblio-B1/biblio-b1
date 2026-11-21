@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { logoutAction } from "@/app/(auth)/actions";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { UNCLASSIFIED_SLUG, subjectHref } from "@/lib/routes";
 import { Spine } from "./Spine";
 import { IconBooks, IconCalendar, IconCheckList, IconClose, IconHome, IconHomework, IconPen, IconSettings, IconUpload, IconUsers } from "./Icons";
 
@@ -36,6 +37,8 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
 
 function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Props) {
   const pathname = usePathname();
+  const slug = useSearchParams().get("slug");
+  const { signOut } = useAuth();
   const is = (p: string) => pathname === p;
   return (
     <div className="flex h-full flex-col gap-6 px-3 py-4">
@@ -81,14 +84,14 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
       <nav className="flex flex-col gap-0.5" aria-label="Matières">
         <p className="px-2 pb-1 text-[12.5px] font-medium text-ink-3">Matières</p>
         {subjects.map((s) => (
-          <NavLink key={s.slug} href={`/library/${s.slug}`} active={pathname === `/library/${s.slug}`}>
+          <NavLink key={s.slug} href={subjectHref(s.slug)} active={pathname === "/library/subject" && slug === s.slug}>
             <Spine color={s.color} />
             <span className="min-w-0 flex-1 truncate">{s.name}</span>
             <span className="text-[12.5px] text-ink-3 tabular-nums">{s.count || ""}</span>
           </NavLink>
         ))}
         {unclassified > 0 && (
-          <NavLink href="/library/sans-matiere" active={pathname === "/library/sans-matiere"}>
+          <NavLink href={subjectHref(UNCLASSIFIED_SLUG)} active={pathname === "/library/subject" && slug === UNCLASSIFIED_SLUG}>
             <Spine color={null} />
             <span className="flex-1">Sans matière</span>
             <span className="text-[12.5px] text-ink-3 tabular-nums">{unclassified}</span>
@@ -113,9 +116,6 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
               </span>
             )}
           </NavLink>
-          <NavLink href="/admin/invites" active={is("/admin/invites")}>
-            <IconUsers /> Invitations
-          </NavLink>
           <NavLink href="/admin/reports" active={is("/admin/reports")}>
             <IconCheckList /> Signalements
           </NavLink>
@@ -127,9 +127,13 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
         <span className="truncate text-ink-2" title={user.name}>
           {user.name}
         </span>
-        <form action={logoutAction}>
-          <button className="text-[13px] text-ink-3 underline-offset-2 hover:text-ink hover:underline">Se déconnecter</button>
-        </form>
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="text-[13px] text-ink-3 underline-offset-2 hover:text-ink hover:underline"
+        >
+          Se déconnecter
+        </button>
       </div>
       ) : (
         <div className="mt-auto border-t border-line px-2 pt-3 text-sm">

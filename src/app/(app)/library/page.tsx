@@ -1,51 +1,63 @@
+"use client";
+
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { DocumentList, TypeFilter } from "@/components/library/DocumentList";
-import { parseType } from "@/lib/labels";
-import { getCurrentUser } from "@/server/auth/session";
-import { getDb } from "@/server/db/client";
-import { listDocuments } from "@/server/documents";
-import { filterByTitle } from "@/server/library";
-import { listSubjects } from "@/server/subjects";
+import { listDocuments, listSubjects } from "@/lib/api/library";
+import { useData } from "@/lib/api/use-data";
+import { filterByTitle, parseType } from "@/lib/labels";
 
-export const metadata = { title: "Bibliothèque" };
-
-type SP = Promise<{ type?: string; q?: string }>;
-
-export default async function LibraryPage({ searchParams }: { searchParams: SP }) {
-  await getCurrentUser(); // page publique : consultation sans compte
-  const { type: rawType, q: rawQ } = await searchParams;
-  const type = parseType(rawType);
-  const q = typeof rawQ === "string" ? rawQ.slice(0, 200) : undefined;
-  const db = getDb();
-  const subjects = listSubjects(db);
-  const docs = filterByTitle(listDocuments(db, { type }), q);
+function Library() {
+  const params = useSearchParams();
+  const type = parseType(params.get("type") ?? undefined);
+  const q = params.get("q")?.slice(0, 200) || undefined;
+  const { data, error } = useData(async () => {
+    const [subjects, docs] = await Promise.all([listSubjects(), listDocuments({ type })]);
+    return { subjects, docs };
+  }, [type]);
+  const docs = filterByTitle(data?.docs ?? [], q);
 
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-col gap-1">
         <h1 className="page-title">Bibliothèque</h1>
         <p className="text-ink-2">
-          {q ? `${docs.length} résultat${docs.length > 1 ? "s" : ""} pour « ${q} »` : `${docs.length} document${docs.length > 1 ? "s" : ""}`}
+          {!data
+            ? error ?? "Chargement…"
+            : q
+              ? `${docs.length} résultat${docs.length > 1 ? "s" : ""} pour « ${q} »`
+              : `${docs.length} document${docs.length > 1 ? "s" : ""}`}
         </p>
       </header>
       <TypeFilter active={type} base="/library" q={q} />
-      <DocumentList
-        docs={docs}
-        subjects={subjects}
-        empty={
-          q || type ? (
-            "Aucun document ne correspond. Essayez un autre mot ou retirez le filtre."
-          ) : (
-            <>
-              Aucun document pour l&apos;instant.{" "}
-              <Link href="/upload" className="text-ink underline underline-offset-2">
-                Déposer des fichiers
-              </Link>
-              {" "}ou lancer <code className="font-mono text-[13px]">npm run import</code> sur le serveur.
-            </>
-          )
-        }
-      />
+      {data && (
+        <DocumentList
+          docs={docs}
+          subjects={data.subjects}
+          empty={
+            q || type ? (
+              "Aucun document ne correspond. Essayez un autre mot ou retirez le filtre."
+            ) : (
+              <>
+                Aucun document pour l&apos;instant.{" "}
+                <Link href="/upload" className="text-ink underline underline-offset-2">
+                  Déposer des fichiers
+                </Link>
+                .
+              </>
+            )
+          }
+        />
+      )}
     </div>
+  );
+}
+
+export default function LibraryPage() {
+  return (
+    <Suspense fallback={null}>
+      <Library />
+    </Suspense>
   );
 }

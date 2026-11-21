@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { IconChevron, IconExpand } from "@/components/layout/Icons";
+import { docHref } from "@/lib/routes";
 
 export type GalleryImage = { id: string; src: string; title: string };
 
@@ -145,7 +146,7 @@ export function ImageGallery({ images, initialId }: { images: GalleryImage[]; in
               {img.id !== initialId && (
                 <>
                   {" "}
-                  <Link href={`/doc/${img.id}`} className="underline underline-offset-2">
+                  <Link href={docHref(img.id)} className="underline underline-offset-2">
                     {img.title}
                   </Link>
                 </>
