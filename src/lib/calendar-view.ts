@@ -336,12 +336,8 @@ export function homeworksForEvent(
   return homeworks.filter((hw) => hw.subjectId === subject.id && hw.dueDate === dayKey);
 }
 
-/** Supprime le bloc « Contenu pédagogique de cette séance : ... » et son HTML Boostcamp/Hyperplanning. */
-export function cleanEventDescription(description: string): string {
-  return description
-    .replace(/\n*Contenu pédagogique de cette séance\s*:[\s\S]*$/i, "")
-    .trim();
-}
+// Partagé avec l'Edge Function `calendar` (une seule définition).
+export { cleanEventDescription } from "../../supabase/functions/_shared/calendar-core";
 
 /** Devoirs à rendre au cours de la semaine prochaine (lundi à dimanche suivants). */
 export function homeworksForNextWeek<T extends { dueDate: string }>(homeworks: T[], todayKey: string): T[] {

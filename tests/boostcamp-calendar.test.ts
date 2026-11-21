@@ -2,12 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  decryptCalendarUrl,
-  encryptCalendarUrl,
-  parseCalendar,
-  validateCalendarFeedUrl,
-} from "@/server/boostcamp/calendar";
+import { decryptCalendarUrl, encryptCalendarUrl } from "@/server/boostcamp/calendar";
+// Analyse et validation : le cœur partagé avec l'Edge Function `calendar`.
+import { parseCalendar, validateCalendarFeedUrl } from "../supabase/functions/_shared/calendar-core";
 
 afterEach(() => {
   vi.unstubAllEnvs();
