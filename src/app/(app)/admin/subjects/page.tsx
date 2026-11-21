@@ -1,20 +1,30 @@
-import { Spine } from "@/components/layout/Spine";
-import { requireUser } from "@/server/auth/session";
-import { getDb } from "@/server/db/client";
-import { formatKeywordLines, listSubjects, type SubjectRules } from "@/server/subjects";
-import { createSubjectAction, deleteSubjectAction, updateSubjectAction } from "./actions";
-import { SubjectForm } from "./SubjectForm";
+"use client";
 
-export const metadata = { title: "Matières et règles" };
+import { RequireAuth } from "@/components/auth/RequireAuth";
+import type { FormState } from "@/components/ActionForm";
+import { Spine } from "@/components/layout/Spine";
+import { listSubjects } from "@/lib/api/library";
+import { createSubjectAction, deleteSubjectAction, updateSubjectAction } from "@/lib/api/subjects";
+import { useData } from "@/lib/api/use-data";
+import { formatKeywordLines, type SubjectRules } from "@/lib/subject-rules";
+import { SubjectForm } from "./SubjectForm";
 
 const rulesOf = (r: unknown): SubjectRules =>
   r && typeof r === "object" && "pathPatterns" in r && "keywords" in r
     ? (r as SubjectRules)
     : { pathPatterns: [], keywords: {} };
 
-export default async function SubjectsAdminPage() {
-  await requireUser("admin");
-  const subjects = listSubjects(getDb());
+function SubjectsAdmin() {
+  const { data: subjects, reload } = useData(listSubjects, []);
+  // Recharge la liste après chaque enregistrement réussi.
+  const then =
+    (fn: (prev: FormState, fd: FormData) => Promise<FormState>) =>
+    async (prev: FormState, fd: FormData): Promise<FormState> => {
+      const r = await fn(prev, fd);
+      if (r && !r.error) reload();
+      return r;
+    };
+  if (!subjects) return <p className="text-sm text-ink-3">Chargement…</p>;
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-1">
@@ -35,7 +45,12 @@ export default async function SubjectsAdminPage() {
                 {s.name}
                 <code className="font-mono text-[12.5px] font-normal text-ink-3">{s.slug}</code>
               </h2>
-              <form action={deleteSubjectAction.bind(null, s.id)}>
+              <form
+                action={async () => {
+                  await deleteSubjectAction(s.id);
+                  reload();
+                }}
+              >
                 <button type="submit" className="btn btn-ghost h-8 px-2 text-[13px] text-danger">
                   Supprimer
                 </button>
@@ -43,7 +58,7 @@ export default async function SubjectsAdminPage() {
             </div>
             <SubjectForm
               idPrefix={s.id}
-              action={updateSubjectAction.bind(null, s.id)}
+              action={then(updateSubjectAction.bind(null, s.id))}
               submitLabel="Enregistrer"
               initial={{
                 name: s.name,
@@ -62,12 +77,20 @@ export default async function SubjectsAdminPage() {
         </h2>
         <SubjectForm
           idPrefix="new"
-          action={createSubjectAction}
+          action={then(createSubjectAction)}
           resetOnSuccess
           submitLabel="Ajouter la matière"
           initial={{ name: "", color: "#0891b2", pathPatterns: "", keywords: "" }}
         />
       </section>
     </div>
+  );
+}
+
+export default function SubjectsAdminPage() {
+  return (
+    <RequireAuth admin>
+      <SubjectsAdmin />
+    </RequireAuth>
   );
 }

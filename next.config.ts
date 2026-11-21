@@ -1,34 +1,26 @@
 import type { NextConfig } from "next";
 
+// Site exporté en pages statiques (dossier out/) pour GitHub Pages : https://biblio-b1.github.io/biblio-b1/
+// NEXT_PUBLIC_BASE_PATH = "/biblio-b1" au build Pages (workflow), vide en local (npm run dev).
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 const nextConfig: NextConfig = {
-  // Préfixe github.io (« /biblio-b1 » au build Pages) toujours défini, y compris dans les workers.
-  env: { NEXT_PUBLIC_BASE_PATH: process.env.NEXT_PUBLIC_BASE_PATH ?? "" },
-  serverExternalPackages: ["better-sqlite3", "@node-rs/argon2", "pdfjs-dist", "mammoth"],
-  async headers() {
-    return [
-      {
-        // Moteurs WASM (≈ 115 Mo) : chemins versionnés (/runtimes/<moteur>/<version>/…, cf.
-        // scripts/copy-runtimes.mjs), donc jamais modifiés en place → cache d'un an.
-        source: "/runtimes/:path*",
-        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
-      },
-    ];
-  },
+  output: "export",
+  basePath: basePath || undefined,
+  // GitHub Pages sert /page/index.html : adresses avec « / » final.
+  trailingSlash: true,
+  images: { unoptimized: true },
+  // Préfixe toujours défini, y compris dans les workers (moteurs d'exécution, pdf.js).
+  env: { NEXT_PUBLIC_BASE_PATH: basePath },
   webpack: (config, { dev }) => {
     if (dev) {
-      // Les fichiers déposés (storage/) et les sorties d'outils ne doivent pas relancer la compilation.
+      // Les fichiers locaux (storage/, outils) ne doivent pas relancer la compilation.
       config.watchOptions = {
         ...config.watchOptions,
         ignored: ["**/node_modules/**", "**/.git/**", "**/storage/**", "**/.playwright-mcp/**"],
       };
     }
     return config;
-  },
-  experimental: {
-    // Uploads : un fichier (50 Mo max) par appel de server action, plus la marge multipart.
-    serverActions: { bodySizeLimit: "52mb" },
-    // Le middleware tronque sinon les corps de requête au-delà de 10 Mo.
-    middlewareClientMaxBodySize: "52mb",
   },
 };
 

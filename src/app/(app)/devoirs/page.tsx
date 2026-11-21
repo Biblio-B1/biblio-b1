@@ -1,22 +1,16 @@
-import { requireUser } from "@/server/auth/session";
-import { getDb } from "@/server/db/client";
-import { listHomeworks } from "@/server/homeworks";
-import { listSubjects } from "@/server/subjects";
+"use client";
+
+import { PageRefreshProvider } from "@/components/PageRefresh";
+import { listHomeworks } from "@/lib/api/homeworks";
+import { listSubjects } from "@/lib/api/library";
+import { useData } from "@/lib/api/use-data";
 import { HomeworkClient } from "./HomeworkClient";
 
-export const metadata = { title: "Devoirs" };
-export const dynamic = "force-dynamic";
-
-export default async function DevoirsPage() {
-  await requireUser();
-  const db = getDb();
-  const subjects = listSubjects(db).map((s) => ({
-    id: s.id,
-    name: s.name,
-    slug: s.slug,
-    color: s.color,
-  }));
-  const homeworks = listHomeworks(db);
+export default function DevoirsPage() {
+  const { data, error, reload } = useData(async () => {
+    const [subjects, homeworks] = await Promise.all([listSubjects(), listHomeworks()]);
+    return { subjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color })), homeworks };
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -26,7 +20,15 @@ export default async function DevoirsPage() {
           Espace collaboratif : ajoutez et consultez les devoirs à rendre, visibles et mis à jour pour toute la classe.
         </p>
       </header>
-      <HomeworkClient subjects={subjects} homeworks={homeworks} />
+      {error ? (
+        <p role="alert" className="text-danger">{error}</p>
+      ) : !data ? (
+        <p className="text-sm text-ink-3">Chargement…</p>
+      ) : (
+        <PageRefreshProvider value={reload}>
+          <HomeworkClient subjects={data.subjects} homeworks={data.homeworks} />
+        </PageRefreshProvider>
+      )}
     </div>
   );
 }

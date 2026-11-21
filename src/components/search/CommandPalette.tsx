@@ -4,6 +4,7 @@ import { Command } from "cmdk";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { IconSearch } from "@/components/layout/Icons";
+import { search } from "@/lib/api/search";
 import { DOC_TYPE_LABELS, DOC_TYPE_VALUES, type DocTypeValue } from "@/lib/labels";
 
 export type PaletteResult = {
@@ -36,17 +37,9 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     setState("loading");
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?${new URLSearchParams({ q: term, limit: "20" })}`, { signal: ctrl.signal });
-        if (res.status === 401) {
-          if (mine !== seq.current) return;
-          setResults([]);
-          setState("expired");
-          return;
-        }
-        if (!res.ok || !res.headers.get("content-type")?.includes("json")) throw new Error("search");
-        const data = (await res.json()) as { results: PaletteResult[] };
-        if (mine !== seq.current) return;
-        setResults(data.results);
+        const found = await search(term, {}, 20);
+        if (mine !== seq.current || ctrl.signal.aborted) return;
+        setResults(found);
         setState("done");
       } catch (e) {
         if ((e as Error).name === "AbortError" || mine !== seq.current) return;

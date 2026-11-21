@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePageRefresh } from "@/components/PageRefresh";
 import { IconChevron, IconHomework } from "@/components/layout/Icons";
 import {
   allDayEventsForDay,
@@ -224,7 +224,8 @@ export function CalendarView({
   subjects?: CalendarSubject[];
   homeworks?: CalendarHomework[];
 }) {
-  const router = useRouter();
+  // Actualisation toutes les minutes : fournie par la page (PageRefreshProvider), sinon sans effet.
+  const router = usePageRefresh();
   const [today, setToday] = useState<string>();
   const [now, setNow] = useState<Date>();
   const [active, setActive] = useState<{ event: ScheduleEvent; dayKey: string }>();

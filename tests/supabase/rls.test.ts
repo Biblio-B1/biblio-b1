@@ -116,10 +116,27 @@ describe("compte actif", () => {
     ).rejects.toThrow();
   });
 
-  it("la recherche trouve le document (accents ignorés)", async () => {
+  it("la recherche trouve le document (accents ignorés) avec de quoi filtrer", async () => {
     await t.as(activeId);
-    const r = await t.db.query<{ kind: string; id: string }>("select kind, id from public.search('POINTEURS')");
-    expect(r.rows).toContainEqual(expect.objectContaining({ kind: "document", id: docId }));
+    const r = await t.db.query<Record<string, unknown>>("select * from public.search('POINTEURS')");
+    expect(r.rows).toContainEqual(
+      expect.objectContaining({ entity: "document", id: docId, doc_type: "course", subject_id: subjectId, title: "Cours sur les pointeurs" }),
+    );
+    expect(r.rows[0].created_at).toBeTruthy();
+  });
+
+  it("l'extrait surligne avec <mark> et échappe le HTML du document", async () => {
+    await t.admin(async () => {
+      await t.db.query(
+        `insert into public.documents (title, type, file_path, mime, sha256, text, source)
+         values ('Piège', 'note', 'x.md', 'text/markdown', 'xss', 'malloc <script>alert(1)</script> fin', 'upload')`,
+      );
+    });
+    await t.as(activeId);
+    const r = await t.db.query<{ snippet: string }>("select snippet from public.search('malloc') where title = 'Piège'");
+    expect(r.rows[0].snippet).toContain("<mark>malloc</mark>");
+    expect(r.rows[0].snippet).not.toContain("<script>");
+    expect(r.rows[0].snippet).toContain("&lt;script&gt;");
   });
 });
 

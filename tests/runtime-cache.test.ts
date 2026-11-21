@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import nextConfig from "../next.config";
 import { createBrowserEngine } from "@/lib/runners/browser";
 import { RUNTIME_VERSIONS, runtimePath } from "@/lib/runners/runtime-versions";
 
@@ -26,9 +25,5 @@ describe("moteurs WASM : chemins versionnés et cache", () => {
     expect(src).toMatch(/path\.join\(base, version\)/);
   });
 
-  it("next.config : /runtimes/:path* en cache public d'un an, immutable", async () => {
-    const rules = (await nextConfig.headers?.()) ?? [];
-    const rule = rules.find((r) => r.source === "/runtimes/:path*");
-    expect(rule?.headers).toContainEqual({ key: "Cache-Control", value: "public, max-age=31536000, immutable" });
-  });
+  // GitHub Pages n'accepte pas d'en-têtes personnalisés : le cache repose sur les chemins versionnés.
 });

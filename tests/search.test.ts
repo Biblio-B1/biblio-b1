@@ -209,13 +209,6 @@ describe("parseSearchQuery et route", () => {
     const p = parseSearchQuery({ q: "a", to: "2026-03-01" })!.params;
     expect(p.to!.toISOString()).toBe("2026-03-01T23:59:59.999Z");
   });
-
-  it("la route /api/search valide elle-même la session", () => {
-    const src = fs.readFileSync(path.resolve(import.meta.dirname, "../src/app/api/search/route.ts"), "utf8");
-    expect(src).toMatch(/await getCurrentUser[(]/);
-    expect(src).toMatch(/status: 401/);
-    expect(src).toMatch(/parseSearchQuery/);
-  });
 });
 
 describe("fraîcheur de l'index", () => {

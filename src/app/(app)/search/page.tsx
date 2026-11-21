@@ -1,28 +1,39 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Spine } from "@/components/layout/Spine";
+import { listSubjects } from "@/lib/api/library";
+import { listAuthors, search } from "@/lib/api/search";
+import { useData } from "@/lib/api/use-data";
 import { DOC_TYPE_LABELS, DOC_TYPE_VALUES, formatDate } from "@/lib/labels";
-import { requireUser } from "@/server/auth/session";
-import { getDb } from "@/server/db/client";
-import { listAuthors, parseSearchQuery, search } from "@/server/search";
-import { listSubjects } from "@/server/subjects";
 
-export const metadata = { title: "Recherche" };
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-type SP = Promise<Record<string, string | string[] | undefined>>;
-
-const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-
-export default async function SearchPage({ searchParams }: { searchParams: SP }) {
-  await requireUser();
-  const sp = await searchParams;
-  const raw = Object.fromEntries(["q", "subject", "kind", "author", "from", "to"].map((k) => [k, first(sp[k])]));
-  const parsed = parseSearchQuery({ ...raw, limit: "50" });
-  const db = getDb();
-  const subjects = listSubjects(db);
-  const authors = listAuthors(db);
+function SearchView() {
+  const sp = useSearchParams();
+  const router = useRouter();
+  const raw = Object.fromEntries(["q", "subject", "kind", "author", "from", "to"].map((k) => [k, sp.get(k) ?? undefined])) as Record<
+    string,
+    string | undefined
+  >;
+  const tooLong = (raw.q ?? "").trim().length > 200;
+  const badDates = (!!raw.from && !DATE.test(raw.from)) || (!!raw.to && !DATE.test(raw.to));
+  const parsed = !tooLong && !badDates;
+  const v = raw;
+  const { data } = useData(async () => {
+    const [subjects, authors, results] = await Promise.all([
+      listSubjects(),
+      listAuthors(),
+      parsed && raw.q ? search(raw.q, { subject: raw.subject, kind: raw.kind, author: raw.author, from: raw.from, to: raw.to }) : Promise.resolve([]),
+    ]);
+    return { subjects, authors, results };
+  }, [sp.toString()]);
+  const subjects = data?.subjects ?? [];
+  const authors = data?.authors ?? [];
+  const results = data?.results ?? [];
   const bySubject = new Map(subjects.map((s) => [s.id, s]));
-  const v = parsed?.query;
-  const results = parsed ? search(db, parsed.params) : [];
 
   return (
     <div className="flex flex-col gap-5">
@@ -30,7 +41,7 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
         <h1 className="page-title">Recherche</h1>
         <p className="text-ink-2" aria-live="polite">
           {!parsed
-            ? (raw.q ?? "").trim().length > 200
+            ? tooLong
               ? "Recherche trop longue (200 caractères max)."
               : "Filtres invalides : vérifiez les dates."
             : v?.q
@@ -39,7 +50,15 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
         </p>
       </header>
 
-      <form action="/search" role="search" className="grid grid-cols-1 gap-3 rounded-lg border border-line bg-surface p-3 sm:grid-cols-2 lg:grid-cols-3">
+      <form
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const p = new URLSearchParams();
+          for (const [k, val] of new FormData(e.currentTarget)) if (String(val).trim()) p.set(k, String(val).trim());
+          router.push(`/search?${p}`);
+        }}
+        className="grid grid-cols-1 gap-3 rounded-lg border border-line bg-surface p-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="label sm:col-span-2 lg:col-span-3">
           Mots
           <input name="q" type="search" defaultValue={v?.q ?? raw.q ?? ""} maxLength={200} placeholder="pointeur, mémoire…" className="input" />
@@ -119,5 +138,13 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
         </ul>
       )}
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchView />
+    </Suspense>
   );
 }

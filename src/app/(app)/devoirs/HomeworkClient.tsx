@@ -1,14 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePageRefresh } from "@/components/PageRefresh";
 import type { FormState } from "@/components/ActionForm";
 import { Spine } from "@/components/layout/Spine";
 import { IconDownload, IconHomework } from "@/components/layout/Icons";
 import { labelDate, todayKeyInParis } from "@/lib/calendar-view";
-import { UPLOAD_ACCEPT, fileUrl, formatSize } from "@/lib/labels";
-import type { HomeworkRow } from "@/server/homeworks";
-import { createHomeworkAction, deleteHomeworkAction } from "./actions";
+import { signedFileUrl } from "@/lib/api/files";
+import { UPLOAD_ACCEPT, formatSize } from "@/lib/labels";
+import { createHomeworkAction, deleteHomeworkAction, type HomeworkRow } from "@/lib/api/homeworks";
 
 const MAX_ATTACHMENT_MB = 30;
 const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024;
@@ -72,7 +72,11 @@ function HomeworkItem({ hw, onDeleted }: { hw: HomeworkRow; onDeleted: () => voi
         <div>
           {hw.attachmentPath && hw.attachmentName && (
             <a
-              href={fileUrl(hw.attachmentPath, true)}
+              href="#"
+              onClick={async (e) => {
+                e.preventDefault();
+                window.location.href = await signedFileUrl(hw.attachmentPath!, { download: hw.attachmentName ?? true });
+              }}
               className="inline-flex items-center gap-1.5 rounded-md border border-line bg-sunken px-2.5 py-1 text-xs font-medium text-ink hover:border-line-strong"
             >
               <IconDownload size={14} />
@@ -101,7 +105,7 @@ export function HomeworkClient({
   subjects: SubjectOpt[];
   homeworks: HomeworkRow[];
 }) {
-  const router = useRouter();
+  const router = usePageRefresh();
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
   const [dueDate, setDueDate] = useState("");
   const [title, setTitle] = useState("");
