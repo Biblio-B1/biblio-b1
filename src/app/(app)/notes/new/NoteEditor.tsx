@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { MarkdownView } from "@/components/viewers/MarkdownView";
-import { createNoteAction } from "./actions";
+import { createNoteAction, type NoteState } from "@/lib/api/notes";
+import { docHref } from "@/lib/routes";
 
 const PLACEHOLDER = `## Pointeurs
 
@@ -18,7 +20,12 @@ Formule : $\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$`;
 
 /** Éditeur Markdown avec aperçu (côte à côte sur grand écran, onglets sur mobile). */
 export function NoteEditor({ subjects }: { subjects: { id: string; name: string }[] }) {
-  const [state, action, pending] = useActionState(createNoteAction, null);
+  const router = useRouter();
+  const [state, action, pending] = useActionState(async (prev: NoteState, fd: FormData) => {
+    const r = await createNoteAction(prev, fd);
+    if (r?.id) router.push(docHref(r.id));
+    return r;
+  }, null);
   // Champs contrôlés : React réinitialise le formulaire après l'action (erreur incluse).
   const [title, setTitle] = useState("");
   const [subjectId, setSubjectId] = useState("");

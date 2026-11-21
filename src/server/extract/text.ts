@@ -1,14 +1,13 @@
 import fs from "node:fs/promises";
+import { documentText, MAX_TEXT_CHARS } from "@/lib/pdf-text";
 
-/** Plafonds d'extraction : gardent les imports rapides sur de gros PDF. */
-export const MAX_PDF_PAGES = 200;
-export const MAX_TEXT_CHARS = 2_000_000;
+/** Plafonds d'extraction (partagés avec le navigateur) : gardent les imports rapides sur de gros PDF. */
+export { MAX_PDF_PAGES, MAX_TEXT_CHARS } from "@/lib/pdf-text";
 
 /** Taille max d'upload : au-delà, pas d'extraction. */
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-type PdfItem = { str?: string; hasEOL?: boolean; transform?: number[] };
 
 async function pdfText(absPath: string): Promise<string> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -16,33 +15,7 @@ async function pdfText(absPath: string): Promise<string> {
   // Sans worker configuré, pdf.js charge lui-même son worker "fake" dans le thread courant (Node).
   const task = pdfjs.getDocument({ data, useSystemFonts: true, verbosity: 0 });
   try {
-    const doc = await task.promise;
-    let out = "";
-    const pages = Math.min(doc.numPages, MAX_PDF_PAGES);
-    for (let n = 1; n <= pages && out.length < MAX_TEXT_CHARS; n++) {
-      const page = await doc.getPage(n);
-      const content = await page.getTextContent();
-      let line = "";
-      let lastY: number | null = null;
-      for (const raw of content.items as PdfItem[]) {
-        if (typeof raw.str !== "string") continue;
-        const y = raw.transform?.[5] ?? null;
-        // Changement de ligne : saut de y notable (> 2 pt) ou fin de ligne signalée.
-        if (lastY !== null && y !== null && Math.abs(y - lastY) > 2 && line) {
-          out += line.trimEnd() + "\n";
-          line = "";
-        }
-        line += raw.str;
-        if (y !== null) lastY = y;
-        if (raw.hasEOL) {
-          out += line.trimEnd() + "\n";
-          line = "";
-        }
-      }
-      if (line) out += line.trimEnd() + "\n";
-      page.cleanup();
-    }
-    return out.trim();
+    return await documentText(await task.promise);
   } finally {
     await task.destroy();
   }

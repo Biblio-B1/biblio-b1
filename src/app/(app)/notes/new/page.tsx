@@ -1,17 +1,15 @@
-import { requireUser } from "@/server/auth/session";
-import { getDb } from "@/server/db/client";
-import { listSubjects } from "@/server/subjects";
+"use client";
+
+import { listSubjects } from "@/lib/api/library";
+import { useData } from "@/lib/api/use-data";
 import { NoteEditor } from "./NoteEditor";
 
-export const metadata = { title: "Nouvelle fiche" };
-
-export default async function NewNotePage() {
-  await requireUser();
-  const subjects = listSubjects(getDb()).map((s) => ({ id: s.id, name: s.name }));
+export default function NewNotePage() {
+  const { data: subjects } = useData(listSubjects, []);
   return (
     <div className="flex flex-col gap-5">
       <h1 className="page-title">Nouvelle fiche</h1>
-      <NoteEditor subjects={subjects} />
+      {subjects ? <NoteEditor subjects={subjects.map((s) => ({ id: s.id, name: s.name }))} /> : <p className="text-sm text-ink-3">Chargement…</p>}
     </div>
   );
 }

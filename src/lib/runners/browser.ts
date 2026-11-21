@@ -30,7 +30,8 @@ export type { Language, RunResult } from "./types.ts";
 // Import d'une URL servie par Next, hors bundle webpack.
 const importUrl = (url: string): Promise<unknown> => import(/* webpackIgnore: true */ url);
 
-export function createBrowserEngine(baseUrl = "/runtimes"): Engine {
+// Préfixe github.io (/biblio-b1) injecté au build ; vide en local.
+export function createBrowserEngine(baseUrl = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/runtimes`): Engine {
   const clangBase = runtimePath("clang", baseUrl);
   const pyodideBase = runtimePath("pyodide", baseUrl);
   return createEngine({

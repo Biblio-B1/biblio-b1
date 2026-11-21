@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Préfixe github.io (« /biblio-b1 » au build Pages) toujours défini, y compris dans les workers.
+  env: { NEXT_PUBLIC_BASE_PATH: process.env.NEXT_PUBLIC_BASE_PATH ?? "" },
   serverExternalPackages: ["better-sqlite3", "@node-rs/argon2", "pdfjs-dist", "mammoth"],
   async headers() {
     return [

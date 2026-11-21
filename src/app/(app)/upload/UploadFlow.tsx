@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { IconCamera, IconClose, IconUpload } from "@/components/layout/Icons";
 import { DOC_TYPE_LABELS, DOC_TYPE_VALUES, MAX_UPLOAD_MB, UPLOAD_ACCEPT, formatSize, type DocTypeValue } from "@/lib/labels";
-import type { UploadDraft } from "@/server/uploads";
-import { confirmUploads, uploadFiles } from "./actions";
+import { confirmUploads, uploadFiles, type UploadDraft } from "@/lib/api/uploads";
+import { docHref } from "@/lib/routes";
 
 type SubjectOpt = { id: string; name: string; color: string };
 type Row = UploadDraft & { subjectId: string; type: DocTypeValue; titleValue: string; error?: string };
@@ -77,7 +77,7 @@ export function UploadFlow({ subjects }: { subjects: SubjectOpt[] }) {
       );
       const failed = new Map(res.errors.map((e) => [e.tmpId, e.error]));
       if (res.created.length === 1 && failed.size === 0) {
-        router.push(`/doc/${res.created[0].id}`);
+        router.push(docHref(res.created[0].id));
         return;
       }
       setCreated((c) => [...c, ...res.created]);
@@ -187,7 +187,7 @@ export function UploadFlow({ subjects }: { subjects: SubjectOpt[] }) {
           <ul className="flex flex-col gap-1 text-[14px]">
             {created.map((c) => (
               <li key={c.id}>
-                <Link href={`/doc/${c.id}`} className="underline underline-offset-2">
+                <Link href={docHref(c.id)} className="underline underline-offset-2">
                   {c.title}
                 </Link>
               </li>
@@ -284,7 +284,7 @@ export function UploadFlow({ subjects }: { subjects: SubjectOpt[] }) {
                   {r.duplicateOfId && (
                     <p className="pl-2 text-[13.5px] text-danger">
                       Ce fichier est déjà dans la bibliothèque :{" "}
-                      <Link href={`/doc/${r.duplicateOfId}`} className="underline underline-offset-2">
+                      <Link href={docHref(r.duplicateOfId)} className="underline underline-offset-2">
                         voir le document
                       </Link>
                       . Retirez-le de la liste.

@@ -3,7 +3,10 @@ import { z } from "zod";
 import type { Db } from "./db/client";
 import { subjects } from "./db/schema";
 
+import { normalizeKeyword, slugify } from "@/lib/slug";
 import type { SubjectRules } from "@/lib/subject-rules";
+
+export { normalizeKeyword, slugify };
 
 export type { SubjectRules };
 
@@ -125,9 +128,6 @@ export function listSubjects(db: Db): Subject[] {
 
 const MAX_WEIGHT = 10;
 
-export function normalizeKeyword(k: string): string {
-  return k.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim().replace(/\s+/g, " ");
-}
 
 /** Lit des lignes « mot-clé: poids » (poids entier 1–10, 1 par défaut). */
 export function parseKeywordLines(text: string): Record<string, number> {
@@ -197,14 +197,6 @@ export function updateSubject(db: Db, id: string, input: SubjectInput): Subject 
   return row;
 }
 
-export function slugify(name: string): string {
-  return (
-    normalizeKeyword(name)
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 50) || "matiere"
-  );
-}
 
 export function createSubject(db: Db, input: SubjectInput): Subject {
   const data = parseSubjectInput(input);

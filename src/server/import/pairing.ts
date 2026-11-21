@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { DOC_TYPES, LANGS } from "../db/schema";
 
 export type DocType = (typeof DOC_TYPES)[number];
@@ -10,12 +9,17 @@ function norm(s: string): string {
 }
 
 const posix = (p: string) => p.replace(/\\/g, "/");
-const baseName = (relPath: string) => path.posix.basename(posix(relPath));
+// Sans node:path : ce module sert aussi dans le navigateur (dépôt de fichiers).
+const trimSlash = (p: string) => p.replace(/\/+$/, "");
+const baseName = (relPath: string) => trimSlash(posix(relPath)).split("/").pop() ?? "";
 const stem = (relPath: string) => baseName(relPath).replace(/\.[^.]+$/, "");
 const dirName = (relPath: string) => {
-  const d = path.posix.dirname(posix(relPath));
-  return d === "." ? "" : d;
+  const p = trimSlash(posix(relPath));
+  const i = p.lastIndexOf("/");
+  return i <= 0 ? (i === 0 ? "/" : "") : p.slice(0, i);
 };
+/** Extension avec le point, comme path.extname (".pdf" ; "" pour « .bashrc » ou sans extension). */
+const extName = (name: string) => /(\.[^.]*)$/.exec(name.replace(/^\.+/, ""))?.[1] ?? "";
 
 const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const CODE_EXT = new Set([".c", ".h", ".py"]);
@@ -33,7 +37,7 @@ export function inferType(relPath: string): DocType {
   const p = norm(posix(relPath));
   const dirs = p.split("/").slice(0, -1).map((s) => s.trim());
   const name = baseName(p);
-  const ext = path.posix.extname(name);
+  const ext = extName(name);
   if (dirs.some((d) => EXAM_DIR.test(d)) || EXAM_WORD.test(name)) return "exam";
   if (IMAGE_EXT.has(ext)) return "photo";
   if (EXERCISE_WORD.test(p) || CODE_EXT.has(ext)) return "exercise";

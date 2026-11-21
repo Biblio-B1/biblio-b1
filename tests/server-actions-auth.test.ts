@@ -47,9 +47,13 @@ const cases = files.flatMap((f) => {
 });
 
 describe("server actions authentifiées", () => {
-  it("trouve les fichiers \"use server\" et leurs actions", () => {
-    expect(files.length).toBeGreaterThanOrEqual(7);
-    expect(cases.length).toBeGreaterThanOrEqual(15);
+  // Passage à github.io : les server actions disparaissent au fil de la conversion (plus aucune à
+  // la fin). Les fichiers restants sont tous contrôlés ci-dessous.
+  it("chaque fichier \"use server\" restant exporte des actions détectées", () => {
+    for (const f of files) {
+      const rel = path.relative(SRC_APP, f).split(path.sep).join("/");
+      expect(cases.some((c) => c.id.startsWith(`${rel}#`)), rel).toBe(true);
+    }
   });
 
   it("la liste blanche ne contient que des actions existantes", () => {

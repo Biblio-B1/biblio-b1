@@ -26,25 +26,8 @@ export type UploadDraft = {
   duplicateOfId: string | null;
 };
 
-const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".webp"]);
-const CODE_EXT = new Set([".c", ".h", ".py"]);
-
-/** Type de contenu proposé d'après le nom de fichier (modifiable à la confirmation). */
-export function guessType(fileName: string): DocType {
-  const ext = path.extname(fileName).toLowerCase();
-  const name = fileName.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  if (IMAGE_EXT.has(ext)) return "photo";
-  if (CODE_EXT.has(ext)) return "exercise";
-  if (/\b(annales?|partiel|exam(en)?|ds\d*|controle)\b/.test(name)) return "exam";
-  if (/\b(td|tp|lab|exo|exercices?|exercises?)\s*\d*\b/.test(name)) return "exercise";
-  if (ext === ".md" || ext === ".txt") return "note";
-  return "course";
-}
-
-export function titleFromFileName(fileName: string): string {
-  const t = fileName.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim();
-  return (t || fileName).slice(0, 300);
-}
+export { guessType, titleFromFileName } from "@/lib/upload-core";
+import { guessType, titleFromFileName } from "@/lib/upload-core";
 
 function findBySha(db: Db, sha256: string): string | null {
   return db.select({ id: documents.id }).from(documents).where(eq(documents.sha256, sha256)).get()?.id ?? null;

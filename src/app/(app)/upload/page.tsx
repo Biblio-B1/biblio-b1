@@ -1,20 +1,22 @@
-import { requireUser } from "@/server/auth/session";
-import { getDb } from "@/server/db/client";
-import { listSubjects } from "@/server/subjects";
+"use client";
+
+import { listSubjects } from "@/lib/api/library";
+import { useData } from "@/lib/api/use-data";
 import { UploadFlow } from "./UploadFlow";
 
-export const metadata = { title: "Déposer des fichiers" };
-
-export default async function UploadPage() {
-  await requireUser();
-  const subjects = listSubjects(getDb()).map((s) => ({ id: s.id, name: s.name, color: s.color }));
+export default function UploadPage() {
+  const { data: subjects } = useData(listSubjects, []);
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h1 className="page-title">Déposer des fichiers</h1>
         <p className="text-ink-2">La matière est proposée automatiquement ; vérifiez-la puis ajoutez en un clic.</p>
       </header>
-      <UploadFlow subjects={subjects} />
+      {subjects ? (
+        <UploadFlow subjects={subjects.map((s) => ({ id: s.id, name: s.name, color: s.color }))} />
+      ) : (
+        <p className="text-sm text-ink-3">Chargement…</p>
+      )}
     </div>
   );
 }

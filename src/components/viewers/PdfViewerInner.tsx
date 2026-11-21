@@ -5,9 +5,10 @@ import "react-pdf/dist/Page/TextLayer.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { IconChevron } from "@/components/layout/Icons";
+import { PDF_WORKER_SRC } from "@/lib/site";
 
 // Worker servi localement (copié dans public/ par scripts/copy-pdf-worker.mjs).
-pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
 
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 
