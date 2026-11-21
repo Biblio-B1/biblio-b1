@@ -1,0 +1,24 @@
+import { describe, expect, it } from "vitest";
+import { canReject } from "../../supabase/functions/_shared/admin-core";
+
+describe("canReject", () => {
+  it("un administrateur actif peut refuser une demande en attente", () => {
+    expect(canReject({ role: "admin", status: "active" }, { status: "pending" })).toBe(true);
+  });
+
+  it("un membre ne peut pas refuser", () => {
+    expect(canReject({ role: "member", status: "active" }, { status: "pending" })).toBe(false);
+  });
+
+  it("un administrateur en attente ne peut pas refuser", () => {
+    expect(canReject({ role: "admin", status: "pending" }, { status: "pending" })).toBe(false);
+  });
+
+  it("on ne supprime jamais un compte actif par ce biais", () => {
+    expect(canReject({ role: "admin", status: "active" }, { status: "active" })).toBe(false);
+  });
+
+  it("cible introuvable : refusé", () => {
+    expect(canReject({ role: "admin", status: "active" }, null)).toBe(false);
+  });
+});
