@@ -11,7 +11,6 @@
     "dev": "next dev -H 127.0.0.1",
     "prebuild": "node scripts/copy-pdf-worker.mjs && node scripts/copy-runtimes.mjs",
     "build": "next build",
-    "start": "node scripts/start.mjs",
     "import": "tsx scripts/import.ts",
     "prune": "tsx scripts/prune.ts",
     "reindex": "tsx scripts/reindex.ts",
