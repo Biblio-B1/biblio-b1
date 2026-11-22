@@ -194,7 +194,7 @@
 
 **Interfaces:** workflow : `on: push: branches: [main]`, `npm ci`, `npm run build` avec `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (variables du dépôt), `actions/upload-pages-artifact` sur `out/`, `actions/deploy-pages`.
 - [ ] **Step 1:** `npm run build` local → dossier `out/` sans erreur, `out/runtimes/` présent, aucune occurrence de `service_role`, `NTFY_TOPIC` ni de topic dans `out/` (`grep -r`).
-- [ ] **Step 2:** Vérifier l'historique avant passage en public : `git log -p --all | grep -E "icalsecurise|180412|biblio-b1-[0-9a-f]{24}|service_role|eyJ"` → aucune occurrence (sinon : réécrire l'historique, avec accord explicite).
+- [ ] **Step 2:** Vérifier l'historique avant passage en public : recherche dans `git log --all` des valeurs exactes du fichier de configuration locale et des motifs de secrets (jeton `.ics`, `sb_secret_`, JWT, topic ntfy) → aucune occurrence (sinon : réécrire l'historique, avec accord explicite).
 - [ ] **Step 3:** **Demander confirmation à l'utilisateur**, puis dépôt public, Pages (source GitHub Actions), variables du dépôt ; tag `serveur-node` sur le dernier commit de l'ancien serveur.
 - [ ] **Step 4:** Vérification de bout en bout sur `https://biblio-b1.github.io/biblio-b1/` : inscription (confirmation), notification, validation, accès aux documents, 15 min d'inactivité, emploi du temps, exercice vérifié.
 - [ ] **Step 5: Commit** `feat: publication github.io` + push, fusion dans `main`.
