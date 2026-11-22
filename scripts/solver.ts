@@ -22,6 +22,7 @@ import { env } from "../src/server/env";
 import { exercises } from "../src/server/db/schema";
 import { processNext, solveExerciseDetailed, type SolveDeps, type SolveResult } from "../src/server/solver/solve";
 import { disposeRunners } from "../src/lib/runners/index.ts";
+import { pullExclusions, pullPending, pushCheck, supabaseAdmin } from "../src/server/sync/supabase-sync";
 import { eq } from "drizzle-orm";
 
 if (fs.existsSync(".env")) process.loadEnvFile(".env");
@@ -61,6 +62,25 @@ const onSignal = (sig: string) => {
 };
 process.on("SIGINT", () => onSignal("SIGINT"));
 process.on("SIGTERM", () => onSignal("SIGTERM"));
+
+// Site (Supabase) : le solveur rapatrie les exercices en attente et envoie chaque résultat.
+// Sans SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY dans .env, il travaille sur la base du PC seule.
+const sb = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? supabaseAdmin() : null;
+const syncLog = (m: string) => console.log(`[solveur] site : ${m}`);
+/** Une erreur réseau ne doit jamais arrêter le solveur : journalisée, réessayée plus tard. */
+async function syncSafely(what: string, fn: () => Promise<unknown>): Promise<void> {
+  if (!sb) return;
+  try {
+    await fn();
+  } catch (e) {
+    console.warn(`[solveur] site injoignable (${what}) : ${e instanceof Error ? e.message : e}`);
+  }
+}
+const pull = () => syncSafely("rapatriement", async () => {
+  await pullExclusions(getDb(), sb!, syncLog);
+  await pullPending(getDb(), sb!, syncLog);
+});
+const push = (id: string) => syncSafely("envoi du résultat", () => pushCheck(getDb(), sb!, id));
 
 /** Attente interrompue par un signal d'arrêt (l'écouteur est retiré à la fin de l'attente). */
 function pause(ms: number): Promise<void> {
@@ -123,6 +143,9 @@ async function main(): Promise<number> {
       (values["retry-failed"] ? `, ${requeued} échec(s) remis en file` : ""),
   );
 
+  if (!sb) console.warn("[solveur] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY absents : résultats gardés sur le PC (npm run sync pour les envoyer).");
+  await pull();
+
   if (values.exercise !== undefined) {
     const id = values.exercise;
     if (!db.select({ id: exercises.id }).from(exercises).where(eq(exercises.id, id)).get()) {
@@ -141,6 +164,7 @@ async function main(): Promise<number> {
     const t0 = performance.now();
     const r = await solveExerciseDetailed(db, id, deps);
     logLine(id, r, Math.round(performance.now() - t0));
+    await push(id);
     if (r.outcome === "config_error") return configError(r.message);
     return r.outcome === "unavailable" || r.outcome === "retry_later" ? 1 : 0;
   }
@@ -166,6 +190,7 @@ async function main(): Promise<number> {
     if (!r) {
       if (bounded) break;
       await pause(IDLE_MS);
+      await pull(); // nouveaux exercices déposés ou relancés sur le site
       continue;
     }
     if (r.outcome === "config_error") return configError(r.message);
@@ -184,6 +209,7 @@ async function main(): Promise<number> {
     backoff = BACKOFF_START_MS;
     if (r.outcome !== "interrupted" && r.outcome !== "skipped") done++;
     logLine(r.id, r, r.durationMs);
+    if (r.outcome !== "interrupted" && r.outcome !== "skipped") await push(r.id);
     // Délai dépassé / erreur 5xx : prise comptée, petite pause avant de réessayer.
     if (r.outcome === "retry_later" && !bounded) await pause(BACKOFF_START_MS);
   }

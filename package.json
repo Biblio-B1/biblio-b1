@@ -16,6 +16,7 @@
     "prune": "tsx scripts/prune.ts",
     "reindex": "tsx scripts/reindex.ts",
     "solver": "tsx scripts/solver.ts",
+    "sync": "tsx scripts/sync.ts",
     "solver:status": "tsx scripts/solver-status.ts",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate"
