@@ -51,11 +51,19 @@ PC de l'administrateur (clé secrète dans .env, jamais publiée)
    `TELEGRAM_WEBHOOK_SECRET` (valeur aléatoire), `CALENDAR_ENCRYPTION_KEY` (64 caractères
    hexadécimaux), `APP_URL` (`https://biblio-b1.github.io/biblio-b1`) —
    `npx supabase secrets set --env-file <fichier>`.
-6. Fonctions : `npx supabase functions deploy notify telegram calendar admin-users --use-api`
+6. Fonctions : `npx supabase functions deploy notify telegram calendar admin-users channel --use-api`
    (`telegram` sans vérification de jeton Supabase : voir `supabase/config.toml`), puis brancher le
    webhook du bot : `setWebhook` vers `https://<ref>.supabase.co/functions/v1/telegram` avec
    `secret_token` = `TELEGRAM_WEBHOOK_SECRET`.
-7. L'adresse du projet et la clé **publiable** (`sb_publishable_…`, publique par conception) sont
+7. Canal Telegram de la classe (documents, devoirs, contrôles, changements d'emploi du temps) :
+   - secret `CHANNEL_CRON_SECRET` (valeur aléatoire), déployer `channel` (sans vérification de jeton) ;
+   - tâche planifiée, toutes les 5 minutes : extensions `pg_cron` et `pg_net`, la même valeur dans
+     Vault (`select vault.create_secret('<valeur>', 'channel_cron_secret')`), puis
+     `cron.schedule('biblio-channel', '*/5 * * * *', …net.http_post(…/functions/v1/channel, en-tête
+     x-cron-secret lu dans vault.decrypted_secrets…))` ;
+   - créer le canal dans Telegram et y nommer le bot **administrateur** (droit de publier) : le bot
+     envoie à l'administrateur un bouton « Utiliser ce canal pour la classe ».
+8. L'adresse du projet et la clé **publiable** (`sb_publishable_…`, publique par conception) sont
    dans `src/lib/supabase/client.ts` (surchargeables par `NEXT_PUBLIC_SUPABASE_URL` /
    `NEXT_PUBLIC_SUPABASE_ANON_KEY`). **Ne jamais y mettre la clé secrète.**
 

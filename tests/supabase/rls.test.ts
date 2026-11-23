@@ -267,3 +267,18 @@ describe("professeurs masqués", () => {
     expect(r.rows).toEqual([{ hidden: true }]);
   });
 });
+
+describe("canal Telegram", () => {
+  it("un document ou un devoir ajouté entre dans la file ; le site ne la lit pas", async () => {
+    await t.as(activeId);
+    await t.db.query(
+      "insert into public.homeworks (subject_id, title, due_date) values ($1, 'Contrôle C', '2026-12-01')",
+      [subjectId],
+    );
+    await expect(t.db.query("select * from public.channel_outbox")).rejects.toThrow();
+    await t.as("service");
+    const r = await t.db.query<{ kind: string }>("select kind from public.channel_outbox order by id");
+    expect(r.rows.map((x) => x.kind)).toContain("homework");
+    expect(r.rows.map((x) => x.kind)).toContain("document");
+  });
+});

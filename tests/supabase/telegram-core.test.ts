@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildTelegramMessage,
+  channelChoiceKeyboard,
   eventForLogin,
   isAdminChat,
+  parseChannelChoice,
   parseDecision,
   sendTelegram,
   statusKeyboard,
@@ -136,5 +138,15 @@ describe("sendTelegram", () => {
       throw new Error("réseau");
     });
     expect(await sendTelegram({ text: "x" }, { token: "1:A", chatId: "42", fetchImpl: boom as unknown as typeof fetch })).toEqual({ ok: false, error: "réseau" });
+  });
+});
+
+describe("choix du canal", () => {
+  it("bouton et lecture de l'identifiant du canal", () => {
+    const kb = channelChoiceKeyboard(-1001234567890);
+    expect(kb.inline_keyboard[0][0].callback_data).toBe("channel:-1001234567890");
+    expect(parseChannelChoice("channel:-1001234567890")).toBe("-1001234567890");
+    expect(parseChannelChoice("channel:abc")).toBeNull();
+    expect(parseChannelChoice("approve:x")).toBeNull();
   });
 });

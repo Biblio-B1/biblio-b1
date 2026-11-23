@@ -107,3 +107,13 @@ export async function sendTelegram(
   if (!opts.token || !opts.chatId) return { ok: false, error: "TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID absent" };
   return telegramApi("sendMessage", { chat_id: opts.chatId, text: m.text, parse_mode: "HTML", reply_markup: m.reply_markup }, opts);
 }
+
+/** Choix du canal de la classe (bouton envoyé à l'administrateur quand le bot devient admin d'un canal). */
+export function channelChoiceKeyboard(chatId: number | string) {
+  return { inline_keyboard: [[{ text: "✅ Utiliser ce canal pour la classe", callback_data: `channel:${chatId}` }]] };
+}
+
+export function parseChannelChoice(data: string | undefined): string | null {
+  const m = data?.match(/^channel:(-?\d{1,20})$/);
+  return m ? m[1] : null;
+}

@@ -4,7 +4,15 @@
 //  - un clic venant de la conversation de l'administrateur (TELEGRAM_CHAT_ID).
 // Accepter = profil « active » ; Refuser = suppression du compte, seulement s'il est encore en attente.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { isAdminChat, parseDecision, statusKeyboard, telegramApi } from "../_shared/telegram-core.ts";
+import {
+  channelChoiceKeyboard,
+  escapeHtml,
+  isAdminChat,
+  parseChannelChoice,
+  parseDecision,
+  statusKeyboard,
+  telegramApi,
+} from "../_shared/telegram-core.ts";
 
 const ok = () => new Response("ok", { status: 200 });
 
@@ -21,10 +29,25 @@ Deno.serve(async (req) => {
   let update: {
     callback_query?: { id: string; data?: string; message?: { message_id: number; chat?: { id?: number }; text?: string } };
     message?: { chat?: { id?: number }; text?: string };
+    my_chat_member?: { chat: { id: number; type: string; title?: string }; new_chat_member?: { status?: string } };
   };
   try {
     update = await req.json();
   } catch {
+    return ok();
+  }
+
+  // Le bot vient d'être nommé administrateur d'un canal : on propose à l'administrateur de l'utiliser.
+  const member = update.my_chat_member;
+  if (member) {
+    if (member.chat.type === "channel" && member.new_chat_member?.status === "administrator" && adminChat) {
+      await api("sendMessage", {
+        chat_id: adminChat,
+        parse_mode: "HTML",
+        text: `📢 Le bot est maintenant administrateur du canal <b>${escapeHtml(member.chat.title ?? String(member.chat.id))}</b>.\nY publier les notifications de la classe (documents, devoirs, contrôles, emploi du temps) ?`,
+        reply_markup: channelChoiceKeyboard(member.chat.id),
+      });
+    }
     return ok();
   }
 
@@ -43,6 +66,37 @@ Deno.serve(async (req) => {
     await api("answerCallbackQuery", { callback_query_id: cb.id, text: "Demande déjà traitée." });
     return ok();
   }
+  const channelId = parseChannelChoice(cb.data);
+  if (channelId) {
+    if (!isAdminChat(cb, adminChat)) {
+      await api("answerCallbackQuery", { callback_query_id: cb.id, text: "Action non autorisée." });
+      return ok();
+    }
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { error } = await db
+      .from("app_settings")
+      .upsert({ key: "telegram_channel_id", value: channelId, updated_at: new Date().toISOString() });
+    const welcome = error
+      ? { ok: false }
+      : await api("sendMessage", {
+          chat_id: channelId,
+          parse_mode: "HTML",
+          text: "👋 <b>Biblio B1</b> publiera ici les nouveaux documents, les devoirs, les alertes de contrôle et les changements d'emploi du temps.",
+        });
+    await api("answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: error ? "Enregistrement impossible, réessayez." : welcome.ok ? "Canal relié." : "Canal enregistré, mais le bot ne peut pas y écrire : vérifiez son droit de publier.",
+    });
+    if (!error && cb.message) {
+      await api("editMessageReplyMarkup", {
+        chat_id: cb.message.chat?.id,
+        message_id: cb.message.message_id,
+        reply_markup: statusKeyboard("✅ Canal relié"),
+      });
+    }
+    return ok();
+  }
+
   const decision = parseDecision(cb.data);
   if (!decision || !isAdminChat(cb, adminChat)) {
     await api("answerCallbackQuery", { callback_query_id: cb.id, text: "Action non autorisée." });

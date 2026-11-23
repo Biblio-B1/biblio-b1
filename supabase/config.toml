@@ -432,3 +432,6 @@ enabled = true
 # TELEGRAM_WEBHOOK_SECRET et par l'identifiant de la conversation de l'administrateur.
 [functions.telegram]
 verify_jwt = false
+
+[functions.channel]
+verify_jwt = false
