@@ -54,7 +54,9 @@ PC de l'administrateur (clé secrète dans .env, jamais publiée)
 6. Fonctions : `npx supabase functions deploy notify telegram calendar admin-users channel --use-api`
    (`telegram` sans vérification de jeton Supabase : voir `supabase/config.toml`), puis brancher le
    webhook du bot : `setWebhook` vers `https://<ref>.supabase.co/functions/v1/telegram` avec
-   `secret_token` = `TELEGRAM_WEBHOOK_SECRET`.
+   `secret_token` = `TELEGRAM_WEBHOOK_SECRET` et
+   `allowed_updates` = `["message", "callback_query", "my_chat_member"]` (le dernier signale que le bot
+   a été nommé administrateur d'un canal).
 7. Canal Telegram de la classe (documents, devoirs, contrôles, changements d'emploi du temps) :
    - secret `CHANNEL_CRON_SECRET` (valeur aléatoire), déployer `channel` (sans vérification de jeton) ;
    - tâche planifiée, toutes les 5 minutes : extensions `pg_cron` et `pg_net`, la même valeur dans
