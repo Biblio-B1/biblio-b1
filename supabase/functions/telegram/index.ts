@@ -4,7 +4,7 @@
 //  - un clic venant de la conversation de l'administrateur (TELEGRAM_CHAT_ID).
 // Accepter = profil « active » ; Refuser = suppression du compte, seulement s'il est encore en attente.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { escapeHtml, isAdminChat, parseDecision, telegramApi } from "../_shared/telegram-core.ts";
+import { isAdminChat, parseDecision, statusKeyboard, telegramApi } from "../_shared/telegram-core.ts";
 
 const ok = () => new Response("ok", { status: 200 });
 
@@ -39,6 +39,10 @@ Deno.serve(async (req) => {
 
   const cb = update.callback_query;
   if (!cb) return ok();
+  if (cb.data === "done") {
+    await api("answerCallbackQuery", { callback_query_id: cb.id, text: "Demande déjà traitée." });
+    return ok();
+  }
   const decision = parseDecision(cb.data);
   if (!decision || !isAdminChat(cb, adminChat)) {
     await api("answerCallbackQuery", { callback_query_id: cb.id, text: "Action non autorisée." });
@@ -48,26 +52,30 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: target } = await admin.from("profiles").select("name, status").eq("id", decision.userId).maybeSingle();
   let outcome: string;
+  let status: string | null = null; // libellé du bouton d'état ; null = boutons gardés (erreur)
   if (!target) {
     outcome = "Compte introuvable (déjà refusé ?).";
+    status = "Demande déjà traitée";
   } else if (target.status !== "pending") {
     outcome = `${target.name} est déjà validé.`;
+    status = "✅ Accepté";
   } else if (decision.action === "approve") {
     const { error } = await admin.from("profiles").update({ status: "active" }).eq("id", decision.userId).eq("status", "pending");
-    outcome = error ? "Validation impossible." : `✅ ${target.name} a accès au site.`;
+    outcome = error ? "Validation impossible, réessayez." : `✅ ${target.name} a accès au site.`;
+    if (!error) status = "✅ Accepté";
   } else {
     const { error } = await admin.auth.admin.deleteUser(decision.userId);
-    outcome = error ? "Refus impossible." : `❌ Demande de ${target.name} refusée.`;
+    outcome = error ? "Refus impossible, réessayez." : `❌ Demande de ${target.name} refusée.`;
+    if (!error) status = "❌ Refusé";
   }
 
   await api("answerCallbackQuery", { callback_query_id: cb.id, text: outcome });
-  if (cb.message) {
-    // Le message garde son texte, sans les boutons, avec la décision prise.
-    await api("editMessageText", {
+  if (cb.message && status) {
+    // Le message garde sa mise en forme ; les boutons laissent place à l'état de la demande.
+    await api("editMessageReplyMarkup", {
       chat_id: cb.message.chat?.id,
       message_id: cb.message.message_id,
-      text: `${escapeHtml(cb.message.text ?? "")}\n\n${escapeHtml(outcome)}`,
-      parse_mode: "HTML",
+      reply_markup: statusKeyboard(status),
     });
   }
   return ok();

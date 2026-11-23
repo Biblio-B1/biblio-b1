@@ -48,6 +48,11 @@ export function buildTelegramMessage(p: {
   };
 }
 
+/** Après une décision : les boutons laissent place à un bouton d'état (« done » = déjà traité). */
+export function statusKeyboard(label: string): NonNullable<TelegramMessage["reply_markup"]> {
+  return { inline_keyboard: [[{ text: label, callback_data: "done" }]] };
+}
+
 /** Décision lue dans un bouton : `approve:<uuid>` ou `reject:<uuid>`, rien d'autre. */
 export function parseDecision(data: string | undefined): { action: "approve" | "reject"; userId: string } | null {
   const m = /^(approve|reject):(.+)$/.exec(data ?? "");

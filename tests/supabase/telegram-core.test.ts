@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildTelegramMessage, isAdminChat, parseDecision, sendTelegram } from "../../supabase/functions/_shared/telegram-core";
+import { buildTelegramMessage, isAdminChat, parseDecision, sendTelegram, statusKeyboard } from "../../supabase/functions/_shared/telegram-core";
 
 const APP = "https://biblio-b1.github.io/biblio-b1";
 
@@ -49,6 +49,12 @@ describe("buildTelegramMessage", () => {
   it("échappe le HTML (nom choisi par l'utilisateur)", () => {
     const m = buildTelegramMessage({ event: "login", name: "<b>x</b>", email: "a@b.c", userId: "u", appUrl: APP });
     expect(m.text).toContain("&lt;b&gt;x&lt;/b&gt;");
+  });
+});
+
+describe("statusKeyboard", () => {
+  it("après une décision : un seul bouton d'état, non actionnable (déjà traité)", () => {
+    expect(statusKeyboard("✅ Accepté")).toEqual({ inline_keyboard: [[{ text: "✅ Accepté", callback_data: "done" }]] });
   });
 });
 
