@@ -1,6 +1,6 @@
 "use client";
 
-// Session de l'utilisateur pour tout le site : compte Supabase + profil (pseudo, rôle, statut), et
+// Session de l'utilisateur pour tout le site : compte Supabase + profil (nom, rôle, statut), et
 // déconnexion automatique après 15 minutes sans activité (src/lib/auth/inactivity.ts).
 import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
@@ -14,7 +14,7 @@ type AuthState = {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  /** Relit le profil (après validation d'un compte, changement de pseudo…). */
+  /** Relit le profil (après validation d'un compte, changement de nom…). */
   refreshProfile(): Promise<void>;
   signOut(reason?: "expired"): Promise<void>;
   /** À appeler juste après une connexion par mot de passe (repart de zéro pour les 15 minutes). */

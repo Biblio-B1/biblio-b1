@@ -15,7 +15,8 @@ export default function SignupPage() {
   async function signup(_prev: FormState, fd: FormData): Promise<FormState> {
     const v = validateSignup({
       email: String(fd.get("email") ?? ""),
-      name: String(fd.get("name") ?? ""),
+      prenom: String(fd.get("prenom") ?? ""),
+      nom: String(fd.get("nom") ?? ""),
       password: String(fd.get("password") ?? ""),
       confirm: String(fd.get("confirm") ?? ""),
     });
@@ -44,7 +45,8 @@ export default function SignupPage() {
     >
       <ActionForm action={signup} submitLabel="Envoyer la demande">
         <Field label="E-mail" name="email" type="email" autoComplete="email" />
-        <Field label="Pseudo" name="name" autoComplete="nickname" />
+        <Field label="Prénom" name="prenom" autoComplete="given-name" />
+        <Field label="Nom" name="nom" autoComplete="family-name" />
         <Field label="Mot de passe (8 caractères min.)" name="password" type="password" autoComplete="new-password" />
         <Field label="Confirmez le mot de passe" name="confirm" type="password" autoComplete="new-password" />
       </ActionForm>

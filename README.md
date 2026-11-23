@@ -11,7 +11,7 @@ exécutables avec vérification automatique, questions et réponses, devoirs, em
 Navigateur ── pages statiques (GitHub Pages, ce dépôt)
    │            moteurs d'exécution C / Python / JavaScript (WebAssembly, dans le navigateur)
    └─ Supabase : comptes, base Postgres (droits RLS), fichiers privés, fonctions
-                 notify (ntfy) · calendar (.ics) · admin-users (refus d'une demande)
+                 notify + telegram (bot Telegram) · calendar (.ics) · admin-users
 PC de l'administrateur (clé secrète dans .env, jamais publiée)
    ├─ npm run import  : dépôt du prof + dossiers de cours → base de travail SQLite (storage/)
    ├─ npm run sync    : base de travail ↔ Supabase
@@ -27,13 +27,15 @@ PC de l'administrateur (clé secrète dans .env, jamais publiée)
 
 ## Comptes
 
-- **Créer un compte** : e-mail, pseudo, mot de passe saisi deux fois. Le compte est **en attente**
+- **Créer un compte** : e-mail, prénom et nom, mot de passe saisi deux fois. Le compte est **en attente**
   tant que l'administrateur ne l'a pas accepté (Administration → Demandes de compte) ; ensuite, la
   personne se reconnecte simplement avec son mot de passe.
-- **Notifications** (application [ntfy](https://ntfy.sh), topic secret) : à chaque demande de compte
-  et **à chaque connexion**, avec le pseudo de la personne.
+- **Notifications Telegram** (bot privé de l'administrateur) : à chaque demande de compte, avec
+  boutons **Accepter / Refuser** directement dans le message, et **à chaque connexion**, avec le nom
+  de la personne (« Prénom Nom »). ntfy.sh n'est pas utilisable : il limite par adresse IP et les
+  fonctions Supabase sortent par des IP partagées (quota épuisé, erreur 429).
 - **Session** : déconnexion après **15 minutes sans activité**, y compris à la réouverture du site.
-- Connexion par e-mail (pas par pseudo).
+- Connexion par e-mail (pas par nom).
 
 ## Installer Supabase (une fois)
 
@@ -43,11 +45,17 @@ PC de l'administrateur (clé secrète dans .env, jamais publiée)
    `npx supabase link --project-ref <ref>`.
 3. Base : appliquer les migrations dans l'ordre (`npx supabase db push`, ou si la connexion directe à
    la base est bloquée : `npx supabase db query --remote --file supabase/migrations/<fichier>.sql`).
-4. Secrets des fonctions (jamais dans le dépôt) : `NTFY_TOPIC` (topic ntfy secret, 16 à 64
-   caractères), `CALENDAR_ENCRYPTION_KEY` (64 caractères hexadécimaux), `APP_URL`
-   (`https://biblio-b1.github.io/biblio-b1`) — `npx supabase secrets set --env-file <fichier>`.
-5. Fonctions : `npx supabase functions deploy notify calendar admin-users --use-api`.
-6. L'adresse du projet et la clé **publiable** (`sb_publishable_…`, publique par conception) sont
+4. Bot Telegram : créer un bot avec [@BotFather](https://t.me/BotFather) (jeton `123456:ABC…`),
+   lui écrire `/start`, puis relever l'identifiant de la conversation (`getUpdates`).
+5. Secrets des fonctions (jamais dans le dépôt) : `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
+   `TELEGRAM_WEBHOOK_SECRET` (valeur aléatoire), `CALENDAR_ENCRYPTION_KEY` (64 caractères
+   hexadécimaux), `APP_URL` (`https://biblio-b1.github.io/biblio-b1`) —
+   `npx supabase secrets set --env-file <fichier>`.
+6. Fonctions : `npx supabase functions deploy notify telegram calendar admin-users --use-api`
+   (`telegram` sans vérification de jeton Supabase : voir `supabase/config.toml`), puis brancher le
+   webhook du bot : `setWebhook` vers `https://<ref>.supabase.co/functions/v1/telegram` avec
+   `secret_token` = `TELEGRAM_WEBHOOK_SECRET`.
+7. L'adresse du projet et la clé **publiable** (`sb_publishable_…`, publique par conception) sont
    dans `src/lib/supabase/client.ts` (surchargeables par `NEXT_PUBLIC_SUPABASE_URL` /
    `NEXT_PUBLIC_SUPABASE_ANON_KEY`). **Ne jamais y mettre la clé secrète.**
 
@@ -59,7 +67,7 @@ Node.js ≥ 22.18. `npm ci`, puis un fichier `.env` (modèle : `.env.example`) :
 | --- | --- |
 | `SUPABASE_URL` | Adresse du projet Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé **secrète** (`sb_secret_…`) : écriture sans RLS. Ne jamais la publier ni l'envoyer. |
-| `NTFY_TOPIC`, `CALENDAR_ENCRYPTION_KEY` | Mêmes valeurs que les secrets des fonctions |
+| `TELEGRAM_BOT_TOKEN`, `CALENDAR_ENCRYPTION_KEY` | Mêmes valeurs que les secrets des fonctions |
 | `C_PROF_REPO_URL` | Dépôt GitHub des cours du professeur |
 | `LOCAL_COURSES_PATH` | Dossier de cours : un sous-dossier = une matière |
 | `STORAGE_PATH` | Base de travail SQLite et fichiers (`./storage`) |

@@ -32,7 +32,7 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.profiles where id = auth.uid() and status = 'active' and role = 'admin')
 $$;
 
--- Inscription : profil créé « pending » avec le pseudo fourni à signUp (options.data.name).
+-- Inscription : profil créé « pending » avec le nom complet fourni à signUp (options.data.name).
 create function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
