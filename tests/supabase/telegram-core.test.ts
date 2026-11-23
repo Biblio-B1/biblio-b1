@@ -17,10 +17,33 @@ describe("buildTelegramMessage", () => {
     ]);
   });
 
-  it("connexion : simple message avec le nom, sans boutons", () => {
-    const m = buildTelegramMessage({ event: "login", name: "Léa Martin", email: "lea@example.com", userId: "u-1", appUrl: APP });
-    expect(m.text).toContain("Léa Martin s'est connecté");
+  it("connexion : titre, nom en gras, e-mail et heure de Paris, sans boutons", () => {
+    const m = buildTelegramMessage({
+      event: "login",
+      name: "Léa Martin",
+      email: "lea@example.com",
+      userId: "u-1",
+      appUrl: APP,
+      at: new Date("2026-11-23T13:05:00Z"),
+    });
+    expect(m.text).toBe(
+      ["🟢 <b>Connexion à Biblio B1</b>", "", "👤 <b>Léa Martin</b>", "✉️ lea@example.com", "🕒 lundi 23 novembre à 14:05"].join("\n"),
+    );
     expect(m.reply_markup).toBeUndefined();
+  });
+
+  it("demande de compte : même présentation, titre distinct", () => {
+    const m = buildTelegramMessage({
+      event: "signup",
+      name: "Léa Martin",
+      email: "lea@example.com",
+      userId: "u-1",
+      appUrl: APP,
+      at: new Date("2026-11-23T13:05:00Z"),
+    });
+    expect(m.text).toBe(
+      ["🆕 <b>Nouvelle demande de compte</b>", "", "👤 <b>Léa Martin</b>", "✉️ lea@example.com", "🕒 lundi 23 novembre à 14:05", "", "Accepter ou refuser ?"].join("\n"),
+    );
   });
 
   it("échappe le HTML (nom choisi par l'utilisateur)", () => {

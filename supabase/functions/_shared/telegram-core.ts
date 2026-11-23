@@ -16,12 +16,26 @@ const TIMEOUT_MS = 5000;
 
 export const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export function buildTelegramMessage(p: { event: TelegramEvent; name: string; email: string; userId: string; appUrl: string }): TelegramMessage {
-  const name = escapeHtml(p.name);
-  const email = escapeHtml(p.email);
-  if (p.event === "login") return { text: `🔑 ${name} s'est connecté à Biblio B1.` };
+/** « lundi 23 novembre à 14:05 », heure de Paris. */
+export function formatWhen(at: Date): string {
+  const day = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", weekday: "long", day: "numeric", month: "long" }).format(at);
+  const time = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).format(at);
+  return `${day} à ${time}`;
+}
+
+export function buildTelegramMessage(p: {
+  event: TelegramEvent;
+  name: string;
+  email: string;
+  userId: string;
+  appUrl: string;
+  at?: Date;
+}): TelegramMessage {
+  // Fiche lisible d'un coup d'œil : titre, nom en gras, e-mail, date et heure.
+  const card = [`👤 <b>${escapeHtml(p.name)}</b>`, `✉️ ${escapeHtml(p.email)}`, `🕒 ${formatWhen(p.at ?? new Date())}`];
+  if (p.event === "login") return { text: ["🟢 <b>Connexion à Biblio B1</b>", "", ...card].join("\n") };
   return {
-    text: `👤 <b>Nouvelle demande de compte</b>\n${name}\n${email}`,
+    text: ["🆕 <b>Nouvelle demande de compte</b>", "", ...card, "", "Accepter ou refuser ?"].join("\n"),
     reply_markup: {
       inline_keyboard: [
         [
