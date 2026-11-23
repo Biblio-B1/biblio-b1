@@ -151,30 +151,57 @@ function snap(c: Change): Snapshot {
   return "now" in c ? c.now : c.before;
 }
 
-function who(s: Snapshot): string {
-  const g = s.groups && !/,/.test(s.groups) ? ` (${escapeHtml(s.groups)})` : "";
-  return `<b>${escapeHtml(s.subject)}</b>${g}`;
-}
 function where(s: Snapshot): string {
   return s.visio ? "en visio" : s.location ? escapeHtml(s.location) : "salle non précisée";
+}
+
+/** Lignes communes : matière (et groupe), date, horaire. */
+function subjectLine(s: Snapshot): string {
+  const g = s.groups && !/,/.test(s.groups) ? ` (${escapeHtml(s.groups)})` : "";
+  return `📚 Matière : <b>${escapeHtml(s.subject)}</b>${g}`;
+}
+function dateLines(s: Snapshot, bold = false): string[] {
+  const b = (t: string) => (bold ? `<b>${t}</b>` : t);
+  return [`📅 Date : ${b(dayFmt.format(new Date(s.start)))}`, `🕒 Horaire : ${b(`${timeFmt.format(new Date(s.start))}–${timeFmt.format(new Date(s.end))}`)}`];
 }
 
 export function describeChange(c: Change): string {
   switch (c.kind) {
     case "added":
-      return `➕ <b>Cours ajouté</b> : ${who(c.now)}\n    ${slot(c.now.start, c.now.end)} · ${where(c.now)}`;
+      return ["➕ <b>Cours ajouté</b>", subjectLine(c.now), ...dateLines(c.now), `📍 Lieu : ${where(c.now)}`].join("\n");
     case "removed":
-      return `❌ <b>Cours supprimé</b> : ${who(c.before)}\n    ${slot(c.before.start, c.before.end)}`;
+      return ["❌ <b>Cours supprimé</b>", subjectLine(c.before), ...dateLines(c.before)].join("\n");
     case "cancelled":
-      return `❌ <b>Cours annulé</b> : ${who(c.now)}\n    ${slot(c.now.start, c.now.end)}`;
+      return ["❌ <b>Cours annulé</b>", subjectLine(c.now), ...dateLines(c.now)].join("\n");
     case "moved":
-      return `🕒 <b>Horaire modifié</b> : ${who(c.now)}\n    ${slot(c.before.start, c.before.end)} → <b>${slot(c.now.start, c.now.end)}</b>`;
+      return [
+        "🕒 <b>Horaire modifié</b>",
+        subjectLine(c.now),
+        `⬅️ Avant : ${slot(c.before.start, c.before.end)}`,
+        `➡️ Maintenant : <b>${slot(c.now.start, c.now.end)}</b>`,
+        `📍 Lieu : ${where(c.now)}`,
+      ].join("\n");
     case "room":
-      return `🚪 <b>Changement de salle</b> : ${who(c.now)}, ${slot(c.now.start, c.now.end)}\n    ${escapeHtml(c.before.location || "?")} → <b>${escapeHtml(c.now.location || "?")}</b>`;
+      return [
+        "🚪 <b>Changement de salle</b>",
+        subjectLine(c.now),
+        ...dateLines(c.now),
+        `📍 Salle : ${escapeHtml(c.before.location || "?")} → <b>${escapeHtml(c.now.location || "?")}</b>`,
+      ].join("\n");
     case "toVisio":
-      return `💻 <b>Passe en visio</b> : ${who(c.now)}\n    ${slot(c.now.start, c.now.end)} (au lieu de ${escapeHtml(c.before.location || "présentiel")})`;
+      return [
+        "💻 <b>Cours en visio</b>",
+        subjectLine(c.now),
+        ...dateLines(c.now, true),
+        `📍 Lieu : <b>en visio</b> (au lieu de ${escapeHtml(c.before.location || "présentiel")})`,
+      ].join("\n");
     case "toPresentiel":
-      return `🏫 <b>Passe en présentiel</b> : ${who(c.now)}\n    ${slot(c.now.start, c.now.end)} · <b>${escapeHtml(c.now.location || "salle non précisée")}</b>`;
+      return [
+        "🏫 <b>Cours en présentiel</b>",
+        subjectLine(c.now),
+        ...dateLines(c.now, true),
+        `📍 Salle : <b>${escapeHtml(c.now.location || "salle non précisée")}</b> (au lieu de la visio)`,
+      ].join("\n");
   }
 }
 
@@ -261,10 +288,10 @@ export function formatHomework(h: NewHomework, appUrl: string): string {
   return [
     exam ? "📣 <b>Contrôle annoncé</b>" : "📝 <b>Nouveau devoir</b>",
     "",
-    `<b>${escapeHtml(h.title)}</b>`,
-    `📚 ${escapeHtml(h.subject)}${h.englishGroup ? ` · groupe ${escapeHtml(h.englishGroup)}` : ""}`,
-    `📅 ${exam ? "Le" : "Pour le"} ${dayLabel(h.dueDate)}`,
-    ...(h.attachmentName ? [`📎 ${escapeHtml(h.attachmentName)}`] : []),
+    `📚 Matière : <b>${escapeHtml(h.subject)}</b>${h.englishGroup ? ` (groupe ${escapeHtml(h.englishGroup)})` : ""}`,
+    `📝 ${exam ? "Contrôle" : "Devoir"} : ${escapeHtml(h.title)}`,
+    `📅 ${exam ? "Date" : "À rendre le"} : <b>${dayLabel(h.dueDate)}</b>`,
+    ...(h.attachmentName ? [`📎 Pièce jointe : ${escapeHtml(h.attachmentName)}`] : []),
     "",
     `<a href="${appUrl}/devoirs/">Voir les devoirs</a>`,
   ].join("\n");
@@ -273,24 +300,33 @@ export function formatHomework(h: NewHomework, appUrl: string): string {
 // ---------------------------------------------------------------------------------------------
 // Alertes de contrôle : une semaine avant (ou dès qu'il reste 2 à 7 jours), puis la veille à 17 h.
 // ---------------------------------------------------------------------------------------------
-export type Exam = { key: string; title: string; day: string; detail?: string };
+/** subject : matière ; title : intitulé (titre du devoir) s'il dit autre chose ; time / place : horaire et lieu (HTML échappé). */
+export type Exam = { key: string; subject: string; title?: string; day: string; time?: string; place?: string };
 export type ExamAlert = { key: string; text: string };
+
+function examText(head: string, e: Exam, footer: string): string {
+  return [
+    head,
+    "",
+    `📚 Matière : <b>${escapeHtml(e.subject)}</b>`,
+    ...(e.title && e.title !== e.subject ? [`📝 ${escapeHtml(e.title)}`] : []),
+    `📅 Date : <b>${dayLabel(e.day)}</b>`,
+    ...(e.time ? [`🕒 Horaire : <b>${e.time}</b>`] : []),
+    ...(e.place ? [`📍 Lieu : ${e.place}`] : []),
+    "",
+    footer,
+  ].join("\n");
+}
 
 export function examAlerts(exams: Exam[], sent: Set<string>, now: Date, appUrl: string): ExamAlert[] {
   const out: ExamAlert[] = [];
+  const revise = `<a href="${appUrl}/">Réviser sur Biblio B1</a>`;
   for (const e of exams) {
     const n = daysUntil(e.day, now);
-    const detail = e.detail ? `\n${e.detail}` : "";
     if (n === 1 && parisHour(now) >= 17 && !sent.has(`${e.key}:veille`)) {
-      out.push({
-        key: `${e.key}:veille`,
-        text: `⚠️ <b>Contrôle demain</b> : <b>${escapeHtml(e.title)}</b>\n📅 ${dayLabel(e.day)}${detail}\n\nBon courage ! <a href="${appUrl}/">Réviser sur Biblio B1</a>`,
-      });
+      out.push({ key: `${e.key}:veille`, text: examText("⚠️ <b>Contrôle demain</b>", e, `Bon courage ! ${revise}`) });
     } else if (n >= 2 && n <= 7 && !sent.has(`${e.key}:semaine`)) {
-      out.push({
-        key: `${e.key}:semaine`,
-        text: `📣 <b>Contrôle dans ${n} jours</b> : <b>${escapeHtml(e.title)}</b>\n📅 ${dayLabel(e.day)}${detail}\n\n<a href="${appUrl}/">Réviser sur Biblio B1</a>`,
-      });
+      out.push({ key: `${e.key}:semaine`, text: examText(`📣 <b>Contrôle dans ${n} jours</b>`, e, revise) });
     }
   }
   return out;
@@ -302,8 +338,9 @@ export function examsFromTimetable(snaps: Snapshot[]): Exam[] {
     .filter((s) => s.type === "EVALUATION" && !s.cancelled)
     .map((s) => ({
       key: `edt:${s.uid}`,
-      title: s.subject,
+      subject: s.subject,
       day: parisDay(new Date(s.start)),
-      detail: `🕒 ${timeFmt.format(new Date(s.start))}–${timeFmt.format(new Date(s.end))} · ${where(s)}`,
+      time: `${timeFmt.format(new Date(s.start))}–${timeFmt.format(new Date(s.end))}`,
+      place: where(s),
     }));
 }

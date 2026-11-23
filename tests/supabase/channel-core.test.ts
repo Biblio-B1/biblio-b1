@@ -77,12 +77,38 @@ describe("diffTimetable", () => {
 });
 
 describe("messages", () => {
-  it("emploi du temps : changement de salle lisible, avec lien", () => {
+  it("emploi du temps : changement de salle avec matière, date, horaire et lien", () => {
     const [m] = formatTimetableChanges(diffTimetable([S()], [S({ location: "Salle G017- E4" })], opts), APP);
-    expect(m).toContain("🚪 <b>Changement de salle</b> : <b>Algorithmique et programmation C</b> (IA Gr1)");
-    expect(m).toContain("mercredi 25 novembre, 09:00–12:00");
-    expect(m).toContain("Salle EM319 - EIFFEL 1 → <b>Salle G017- E4</b>");
+    expect(m).toContain(
+      [
+        "🚪 <b>Changement de salle</b>",
+        "📚 Matière : <b>Algorithmique et programmation C</b> (IA Gr1)",
+        "📅 Date : mercredi 25 novembre",
+        "🕒 Horaire : 09:00–12:00",
+        "📍 Salle : Salle EM319 - EIFFEL 1 → <b>Salle G017- E4</b>",
+      ].join("\n"),
+    );
     expect(m).toContain(`${APP}/timetable/`);
+  });
+
+  it("cours passé en visio : matière, date et horaire", () => {
+    const [m] = formatTimetableChanges(diffTimetable([S()], [S({ type: "CRS-CV", location: "" })], opts), APP);
+    expect(m).toContain(
+      [
+        "💻 <b>Cours en visio</b>",
+        "📚 Matière : <b>Algorithmique et programmation C</b> (IA Gr1)",
+        "📅 Date : <b>mercredi 25 novembre</b>",
+        "🕒 Horaire : <b>09:00–12:00</b>",
+        "📍 Lieu : <b>en visio</b> (au lieu de Salle EM319 - EIFFEL 1)",
+      ].join("\n"),
+    );
+  });
+
+  it("horaire modifié : matière, avant et maintenant (date et heures)", () => {
+    const [m] = formatTimetableChanges(diffTimetable([S()], [S({ start: "2026-11-26T13:00:00Z", end: "2026-11-26T16:00:00Z" })], opts), APP);
+    expect(m).toContain("📚 Matière : <b>Algorithmique et programmation C</b>");
+    expect(m).toContain("⬅️ Avant : mercredi 25 novembre, 09:00–12:00");
+    expect(m).toContain("➡️ Maintenant : <b>jeudi 26 novembre, 14:00–17:00</b>");
   });
 
   it("un document : type, titre, matière et lien", () => {
@@ -116,9 +142,13 @@ describe("messages", () => {
     const h = { id: "h", title: "Exercices 1 à 5", subject: "Maths", dueDate: "2026-11-26", attachmentName: "td.pdf" };
     const m = formatHomework(h, APP);
     expect(m).toContain("📝 <b>Nouveau devoir</b>");
-    expect(m).toContain("📅 Pour le jeudi 26 novembre");
-    expect(m).toContain("📎 td.pdf");
-    expect(formatHomework({ ...h, title: "Contrôle chapitre 3" }, APP)).toContain("📣 <b>Contrôle annoncé</b>");
+    expect(m).toContain("📚 Matière : <b>Maths</b>");
+    expect(m).toContain("📅 À rendre le : <b>jeudi 26 novembre</b>");
+    expect(m).toContain("📎 Pièce jointe : td.pdf");
+    const c = formatHomework({ ...h, title: "Contrôle chapitre 3" }, APP);
+    expect(c).toContain("📣 <b>Contrôle annoncé</b>");
+    expect(c).toContain("📚 Matière : <b>Maths</b>");
+    expect(c).toContain("📅 Date : <b>jeudi 26 novembre</b>");
   });
 });
 
@@ -129,11 +159,14 @@ describe("alertes de contrôle", () => {
   });
 
   it("une semaine avant, puis la veille à partir de 17 h, une seule fois chacune", () => {
-    const exam = [{ key: "hw:1", title: "Contrôle C", day: "2026-11-30" }];
+    const exam = [{ key: "hw:1", subject: "Algorithmique et programmation C", title: "Contrôle pointeurs", day: "2026-11-30" }];
     expect(daysUntil("2026-11-30", NOW)).toBe(7);
     const a = examAlerts(exam, new Set(), NOW, APP);
     expect(a.map((x) => x.key)).toEqual(["hw:1:semaine"]);
-    expect(a[0].text).toContain("Contrôle dans 7 jours");
+    expect(a[0].text).toContain("📣 <b>Contrôle dans 7 jours</b>");
+    expect(a[0].text).toContain("📚 Matière : <b>Algorithmique et programmation C</b>");
+    expect(a[0].text).toContain("📝 Contrôle pointeurs");
+    expect(a[0].text).toContain("📅 Date : <b>lundi 30 novembre</b>");
     expect(examAlerts(exam, new Set(["hw:1:semaine"]), NOW, APP)).toEqual([]);
 
     const eve = new Date("2026-11-29T16:30:00Z"); // 17 h 30 à Paris, la veille
@@ -144,6 +177,10 @@ describe("alertes de contrôle", () => {
 
   it("séances « EVALUATION » de l'emploi du temps", () => {
     const e = examsFromTimetable([S({ uid: "x", type: "EVALUATION" }), S({ uid: "y" })]);
-    expect(e).toEqual([{ key: "edt:x", title: "Algorithmique et programmation C", day: "2026-11-25", detail: "🕒 09:00–12:00 · Salle EM319 - EIFFEL 1" }]);
+    expect(e).toEqual([
+      { key: "edt:x", subject: "Algorithmique et programmation C", day: "2026-11-25", time: "09:00–12:00", place: "Salle EM319 - EIFFEL 1" },
+    ]);
+    const [alert] = examAlerts(e, new Set(), NOW, APP);
+    expect(alert.text).toContain("📅 Date : <b>mercredi 25 novembre</b>\n🕒 Horaire : <b>09:00–12:00</b>\n📍 Lieu : Salle EM319 - EIFFEL 1");
   });
 });

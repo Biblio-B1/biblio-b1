@@ -22,7 +22,7 @@ import {
   type NewDocument,
   type Snapshot,
 } from "../_shared/channel-core.ts";
-import { escapeHtml, telegramApi } from "../_shared/telegram-core.ts";
+import { telegramApi } from "../_shared/telegram-core.ts";
 
 const SWEEP_EVERY_MS = 25 * 60_000;
 const HORIZON_DAYS = 21;
@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
     const in8 = parisDay(new Date(now.getTime() + 8 * 86_400_000));
     const { data: hws } = await db.from("homeworks").select("id, title, due_date, subjects(name)").gte("due_date", today).lte("due_date", in8);
     for (const h of (hws ?? []) as { id: string; title: string; due_date: string; subjects: { name: string } | null }[]) {
-      if (isExamTitle(h.title)) exams.push({ key: `hw:${h.id}`, title: h.title, day: h.due_date, detail: `📚 ${escapeHtml(h.subjects?.name ?? "")}` });
+      if (isExamTitle(h.title)) exams.push({ key: `hw:${h.id}`, subject: h.subjects?.name ?? "Sans matière", title: h.title, day: h.due_date });
     }
     const { data: sentRows } = await db.from("channel_alerts").select("key");
     const sentKeys = new Set(((sentRows ?? []) as { key: string }[]).map((r) => r.key));
