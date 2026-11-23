@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -23,7 +24,9 @@ import {
 } from "@/lib/api/library";
 import type { Document } from "@/lib/api/types";
 import { useData } from "@/lib/api/use-data";
-import { DOC_TYPE_LABELS, formatDate } from "@/lib/labels";
+import { DOC_CATEGORY_MAP, categorizeDocument } from "@/lib/doc-categories";
+import { formatDate } from "@/lib/labels";
+import { UNCLASSIFIED_SLUG, subjectHref } from "@/lib/routes";
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -153,6 +156,8 @@ function DocView() {
   if (!doc) return <p className="text-ink-2">Document introuvable.</p>;
 
   const subject = subjects.find((s) => s.id === doc.subjectId);
+  const category = DOC_CATEGORY_MAP[categorizeDocument(doc)];
+  const subjectSlug = subject?.slug ?? UNCLASSIFIED_SLUG;
   const canDelete = profile ? canDeleteDocument(doc, profile) : false;
   const needsReview = !doc.subjectConfirmed || !doc.subjectId;
 
@@ -164,7 +169,13 @@ function DocView() {
           <div className="min-w-0 flex-1">
             <h1 className="page-title break-words">{doc.title}</h1>
             <p className="mt-1 text-[14px] text-ink-2">
-              {DOC_TYPE_LABELS[doc.type]}, {subject?.name ?? "sans matière"}
+              <Link href={subjectHref(subjectSlug, category.id)} className="underline-offset-2 hover:text-ink hover:underline">
+                {category.label}
+              </Link>
+              {", "}
+              <Link href={subjectHref(subjectSlug)} className="underline-offset-2 hover:text-ink hover:underline">
+                {subject?.name ?? "sans matière"}
+              </Link>
               {author ? `, déposé par ${author}` : doc.source !== "upload" ? ", importé" : ""} le {formatDate(doc.createdAt)}
             </p>
           </div>

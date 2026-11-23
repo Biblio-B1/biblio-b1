@@ -3,5 +3,8 @@
 export const UNCLASSIFIED_SLUG = "sans-matiere";
 
 export const docHref = (id: string) => `/doc?id=${encodeURIComponent(id)}`;
-export const subjectHref = (slug: string) => `/library/subject?slug=${encodeURIComponent(slug)}`;
+export const subjectHref = (slug: string, cat?: string) =>
+  cat
+    ? `/library/subject?slug=${encodeURIComponent(slug)}&cat=${encodeURIComponent(cat)}`
+    : `/library/subject?slug=${encodeURIComponent(slug)}`;
 export const exerciseHref = (id: string) => `/training/exercise?id=${encodeURIComponent(id)}`;
