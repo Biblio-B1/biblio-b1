@@ -4,32 +4,17 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Spine } from "@/components/layout/Spine";
-import { DocumentList, TypeFilter } from "@/components/library/DocumentList";
-import { useSignedUrl } from "@/lib/api/files";
+import { CategorizedDocumentList } from "@/components/library/CategorizedDocumentList";
 import { listDocuments, listSubjects } from "@/lib/api/library";
 import type { Document } from "@/lib/api/types";
 import { useData } from "@/lib/api/use-data";
-import { filterByTitle, parseType } from "@/lib/labels";
-import { UNCLASSIFIED_SLUG, docHref } from "@/lib/routes";
-
-function PhotoThumb({ doc }: { doc: Document }) {
-  const src = useSignedUrl(doc.filePath);
-  return (
-    <Link href={docHref(doc.id)} className="block overflow-hidden rounded-md border border-line" title={doc.title}>
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={doc.title} loading="lazy" className="h-24 w-32 object-cover" />
-      ) : (
-        <span className="block h-24 w-32 animate-pulse bg-sunken" />
-      )}
-    </Link>
-  );
-}
+import { groupDocumentsByCategory, parseCategory } from "@/lib/doc-categories";
+import { UNCLASSIFIED_SLUG } from "@/lib/routes";
 
 function SubjectView() {
   const params = useSearchParams();
   const slug = params.get("slug") ?? "";
-  const type = parseType(params.get("type") ?? undefined);
+  const category = parseCategory(params.get("cat"), params.get("type"));
   const q = params.get("q")?.slice(0, 200) || undefined;
   const { data, error } = useData(async () => {
     const subjects = await listSubjects();
@@ -44,8 +29,7 @@ function SubjectView() {
   if (data.subject === undefined) return <p className="text-ink-2">Matière introuvable.</p>;
 
   const { subject, all, subjects } = data;
-  const docs = filterByTitle(type ? all.filter((d) => d.type === type) : all, q);
-  const photos = all.filter((d) => d.type === "photo" && d.mime.startsWith("image/")).slice(0, 12);
+  const catCount = groupDocumentsByCategory(all).length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -55,34 +39,28 @@ function SubjectView() {
           <h1 className="page-title">{subject?.name ?? "Sans matière"}</h1>
           <p className="text-ink-2">
             {all.length} document{all.length > 1 ? "s" : ""}
+            {catCount > 1 ? ` · ${catCount} catégories` : ""}
             {!subject && " à classer : ouvrez-en un pour choisir sa matière."}
           </p>
         </div>
       </header>
 
-      {photos.length > 0 && !type && (
-        <section aria-label="Photos récentes" className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-          <ul className="flex gap-2">
-            {photos.map((p) => (
-              <li key={p.id} className="shrink-0">
-                <PhotoThumb doc={p} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <TypeFilter active={type} base="/library/subject" q={q} extra={{ slug }} />
-      <DocumentList
-        docs={docs}
+      <CategorizedDocumentList
+        key={slug}
+        docs={all}
         subjects={subjects}
         showSubject={false}
+        activeCategory={category}
+        baseHref="/library/subject"
+        extraParams={{ slug }}
+        initialQuery={q}
         empty={
           <>
             Rien ici pour l&apos;instant.{" "}
             <Link href="/upload" className="text-ink underline underline-offset-2">
               Déposer des fichiers
             </Link>
+            .
           </>
         }
       />
