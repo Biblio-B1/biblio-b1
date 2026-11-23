@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useId, useState } from "react";
 
 export type FormState = { error?: string; message?: string; link?: string } | null;
 
@@ -73,18 +73,47 @@ export function Field({
   defaultValue?: string | number;
   min?: number;
 }) {
+  const [visible, setVisible] = useState(false);
+  const id = useId();
+  const isPassword = type === "password";
+  const input = (
+    <input
+      id={id}
+      name={name}
+      type={isPassword && visible ? "text" : type}
+      required
+      autoComplete={autoComplete}
+      defaultValue={defaultValue}
+      min={min}
+      className={isPassword ? "input pr-24" : "input"}
+    />
+  );
+  if (!isPassword) {
+    return (
+      <label className="label">
+        {label}
+        {input}
+      </label>
+    );
+  }
+  // Mot de passe : bouton pour voir ce que l'on tape (hors du <label> pour ne pas déplacer le focus).
   return (
-    <label className="label">
-      {label}
-      <input
-        name={name}
-        type={type}
-        required
-        autoComplete={autoComplete}
-        defaultValue={defaultValue}
-        min={min}
-        className="input"
-      />
-    </label>
+    <div className="label">
+      <label htmlFor={id}>
+        {label}
+      </label>
+      <div className="relative">
+        {input}
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-pressed={visible}
+          aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+          className="absolute inset-y-0 right-0 px-3 text-sm font-medium text-ink-2 hover:text-ink"
+        >
+          {visible ? "Masquer" : "Afficher"}
+        </button>
+      </div>
+    </div>
   );
 }
