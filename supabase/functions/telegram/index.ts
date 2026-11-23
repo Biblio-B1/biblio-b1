@@ -28,7 +28,8 @@ Deno.serve(async (req) => {
 
   let update: {
     callback_query?: { id: string; data?: string; message?: { message_id: number; chat?: { id?: number }; text?: string } };
-    message?: { chat?: { id?: number }; text?: string };
+    message?: { chat?: { id?: number; type?: string; title?: string }; text?: string };
+    channel_post?: { chat: { id: number; type: string; title?: string }; text?: string };
     my_chat_member?: { chat: { id: number; type: string; title?: string }; new_chat_member?: { status?: string } };
   };
   try {
@@ -37,17 +38,40 @@ Deno.serve(async (req) => {
     return ok();
   }
 
-  // Le bot vient d'être nommé administrateur d'un canal : on propose à l'administrateur de l'utiliser.
+  /** Propose à l'administrateur (conversation privée) de publier dans ce canal ou ce groupe. */
+  const offerChannel = async (chat: { id: number; type: string; title?: string }) => {
+    if (!adminChat) return;
+    const kind = chat.type === "channel" ? "canal" : "groupe";
+    await api("sendMessage", {
+      chat_id: adminChat,
+      parse_mode: "HTML",
+      text: `📢 Le bot peut publier dans le ${kind} <b>${escapeHtml(chat.title ?? String(chat.id))}</b>.\nY envoyer les notifications de la classe (documents, devoirs, contrôles, emploi du temps) ?`,
+      reply_markup: channelChoiceKeyboard(chat.id),
+    });
+  };
+  const isRoom = (type: string | undefined) => type === "channel" || type === "group" || type === "supergroup";
+
+  // Le bot vient d'être ajouté à un canal ou un groupe (ou y change de droits).
   const member = update.my_chat_member;
   if (member) {
-    if (member.chat.type === "channel" && member.new_chat_member?.status === "administrator" && adminChat) {
-      await api("sendMessage", {
-        chat_id: adminChat,
-        parse_mode: "HTML",
-        text: `📢 Le bot est maintenant administrateur du canal <b>${escapeHtml(member.chat.title ?? String(member.chat.id))}</b>.\nY publier les notifications de la classe (documents, devoirs, contrôles, emploi du temps) ?`,
-        reply_markup: channelChoiceKeyboard(member.chat.id),
-      });
+    const status = member.new_chat_member?.status ?? "";
+    // Trace du dernier événement (diagnostic de la configuration, sans contenu de message).
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    await db.from("app_settings").upsert({
+      key: "telegram_last_chat_member",
+      value: { type: member.chat.type, status, at: new Date().toISOString() },
+      updated_at: new Date().toISOString(),
+    });
+    if (isRoom(member.chat.type) && (status === "administrator" || (member.chat.type !== "channel" && status === "member"))) {
+      await offerChannel(member.chat);
     }
+    return ok();
+  }
+
+  // Secours : « /relier » écrit dans le canal ou le groupe renvoie le bouton à l'administrateur.
+  const post = update.channel_post ?? (isRoom(update.message?.chat?.type) ? update.message : undefined);
+  if (post?.chat && isRoom(post.chat.type)) {
+    if (/^\/relier(@\w+)?\b/i.test(post.text ?? "")) await offerChannel(post.chat as { id: number; type: string; title?: string });
     return ok();
   }
 
