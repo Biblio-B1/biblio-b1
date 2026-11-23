@@ -34,7 +34,7 @@ PC de l'administrateur (clé secrète dans .env, jamais publiée)
   boutons **Accepter / Refuser** directement dans le message, et **à chaque connexion**, avec le nom
   de la personne (« Prénom Nom »). ntfy.sh n'est pas utilisable : il limite par adresse IP et les
   fonctions Supabase sortent par des IP partagées (quota épuisé, erreur 429).
-- **Session** : déconnexion après **15 minutes sans activité**, y compris à la réouverture du site.
+- **Session** : reste ouverte jusqu'à ce qu'on se déconnecte (pas de délai d'inactivité).
 - Connexion par e-mail (pas par nom).
 
 ## Installer Supabase (une fois)

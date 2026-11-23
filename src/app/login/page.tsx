@@ -2,20 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ActionForm, Field, type FormState } from "@/components/ActionForm";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthShell } from "@/components/layout/AuthShell";
 import { getSupabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
-  const { session, loading, markActive } = useAuth();
+  const { session, loading } = useAuth();
   const router = useRouter();
-  const [expired, setExpired] = useState(false);
 
-  useEffect(() => {
-    setExpired(new URLSearchParams(window.location.search).has("expire"));
-  }, []);
   useEffect(() => {
     if (!loading && session) router.replace("/");
   }, [loading, session, router]);
@@ -35,7 +31,6 @@ export default function LoginPage() {
             : "Connexion impossible pour le moment.",
       };
     }
-    markActive();
     // Notification à l'administrateur ; un échec ne bloque jamais la connexion.
     void supabase.functions.invoke("notify", { body: { event: "login" } }).catch(() => undefined);
     router.replace("/");
@@ -44,11 +39,6 @@ export default function LoginPage() {
 
   return (
     <AuthShell title="Connexion">
-      {expired && (
-        <p role="status" className="rounded-md border border-line bg-sunken p-2.5 text-sm text-ink-2">
-          Session expirée après 15 minutes sans activité. Reconnectez-vous.
-        </p>
-      )}
       <ActionForm action={login} submitLabel="Se connecter">
         <Field label="E-mail" name="email" type="email" autoComplete="email" />
         <Field label="Mot de passe" name="password" type="password" autoComplete="current-password" />

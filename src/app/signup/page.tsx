@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionForm, Field, type FormState } from "@/components/ActionForm";
-import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthShell } from "@/components/layout/AuthShell";
 import { signupErrorMessage, validateSignup } from "@/lib/auth/signup-form";
 import { getSupabase } from "@/lib/supabase/client";
 
 export default function SignupPage() {
-  const { markActive } = useAuth();
   const router = useRouter();
 
   async function signup(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -32,7 +30,6 @@ export default function SignupPage() {
       // Confirmation par e-mail encore active dans Supabase : la personne doit d'abord cliquer le lien.
       return { message: "Demande enregistrée. Confirmez votre adresse e-mail, puis attendez la validation de l'administrateur." };
     }
-    markActive();
     void supabase.functions.invoke("notify", { body: { event: "signup" } }).catch(() => undefined);
     router.replace("/pending");
     return null;
