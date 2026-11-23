@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canReject } from "../../supabase/functions/_shared/admin-core";
+import { canDeleteSelf, canReject } from "../../supabase/functions/_shared/admin-core";
 
 describe("canReject", () => {
   it("un administrateur actif peut refuser une demande en attente", () => {
@@ -20,5 +20,19 @@ describe("canReject", () => {
 
   it("cible introuvable : refusé", () => {
     expect(canReject({ role: "admin", status: "active" }, null)).toBe(false);
+  });
+});
+
+describe("canDeleteSelf", () => {
+  it("un membre ou un compte en attente peut supprimer son compte", () => {
+    expect(canDeleteSelf({ role: "member", status: "active" }, 1)).toBe(true);
+    expect(canDeleteSelf({ role: "member", status: "pending" }, 1)).toBe(true);
+  });
+  it("le dernier administrateur actif ne peut pas ; s'il en reste un autre, oui", () => {
+    expect(canDeleteSelf({ role: "admin", status: "active" }, 1)).toBe(false);
+    expect(canDeleteSelf({ role: "admin", status: "active" }, 2)).toBe(true);
+  });
+  it("profil introuvable : non", () => {
+    expect(canDeleteSelf(null, 2)).toBe(false);
   });
 });

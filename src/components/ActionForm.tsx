@@ -65,6 +65,7 @@ export function Field({
   autoComplete,
   defaultValue,
   min,
+  required = true,
 }: {
   label: string;
   name: string;
@@ -72,6 +73,7 @@ export function Field({
   autoComplete?: string;
   defaultValue?: string | number;
   min?: number;
+  required?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
   const id = useId();
@@ -81,7 +83,7 @@ export function Field({
       id={id}
       name={name}
       type={isPassword && visible ? "text" : type}
-      required
+      required={required}
       autoComplete={autoComplete}
       defaultValue={defaultValue}
       min={min}

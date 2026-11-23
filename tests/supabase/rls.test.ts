@@ -190,3 +190,50 @@ describe("contraintes", () => {
     expect(r.rows[0]).toMatchObject({ status: "running", attempts: 1 });
   });
 });
+
+describe("professeurs et calendriers", () => {
+  it("un compte validé relève les professeurs, sans doublon, en fusionnant les matières", async () => {
+    await t.as(activeId);
+    await t.db.query("select public.register_teachers($1::jsonb)", [
+      JSON.stringify([{ name: "M. DUPONT JEAN", subjects: ["Maths"] }]),
+    ]);
+    await t.db.query("select public.register_teachers($1::jsonb)", [
+      JSON.stringify([{ name: "m. dupont jean", subjects: ["Algo", "Maths"] }]),
+    ]);
+    const r = await t.db.query<{ name: string; subjects: string[] }>("select name, subjects from public.teachers");
+    expect(r.rows).toEqual([{ name: "M. DUPONT JEAN", subjects: ["Algo", "Maths"] }]);
+  });
+
+  it("un membre renseigne un e-mail valide ; un e-mail invalide est refusé", async () => {
+    await t.as(activeId);
+    await t.db.query("update public.teachers set email = 'jean.dupont@ecole.fr'");
+    await expect(t.db.query("update public.teachers set email = 'pas-un-mail'")).rejects.toThrow();
+  });
+
+  it("un compte en attente ne lit ni ne relève rien ; seul l'admin supprime", async () => {
+    await t.as(pendingId);
+    expect(await t.count("select 1 from public.teachers")).toBe(0);
+    await expect(
+      t.db.query("select public.register_teachers($1::jsonb)", [JSON.stringify([{ name: "Mme X", subjects: [] }])]),
+    ).rejects.toThrow();
+    await t.as(activeId);
+    await t.db.query("delete from public.teachers");
+    expect(await t.count("select 1 from public.teachers")).toBe(1);
+    await t.as(adminId);
+    await t.db.query("delete from public.teachers");
+    expect(await t.count("select 1 from public.teachers")).toBe(0);
+  });
+
+  it("un membre peut avoir un calendrier Boostcamp et un calendrier Outlook", async () => {
+    await t.as("service");
+    await t.db.query(
+      "insert into public.calendar_links (user_id, source, encrypted_url) values ($1, 'outlook', 'b')",
+      [activeId],
+    );
+    await expect(
+      t.db.query("insert into public.calendar_links (user_id, source, encrypted_url) values ($1, 'gmail', 'c')", [activeId]),
+    ).rejects.toThrow();
+    await t.as(activeId);
+    expect(await t.count("select 1 from public.calendar_links")).toBe(2);
+  });
+});

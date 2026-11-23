@@ -4,7 +4,7 @@
 import { z } from "zod";
 
 /** Champ de l'état civil : rempli, sans « @ », 40 caractères au plus (comme profiles.name). */
-function personField(label: string) {
+export function personField(label: string) {
   return z
     .string()
     .trim()
