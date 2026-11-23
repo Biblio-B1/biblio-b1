@@ -4,7 +4,8 @@
 // Une demande de compte arrive avec des boutons « Accepter » / « Refuser » : la fonction `telegram`
 // (webhook du bot) applique la décision, seulement si elle vient de la conversation de l'admin.
 
-export type TelegramEvent = "login" | "signup";
+/** pending_login : connexion d'un compte pas encore validé (alerte avec boutons). */
+export type TelegramEvent = "login" | "signup" | "pending_login";
 
 export type TelegramMessage = {
   text: string;
@@ -34,8 +35,18 @@ export function buildTelegramMessage(p: {
   // Fiche lisible d'un coup d'œil : titre, nom en gras, e-mail, date et heure.
   const card = [`👤 <b>${escapeHtml(p.name)}</b>`, `✉️ ${escapeHtml(p.email)}`, `🕒 ${formatWhen(p.at ?? new Date())}`];
   if (p.event === "login") return { text: ["🟢 <b>Connexion à Biblio B1</b>", "", ...card].join("\n") };
+  const text =
+    p.event === "pending_login"
+      ? [
+          "⏳ <b>Connexion d'un compte en attente</b>",
+          "",
+          ...card,
+          "",
+          "Cette personne essaie de se connecter mais son compte n'est pas encore validé. Accepter ou refuser ?",
+        ]
+      : ["🆕 <b>Nouvelle demande de compte</b>", "", ...card, "", "Accepter ou refuser ?"];
   return {
-    text: ["🆕 <b>Nouvelle demande de compte</b>", "", ...card, "", "Accepter ou refuser ?"].join("\n"),
+    text: text.join("\n"),
     reply_markup: {
       inline_keyboard: [
         [
@@ -46,6 +57,11 @@ export function buildTelegramMessage(p: {
       ],
     },
   };
+}
+
+/** Connexion d'un compte encore en attente : alerte avec boutons plutôt que simple connexion. */
+export function eventForLogin(event: "login" | "signup", status: string | undefined): TelegramEvent {
+  return event === "login" && status === "pending" ? "pending_login" : event;
 }
 
 /** Après une décision : les boutons laissent place à un bouton d'état (« done » = déjà traité). */

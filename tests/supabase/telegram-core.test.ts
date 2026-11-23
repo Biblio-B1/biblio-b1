@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildTelegramMessage, isAdminChat, parseDecision, sendTelegram, statusKeyboard } from "../../supabase/functions/_shared/telegram-core";
+import {
+  buildTelegramMessage,
+  eventForLogin,
+  isAdminChat,
+  parseDecision,
+  sendTelegram,
+  statusKeyboard,
+} from "../../supabase/functions/_shared/telegram-core";
 
 const APP = "https://biblio-b1.github.io/biblio-b1";
 
@@ -30,6 +37,39 @@ describe("buildTelegramMessage", () => {
       ["🟢 <b>Connexion à Biblio B1</b>", "", "👤 <b>Léa Martin</b>", "✉️ lea@example.com", "🕒 lundi 23 novembre à 14:05"].join("\n"),
     );
     expect(m.reply_markup).toBeUndefined();
+  });
+
+  it("connexion d'un compte pas encore validé : alerte avec boutons Accepter / Refuser", () => {
+    const m = buildTelegramMessage({
+      event: "pending_login",
+      name: "Léa Martin",
+      email: "lea@example.com",
+      userId: "u-1",
+      appUrl: APP,
+      at: new Date("2026-11-23T13:05:00Z"),
+    });
+    expect(m.text).toBe(
+      [
+        "⏳ <b>Connexion d'un compte en attente</b>",
+        "",
+        "👤 <b>Léa Martin</b>",
+        "✉️ lea@example.com",
+        "🕒 lundi 23 novembre à 14:05",
+        "",
+        "Cette personne essaie de se connecter mais son compte n'est pas encore validé. Accepter ou refuser ?",
+      ].join("\n"),
+    );
+    expect(m.reply_markup?.inline_keyboard[0]).toEqual([
+      { text: "✅ Accepter", callback_data: "approve:u-1" },
+      { text: "❌ Refuser", callback_data: "reject:u-1" },
+    ]);
+  });
+
+  it("eventForLogin : un compte en attente qui se connecte devient « pending_login »", () => {
+    expect(eventForLogin("login", "pending")).toBe("pending_login");
+    expect(eventForLogin("login", "active")).toBe("login");
+    expect(eventForLogin("signup", "pending")).toBe("signup");
+    expect(eventForLogin("login", undefined)).toBe("login");
   });
 
   it("demande de compte : même présentation, titre distinct", () => {

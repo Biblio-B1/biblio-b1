@@ -1,10 +1,11 @@
 // Edge Function `notify` : prévient l'administrateur sur Telegram à chaque connexion et à chaque
-// demande de compte (avec boutons Accepter / Refuser). Appelée par le site avec le jeton de
+// demande de compte, et à chaque tentative de connexion d'un compte pas encore validé (ces deux
+// derniers avec boutons Accepter / Refuser). Appelée par le site avec le jeton de
 // l'utilisateur ; le nom est lu dans `profiles` (on ne fait pas confiance au corps de la requête).
 // Secrets : TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (conversation de l'admin avec le bot), APP_URL.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/cors.ts";
-import { buildTelegramMessage, sendTelegram, type TelegramEvent } from "../_shared/telegram-core.ts";
+import { buildTelegramMessage, eventForLogin, sendTelegram } from "../_shared/telegram-core.ts";
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
@@ -18,7 +19,7 @@ Deno.serve(async (req) => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) return json({ error: "Non authentifié" }, 401, origin);
 
-  let event: TelegramEvent;
+  let event: "login" | "signup";
   try {
     const body = await req.json();
     if (body?.event !== "login" && body?.event !== "signup") throw new Error();
@@ -28,9 +29,10 @@ Deno.serve(async (req) => {
   }
 
   // Le profil est lisible par son propriétaire, même « pending » (RLS).
-  const { data: profile } = await supabase.from("profiles").select("name").eq("id", userData.user.id).maybeSingle();
+  const { data: profile } = await supabase.from("profiles").select("name, status").eq("id", userData.user.id).maybeSingle();
   const message = buildTelegramMessage({
-    event,
+    // Compte pas encore validé qui se connecte : alerte avec boutons Accepter / Refuser.
+    event: eventForLogin(event, profile?.status),
     name: profile?.name ?? userData.user.email ?? "Quelqu'un",
     email: userData.user.email ?? "",
     userId: userData.user.id,
