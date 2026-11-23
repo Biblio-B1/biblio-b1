@@ -5,7 +5,11 @@ import { getSupabase } from "@/lib/supabase/client";
 export type Teacher = { id: string; name: string; email: string | null; subjects: string[] };
 
 export async function listTeachers(): Promise<Teacher[]> {
-  const { data, error } = await getSupabase().from("teachers").select("id, name, email, subjects").order("name");
+  const { data, error } = await getSupabase()
+    .from("teachers")
+    .select("id, name, email, subjects")
+    .eq("hidden", false)
+    .order("name");
   if (error) throw new Error(`Professeurs : ${error.message}`);
   return (data ?? []) as Teacher[];
 }
@@ -30,9 +34,10 @@ export async function setTeacherEmail(id: string, email: string | null): Promise
   if (error) throw new Error(/check/i.test(error.message) ? "Adresse e-mail invalide." : "Enregistrement impossible.");
 }
 
-export async function deleteTeacher(id: string): Promise<void> {
-  const { error } = await getSupabase().from("teachers").delete().eq("id", id);
-  if (error) throw new Error("Suppression impossible.");
+/** Retire un professeur de l'annuaire (admin) : masqué, pour que le relevé automatique ne le recrée pas. */
+export async function hideTeacher(id: string): Promise<void> {
+  const { error } = await getSupabase().from("teachers").update({ hidden: true }).eq("id", id);
+  if (error) throw new Error("Retrait impossible.");
 }
 
 export type Student = { id: string; name: string; email: string | null; role: "admin" | "member" };

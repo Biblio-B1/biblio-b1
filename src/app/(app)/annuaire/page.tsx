@@ -6,7 +6,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { getMyCalendar } from "@/lib/api/calendar";
 import {
   addTeacher,
-  deleteTeacher,
+  hideTeacher,
   listStudents,
   listTeachers,
   registerTeachers,
@@ -308,7 +308,7 @@ function TeachersTab() {
                       className="text-[13px] text-danger underline-offset-2 hover:underline"
                       onClick={async () => {
                         if (!window.confirm(`Retirer ${displayTeacherName(t.name)} de l'annuaire ?`)) return;
-                        await deleteTeacher(t.id).catch(() => undefined);
+                        await hideTeacher(t.id).catch(() => undefined);
                         reload();
                       }}
                     >

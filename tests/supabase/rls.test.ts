@@ -253,3 +253,17 @@ describe("annuaire des élèves", () => {
     expect(await t.count("select * from public.directory_students()")).toBe(0);
   });
 });
+
+describe("professeurs masqués", () => {
+  it("seul l'admin masque ; un prof masqué n'est pas recréé par le relevé", async () => {
+    await t.as(activeId);
+    await t.db.query("select public.register_teachers($1::jsonb)", [JSON.stringify([{ name: "Mme MASQUEE ANNE", subjects: ["A"] }])]);
+    await expect(t.db.query("update public.teachers set hidden = true where name = 'Mme MASQUEE ANNE'")).rejects.toThrow();
+    await t.as(adminId);
+    await t.db.query("update public.teachers set hidden = true where name = 'Mme MASQUEE ANNE'");
+    await t.as(activeId);
+    await t.db.query("select public.register_teachers($1::jsonb)", [JSON.stringify([{ name: "Mme MASQUEE ANNE", subjects: ["B"] }])]);
+    const r = await t.db.query<{ hidden: boolean }>("select hidden from public.teachers where lower(name) = 'mme masquee anne'");
+    expect(r.rows).toEqual([{ hidden: true }]);
+  });
+});
