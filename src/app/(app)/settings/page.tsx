@@ -11,6 +11,7 @@ import {
   notificationsSupported,
 } from "@/lib/admin-notify";
 import { CALENDAR_SOURCES, callCalendar, getMyCalendar, type CalendarSource, type StoredCalendar } from "@/lib/api/calendar";
+import { getShowEmail, setShowEmail } from "@/lib/api/teachers";
 import { useData } from "@/lib/api/use-data";
 import { renameErrorMessage, splitName, validatePasswordChange, validateRename } from "@/lib/auth/account-form";
 import { getSupabase } from "@/lib/supabase/client";
@@ -55,6 +56,41 @@ function ProfileSection() {
           <Field label="Nom" name="nom" autoComplete="family-name" defaultValue={nom} />
         </div>
       </ActionForm>
+    </Section>
+  );
+}
+
+function DirectorySection({ email }: { email: string }) {
+  const { profile } = useAuth();
+  const [show, setShow] = useState<boolean | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (profile) void getShowEmail(profile.id).then(setShow);
+  }, [profile]);
+  return (
+    <Section title="Annuaire" intro="Les autres élèves vous voient dans l'annuaire. Votre e-mail n'y apparaît que si vous le choisissez.">
+      <label className="flex items-center gap-3 text-sm">
+        <input
+          type="checkbox"
+          className="h-4 w-4"
+          checked={show ?? false}
+          disabled={show === null || !profile}
+          onChange={async (e) => {
+            const next = e.target.checked;
+            setShow(next);
+            setNote(null);
+            try {
+              await setShowEmail(profile!.id, next);
+              setNote(next ? `${email} est visible dans l'annuaire.` : "Votre e-mail est masqué dans l'annuaire.");
+            } catch (err) {
+              setShow(!next);
+              setNote(err instanceof Error ? err.message : "Réglage impossible à enregistrer.");
+            }
+          }}
+        />
+        Afficher mon e-mail ({email}) aux autres élèves
+      </label>
+      {note && <p role="status" className="text-sm text-ink-2">{note}</p>}
     </Section>
   );
 }
@@ -299,6 +335,7 @@ export default function SettingsPage() {
       </header>
       <CalendarSection />
       <ProfileSection key={profile?.name} />
+      <DirectorySection email={email} />
       <PasswordSection email={email} />
       {profile?.role === "admin" && <NotificationSection />}
       <DeleteSection email={email} />

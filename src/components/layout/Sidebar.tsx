@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { UNCLASSIFIED_SLUG, subjectHref } from "@/lib/routes";
 import { Spine } from "./Spine";
-import { IconBooks, IconCalendar, IconCheckList, IconClose, IconHome, IconHomework, IconPen, IconSettings, IconUpload, IconUsers } from "./Icons";
+import { IconBooks, IconCalendar, IconCheckList, IconClose, IconHome, IconHomework, IconMail, IconPen, IconSettings, IconUpload, IconUsers } from "./Icons";
 
 export type SidebarSubject = { slug: string; name: string; color: string; count: number };
 
@@ -71,6 +71,9 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
             <NavLink href="/devoirs" active={pathname === "/devoirs" || pathname.startsWith("/devoirs/")}>
               <IconHomework /> Devoirs
             </NavLink>
+            <NavLink href="/annuaire" active={is("/annuaire")}>
+              <IconMail /> Annuaire
+            </NavLink>
             <NavLink href="/upload" active={is("/upload")}>
               <IconUpload /> Déposer des fichiers
             </NavLink>
@@ -124,9 +127,10 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
 
       {user ? (
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-line px-2 pt-3 text-sm">
-        <span className="truncate text-ink-2" title={user.name}>
-          {user.name}
-        </span>
+        <Link href="/settings" className="flex min-w-0 items-center gap-1.5 text-ink-2 hover:text-ink" title="Paramètres du compte">
+          <IconSettings size={16} />
+          <span className="truncate">{user.name}</span>
+        </Link>
         <button
           type="button"
           onClick={() => void signOut()}

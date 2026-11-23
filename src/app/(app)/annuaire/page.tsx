@@ -1,9 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getMyCalendar } from "@/lib/api/calendar";
-import { addTeacher, deleteTeacher, listTeachers, registerTeachers, setTeacherEmail, type Teacher } from "@/lib/api/teachers";
+import {
+  addTeacher,
+  deleteTeacher,
+  listStudents,
+  listTeachers,
+  registerTeachers,
+  setTeacherEmail,
+  type Student,
+  type Teacher,
+} from "@/lib/api/teachers";
 import { useData } from "@/lib/api/use-data";
 import { displayTeacherName, extractTeachers, mailLinks } from "@/lib/teachers";
 
@@ -208,7 +218,7 @@ function AddTeacher({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-export default function TeachersPage() {
+function TeachersTab() {
   const { profile } = useAuth();
   const { data, error, reload } = useData(loadTeachers, []);
   const [query, setQuery] = useState("");
@@ -227,21 +237,10 @@ export default function TeachersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="page-title">Professeurs</h1>
-        <p className="text-ink-2">
-          Les noms viennent des emplois du temps Boostcamp. Les e-mails sont partagés par la classe : si vous en connaissez
-          un (fiche du cours sur{" "}
-          <a className="underline underline-offset-2" href="https://boostcamp.omneseducation.com/home" target="_blank" rel="noreferrer">
-            Boostcamp
-          </a>{" "}
-          ou annuaire{" "}
-          <a className="underline underline-offset-2" href="https://outlook.office.com/people/" target="_blank" rel="noreferrer">
-            Outlook
-          </a>
-          ), ajoutez-le.
-        </p>
-      </header>
+      <p className="text-sm text-ink-2">
+        Noms relevés dans les emplois du temps Boostcamp, adresses de l&apos;annuaire Outlook de l&apos;école. Une adresse
+        manque ou est fausse ? Corrigez-la : la liste est partagée par la classe.
+      </p>
 
       <Composer teachers={data} to={to} setTo={setTo} />
 
@@ -325,6 +324,130 @@ export default function TeachersPage() {
       </section>
 
       <AddTeacher onAdded={reload} />
+    </div>
+  );
+}
+
+function StudentsTab() {
+  const { profile } = useAuth();
+  const { data, error } = useData(listStudents, []);
+  const [query, setQuery] = useState("");
+  const [copied, setCopied] = useState(false);
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (data ?? []).filter((s) => !q || s.name.toLowerCase().includes(q) || s.email?.toLowerCase().includes(q));
+  }, [data, query]);
+
+  if (error) return <p role="alert" className="text-danger">{error}</p>;
+  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  const me = data.find((s) => s.id === profile?.id);
+  const emails = data.filter((s) => s.email && s.id !== profile?.id).map((s) => s.email!);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-ink-2">
+        Membres de Biblio B1. Chacun choisit d&apos;afficher ou non son e-mail
+        {me && !me.email ? (
+          <>
+            {" "}: le vôtre est masqué,{" "}
+            <Link href="/settings" className="underline underline-offset-2">
+              l&apos;afficher dans les paramètres
+            </Link>
+            .
+          </>
+        ) : (
+          " (Paramètres)."
+        )}
+      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Élèves ({data.length})</h2>
+        <div className="flex flex-wrap gap-2">
+          {emails.length > 0 && (
+            <button
+              type="button"
+              className="btn h-9"
+              onClick={async () => {
+                await navigator.clipboard?.writeText(emails.join(", "));
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+            >
+              {copied ? "Adresses copiées" : `Copier les ${emails.length} adresses`}
+            </button>
+          )}
+          <input
+            type="search"
+            className="input h-9 max-w-xs"
+            placeholder="Nom, e-mail…"
+            aria-label="Filtrer les élèves"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      </div>
+      <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
+        {shown.map((s: Student) => (
+          <li key={s.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-medium">
+                {s.name}
+                {s.id === profile?.id && <span className="ml-2 text-sm font-normal text-ink-3">(vous)</span>}
+                {s.role === "admin" && <span className="ml-2 rounded-full bg-sunken px-2 py-0.5 text-[12px] font-normal text-ink-2">Admin</span>}
+              </p>
+              {s.email ? (
+                <a href={`mailto:${s.email}`} className="text-sm break-all text-ink underline-offset-2 hover:underline">
+                  {s.email}
+                </a>
+              ) : (
+                <p className="text-sm text-ink-3">E-mail non partagé</p>
+              )}
+            </div>
+            {s.email && s.id !== profile?.id && (
+              <div className="flex shrink-0 gap-2">
+                <a href={mailLinks({ to: [s.email] }).outlook} target="_blank" rel="noreferrer" className="btn h-9">
+                  Écrire avec Outlook
+                </a>
+              </div>
+            )}
+          </li>
+        ))}
+        {shown.length === 0 && <li className="p-4 text-sm text-ink-3">Aucun résultat.</li>}
+      </ul>
+    </div>
+  );
+}
+
+type Tab = "profs" | "eleves";
+
+export default function DirectoryPage() {
+  const [tab, setTab] = useState<Tab>("profs");
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "profs", label: "Professeurs" },
+    { id: "eleves", label: "Élèves" },
+  ];
+  return (
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="page-title">Annuaire</h1>
+        <p className="text-ink-2">Les professeurs de la promo et les élèves inscrits sur Biblio B1, avec leurs e-mails.</p>
+      </header>
+      <div role="tablist" aria-label="Annuaire" className="flex gap-1 border-b border-line">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            type="button"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`-mb-px border-b-2 px-3 py-2 text-[15px] ${
+              tab === t.id ? "border-primary font-medium text-ink" : "border-transparent text-ink-2 hover:text-ink"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel">{tab === "profs" ? <TeachersTab /> : <StudentsTab />}</div>
     </div>
   );
 }

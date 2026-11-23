@@ -34,3 +34,22 @@ export async function deleteTeacher(id: string): Promise<void> {
   const { error } = await getSupabase().from("teachers").delete().eq("id", id);
   if (error) throw new Error("Suppression impossible.");
 }
+
+export type Student = { id: string; name: string; email: string | null; role: "admin" | "member" };
+
+/** Membres validés du site ; e-mail seulement pour ceux qui ont choisi de l'afficher. */
+export async function listStudents(): Promise<Student[]> {
+  const { data, error } = await getSupabase().rpc("directory_students");
+  if (error) throw new Error(`Élèves : ${error.message}`);
+  return ((data ?? []) as Student[]).map((s) => ({ id: s.id, name: s.name, email: s.email, role: s.role }));
+}
+
+export async function getShowEmail(userId: string): Promise<boolean> {
+  const { data } = await getSupabase().from("profiles").select("show_email").eq("id", userId).maybeSingle();
+  return Boolean((data as { show_email?: boolean } | null)?.show_email);
+}
+
+export async function setShowEmail(userId: string, show: boolean): Promise<void> {
+  const { error } = await getSupabase().from("profiles").update({ show_email: show }).eq("id", userId);
+  if (error) throw new Error("Réglage impossible à enregistrer.");
+}

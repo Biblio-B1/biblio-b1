@@ -42,6 +42,9 @@ export const IconDownload = ({ className, size }: P) => (
 export const IconSettings = ({ className, size }: P) => (
   <svg {...base(size)} className={className}><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>
 );
+export const IconMail = ({ className, size }: P) => (
+  <svg {...base(size)} className={className}><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /></svg>
+);
 export const IconUsers = ({ className, size }: P) => (
   <svg {...base(size)} className={className}><circle cx="9" cy="8" r="3.5" /><path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.6.8 2.7 2.6 3 5.2" /></svg>
 );

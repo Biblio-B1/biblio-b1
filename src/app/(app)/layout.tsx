@@ -1,13 +1,13 @@
 "use client";
 
 import { Suspense } from "react";
+import { PendingBanner, usePendingRequests } from "@/components/admin/PendingRequests";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { countBySubject, listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
-import { getSupabase } from "@/lib/supabase/client";
 
 /**
  * Coquille des pages membres : toutes exigent un compte validé (RequireAuth ; la RLS protège de
@@ -18,13 +18,9 @@ function Shell({ children }: { children: React.ReactNode }) {
   const isAdmin = profile?.role === "admin";
   const nav = useData(async () => {
     const [subjects, counts] = await Promise.all([listSubjects(), countBySubject()]);
-    let pending = 0;
-    if (isAdmin) {
-      const { data } = await getSupabase().rpc("pending_requests");
-      pending = (data as unknown[] | null)?.length ?? 0;
-    }
-    return { subjects, counts, pending };
-  }, [isAdmin]);
+    return { subjects, counts };
+  }, []);
+  const pending = usePendingRequests(isAdmin);
 
   const subjects = (nav.data?.subjects ?? []).map((s) => ({
     slug: s.slug,
@@ -39,14 +35,17 @@ function Shell({ children }: { children: React.ReactNode }) {
           subjects={subjects}
           unclassified={nav.data?.counts.get(null) ?? 0}
           user={profile ? { name: profile.name, role: profile.role } : null}
-          pendingUsers={nav.data?.pending ?? 0}
+          pendingUsers={pending.length}
         />
       </Suspense>
       <div className="flex min-w-0 flex-1 flex-col">
         <Suspense fallback={<div className="h-14 border-b border-line" />}>
           <TopBar signedIn />
         </Suspense>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-8">
+          <PendingBanner requests={pending} />
+          {children}
+        </main>
       </div>
     </div>
   );

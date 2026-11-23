@@ -237,3 +237,19 @@ describe("professeurs et calendriers", () => {
     expect(await t.count("select 1 from public.calendar_links")).toBe(2);
   });
 });
+
+describe("annuaire des élèves", () => {
+  it("liste les comptes validés ; l'e-mail seulement pour qui l'a choisi", async () => {
+    await t.as(activeId);
+    await t.db.query("update public.profiles set show_email = true where id = $1", [activeId]);
+    const r = await t.db.query<{ name: string; email: string | null }>("select name, email from public.directory_students()");
+    expect(r.rows.map((x) => x.name)).not.toContain("Nouveau");
+    expect(r.rows.find((x) => x.name === "Lea")?.email).toBe("lea@example.com");
+    expect(r.rows.find((x) => x.name === "Admin")?.email).toBeNull();
+  });
+
+  it("un compte en attente ne voit personne", async () => {
+    await t.as(pendingId);
+    expect(await t.count("select * from public.directory_students()")).toBe(0);
+  });
+});

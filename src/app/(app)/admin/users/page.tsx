@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { PENDING_CHANGED } from "@/components/admin/PendingRequests";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { getSupabase } from "@/lib/supabase/client";
 
@@ -32,6 +33,7 @@ function PendingRequests() {
       : await supabase.functions.invoke("admin-users", { body: { action: "reject", userId: id } });
     if (res.error) setError(accept ? "Validation impossible." : "Refus impossible.");
     await load();
+    window.dispatchEvent(new Event(PENDING_CHANGED));
     setBusy(null);
   }
 
