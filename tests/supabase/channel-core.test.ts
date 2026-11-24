@@ -4,6 +4,9 @@ import {
   diffTimetable,
   examAlerts,
   examsFromTimetable,
+  examFromRow,
+  examRowFromSnapshot,
+  formatExamAnnounce,
   formatDocuments,
   formatHomework,
   formatTimetableChanges,
@@ -182,5 +185,63 @@ describe("alertes de contrôle", () => {
     ]);
     const [alert] = examAlerts(e, new Set(), NOW, APP);
     expect(alert.text).toContain("📅 Date : <b>mercredi 25 novembre</b>\n🕒 Horaire : <b>09:00–12:00</b>\n📍 Lieu : Salle EM319 - EIFFEL 1");
+  });
+});
+
+describe("table des contrôles", () => {
+  const row = {
+    id: "e1",
+    kind: "projet" as const,
+    title: "Projet final <web>",
+    exam_date: "2026-11-27",
+    start_time: "14:00:00",
+    end_time: "16:30:00",
+    location: "Salle EM319",
+    details: "Rendu sur Boostcamp",
+    source: "manual" as const,
+    edt_uid: null,
+    subject_label: null,
+    subjects: { name: "Développement web" },
+  };
+
+  it("ligne du site → contrôle (clé, horaire, HTML échappé)", () => {
+    expect(examFromRow(row)).toEqual({
+      key: "exam:e1",
+      subject: "Développement web",
+      title: "Projet final <web>",
+      day: "2026-11-27",
+      time: "14:00–16:30",
+      place: "Salle EM319",
+      kind: "projet",
+    });
+    expect(examFromRow({ ...row, source: "edt", edt_uid: "u9", subjects: null, subject_label: "Maths" }).key).toBe("edt:u9");
+  });
+
+  it("annonce et alertes d'un projet final", () => {
+    const e = examFromRow(row);
+    const t = formatExamAnnounce({ ...e, details: row.details }, APP);
+    expect(t).toContain("📣 <b>Projet final annoncé</b>");
+    expect(t).toContain("📝 Projet final &lt;web&gt;");
+    expect(t).toContain("📅 À rendre le : <b>vendredi 27 novembre</b>");
+    expect(t).toContain("🕒 Horaire : <b>14:00–16:30</b>");
+    expect(t).toContain("Rendu sur Boostcamp");
+    expect(t).toContain(`${APP}/controles/`);
+    expect(examAlerts([e], new Set(), NOW, APP)[0].text).toContain("Projet final à rendre dans 4 jours");
+  });
+
+  it("séance EVALUATION → ligne edt ; autres séances ignorées", () => {
+    expect(examRowFromSnapshot(S({ uid: "x", type: "EVALUATION" }))).toEqual({
+      source: "edt",
+      edt_uid: "x",
+      kind: "controle",
+      subject_label: "Algorithmique et programmation C",
+      title: "",
+      exam_date: "2026-11-25",
+      start_time: "09:00",
+      end_time: "12:00",
+      location: "Salle EM319 - EIFFEL 1",
+    });
+    expect(examRowFromSnapshot(S({ uid: "y" }))).toBeNull();
+    expect(examRowFromSnapshot(S({ uid: "z", type: "EVALUATION", status: "cancelled" }))).toBeNull();
   });
 });

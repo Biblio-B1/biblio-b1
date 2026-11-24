@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { UNCLASSIFIED_SLUG, subjectHref } from "@/lib/routes";
 import { Spine } from "./Spine";
-import { IconBooks, IconCalendar, IconCheckList, IconClose, IconHome, IconHomework, IconMail, IconPen, IconSettings, IconUpload, IconUsers } from "./Icons";
+import { IconBooks, IconCalendar, IconCheckList, IconClose, IconExam, IconHome, IconHomework, IconMail, IconPen, IconSettings, IconUpload, IconUsers } from "./Icons";
 
 export type SidebarSubject = { slug: string; name: string; color: string; count: number };
 
@@ -70,6 +70,9 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
             </NavLink>
             <NavLink href="/devoirs" active={pathname === "/devoirs" || pathname.startsWith("/devoirs/")}>
               <IconHomework /> Devoirs
+            </NavLink>
+            <NavLink href="/controles" active={is("/controles")}>
+              <IconExam /> Contrôles
             </NavLink>
             <NavLink href="/annuaire" active={is("/annuaire")}>
               <IconMail /> Annuaire

@@ -96,6 +96,21 @@ function dateKeyStartInParis(dateKey: string): number {
   return result;
 }
 
+/** Séance d'évaluation Boostcamp (« Type : EVALUATION ») ou contrôle / projet ajouté sur le site. */
+export function isExamEvent(event: Pick<ScheduleEvent, "uid" | "description" | "categories">): boolean {
+  return (
+    event.uid.startsWith("exam:") ||
+    /^type\s*:\s*evaluation\s*$/im.test(event.description ?? "") ||
+    (event.categories ?? []).some((c) => c.toUpperCase() === "EVALUATION")
+  );
+}
+
+/** « 2026-12-01 » + « 14:30 » (heure de Paris) → instant ISO. */
+export function parisWallTimeToIso(dateKey: string, time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  return new Date(dateKeyStartInParis(dateKey) + (h * 60 + m) * 60_000).toISOString();
+}
+
 export function mondayOfWeek(dateKey: string): string {
   const [year, month, day] = dateKey.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));

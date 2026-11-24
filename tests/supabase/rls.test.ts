@@ -282,3 +282,31 @@ describe("canal Telegram", () => {
     expect(r.rows.map((x) => x.kind)).toContain("document");
   });
 });
+
+describe("contrôles", () => {
+  it("un membre ajoute un contrôle (annoncé) ; ceux de l'emploi du temps ne se touchent pas depuis le site", async () => {
+    await t.as(activeId);
+    const id = (
+      await t.db.query<{ id: string }>(
+        "insert into public.exams (kind, subject_id, title, exam_date, start_time) values ('controle', $1, 'DS pointeurs', '2026-12-02', '09:00') returning id",
+        [subjectId],
+      )
+    ).rows[0].id;
+    await expect(
+      t.db.query("insert into public.exams (source, edt_uid, subject_label, exam_date) values ('edt', 'u1', 'Maths', '2026-12-03')"),
+    ).rejects.toThrow();
+    await t.as("service");
+    await t.db.query("insert into public.exams (source, edt_uid, subject_label, exam_date, author_id) values ('edt', 'u1', 'Maths', '2026-12-03', null)");
+    const queued = await t.db.query<{ ref: string }>("select ref from public.channel_outbox where kind = 'exam'");
+    expect(queued.rows.map((x) => x.ref)).toEqual([id]);
+    await t.as(activeId);
+    expect(await t.count("select 1 from public.exams")).toBe(2);
+    await t.db.query("delete from public.exams where source = 'edt'");
+    expect(await t.count("select 1 from public.exams where source = 'edt'")).toBe(1);
+    await t.as(pendingId);
+    expect(await t.count("select 1 from public.exams")).toBe(0);
+    await t.as(adminId);
+    await t.db.query("delete from public.exams where id = $1", [id]);
+    expect(await t.count("select 1 from public.exams where source = 'manual'")).toBe(0);
+  });
+});

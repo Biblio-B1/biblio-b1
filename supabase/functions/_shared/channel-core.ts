@@ -301,7 +301,8 @@ export function formatHomework(h: NewHomework, appUrl: string): string {
 // Alertes de contrôle : une semaine avant (ou dès qu'il reste 2 à 7 jours), puis la veille à 17 h.
 // ---------------------------------------------------------------------------------------------
 /** subject : matière ; title : intitulé (titre du devoir) s'il dit autre chose ; time / place : horaire et lieu (HTML échappé). */
-export type Exam = { key: string; subject: string; title?: string; day: string; time?: string; place?: string };
+export type ExamKind = "controle" | "projet";
+export type Exam = { key: string; subject: string; title?: string; day: string; time?: string; place?: string; kind?: ExamKind };
 export type ExamAlert = { key: string; text: string };
 
 function examText(head: string, e: Exam, footer: string): string {
@@ -320,16 +321,91 @@ function examText(head: string, e: Exam, footer: string): string {
 
 export function examAlerts(exams: Exam[], sent: Set<string>, now: Date, appUrl: string): ExamAlert[] {
   const out: ExamAlert[] = [];
-  const revise = `<a href="${appUrl}/">Réviser sur Biblio B1</a>`;
+  const revise = `<a href="${appUrl}/controles/">Voir les contrôles</a>`;
   for (const e of exams) {
     const n = daysUntil(e.day, now);
+    const projet = e.kind === "projet";
     if (n === 1 && parisHour(now) >= 17 && !sent.has(`${e.key}:veille`)) {
-      out.push({ key: `${e.key}:veille`, text: examText("⚠️ <b>Contrôle demain</b>", e, `Bon courage ! ${revise}`) });
+      const head = projet ? "⚠️ <b>Projet final à rendre demain</b>" : "⚠️ <b>Contrôle demain</b>";
+      out.push({ key: `${e.key}:veille`, text: examText(head, e, `Bon courage ! ${revise}`) });
     } else if (n >= 2 && n <= 7 && !sent.has(`${e.key}:semaine`)) {
-      out.push({ key: `${e.key}:semaine`, text: examText(`📣 <b>Contrôle dans ${n} jours</b>`, e, revise) });
+      const head = projet ? `📣 <b>Projet final à rendre dans ${n} jours</b>` : `📣 <b>Contrôle dans ${n} jours</b>`;
+      out.push({ key: `${e.key}:semaine`, text: examText(head, e, revise) });
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Table « exams » (onglet Contrôles du site)
+// ---------------------------------------------------------------------------------------------
+export type ExamDbRow = {
+  id: string;
+  kind: ExamKind;
+  title: string;
+  exam_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  location: string | null;
+  details?: string | null;
+  source: "manual" | "edt";
+  edt_uid: string | null;
+  subject_label: string | null;
+  subjects?: { name: string } | null;
+};
+
+const hm = (t: string | null) => (t ? t.slice(0, 5) : "");
+
+/** Ligne de la table → contrôle pour les alertes (clé « edt:<uid> » pour l'emploi du temps). */
+export function examFromRow(r: ExamDbRow): Exam {
+  const time = r.start_time ? (r.end_time ? `${hm(r.start_time)}–${hm(r.end_time)}` : hm(r.start_time)) : undefined;
+  return {
+    key: r.source === "edt" && r.edt_uid ? `edt:${r.edt_uid}` : `exam:${r.id}`,
+    subject: r.subjects?.name ?? r.subject_label ?? "Sans matière",
+    title: r.title || undefined,
+    day: r.exam_date,
+    time: time ? escapeHtml(time) : undefined,
+    place: r.location ? escapeHtml(r.location) : undefined,
+    kind: r.kind,
+  };
+}
+
+const hmFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: TZ });
+
+/** Séance EVALUATION de l'emploi du temps → ligne « exams » (source edt). Null si sans intérêt. */
+export function examRowFromSnapshot(s: Snapshot) {
+  if (s.type !== "EVALUATION" || s.cancelled) return null;
+  const start = new Date(s.start);
+  const end = new Date(s.end);
+  const sameDay = parisDay(start) === parisDay(end);
+  return {
+    source: "edt" as const,
+    edt_uid: s.uid,
+    kind: "controle" as const,
+    subject_label: s.subject.slice(0, 200) || "Sans matière",
+    title: "",
+    exam_date: parisDay(start),
+    start_time: hmFmt.format(start),
+    end_time: sameDay && end > start ? hmFmt.format(end) : null,
+    location: (s.visio ? "Visio" : s.location || "").slice(0, 200) || null,
+  };
+}
+
+/** Message « contrôle / projet annoncé » quand un élève l'ajoute sur le site. */
+export function formatExamAnnounce(e: Exam & { details?: string | null }, appUrl: string): string {
+  const projet = e.kind === "projet";
+  return [
+    projet ? "📣 <b>Projet final annoncé</b>" : "📣 <b>Contrôle annoncé</b>",
+    "",
+    `📚 Matière : <b>${escapeHtml(e.subject)}</b>`,
+    ...(e.title && e.title !== e.subject ? [`📝 ${escapeHtml(e.title)}`] : []),
+    `📅 ${projet ? "À rendre le" : "Date"} : <b>${dayLabel(e.day)}</b>`,
+    ...(e.time ? [`🕒 Horaire : <b>${e.time}</b>`] : []),
+    ...(e.place ? [`📍 Lieu : ${e.place}`] : []),
+    ...(e.details ? ["", escapeHtml(e.details)] : []),
+    "",
+    `<a href="${appUrl}/controles/">Voir les contrôles</a>`,
+  ].join("\n");
 }
 
 /** Contrôles de l'emploi du temps (séances « EVALUATION »). */

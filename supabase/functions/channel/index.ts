@@ -3,7 +3,8 @@
 //  1. documents et devoirs ajoutés (channel_outbox) : un message par devoir, un récapitulatif des documents ;
 //  2. toutes les 30 minutes : relit les emplois du temps Boostcamp des membres, compare avec l'état
 //     connu (timetable_watch) et annonce salle, visio/présentiel, horaire, ajout, suppression, annulation ;
-//  3. alertes de contrôle (séances EVALUATION et devoirs « contrôle/DS/partiel… ») : J-7 et la veille.
+//  3. alertes de contrôle (table exams : ajouts du site et séances EVALUATION recopiées au relevé ;
+//     devoirs « contrôle/DS/partiel… ») : J-7 et la veille.
 // Le canal est choisi par l'administrateur depuis Telegram (fonction `telegram`, app_settings).
 // Secrets : TELEGRAM_BOT_TOKEN, CHANNEL_CRON_SECRET, CALENDAR_ENCRYPTION_KEY, APP_URL (facultatif).
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -11,7 +12,9 @@ import { decryptUrl, fetchCalendarFeed, parseCalendar, validateCalendarFeedUrl }
 import {
   diffTimetable,
   examAlerts,
-  examsFromTimetable,
+  examFromRow,
+  examRowFromSnapshot,
+  formatExamAnnounce,
   formatDocuments,
   formatHomework,
   formatTimetableChanges,
@@ -19,6 +22,7 @@ import {
   parisDay,
   snapshot,
   type Exam,
+  type ExamDbRow,
   type NewDocument,
   type Snapshot,
 } from "../_shared/channel-core.ts";
@@ -68,6 +72,7 @@ Deno.serve(async (req) => {
   if (rows.length) {
     const docIds = rows.filter((r) => r.kind === "document").map((r) => r.ref);
     const hwIds = rows.filter((r) => r.kind === "homework").map((r) => r.ref);
+    const examIds = rows.filter((r) => r.kind === "exam").map((r) => r.ref);
     const { data: docs } = docIds.length
       ? await db.from("documents").select("id, title, type, subjects(name)").in("id", docIds)
       : { data: [] };
@@ -89,6 +94,15 @@ Deno.serve(async (req) => {
       const ok = h
         ? await post(formatHomework({ id: h.id, title: h.title, subject: h.subjects?.name ?? "Sans matière", dueDate: h.due_date, englishGroup: h.english_group, attachmentName: h.attachment_name }, appUrl))
         : true; // supprimé entre-temps
+      if (ok || stale(r)) done.push(r.id);
+    }
+    const { data: exs } = examIds.length
+      ? await db.from("exams").select("*, subjects(name)").in("id", examIds)
+      : { data: [] };
+    const examById = new Map(((exs ?? []) as ExamDbRow[]).map((x) => [x.id, x]));
+    for (const r of rows.filter((x) => x.kind === "exam")) {
+      const x = examById.get(r.ref);
+      const ok = x ? await post(formatExamAnnounce({ ...examFromRow(x), details: x.details }, appUrl)) : true;
       if (ok || stale(r)) done.push(r.id);
     }
     if (done.length) await db.from("channel_outbox").update({ sent_at: now.toISOString() }).in("id", done);
@@ -141,15 +155,27 @@ Deno.serve(async (req) => {
       await db.from("timetable_watch").delete().lt("start_at", new Date(now.getTime() - 86_400_000).toISOString());
       await setSetting(db, "timetable_sweep", { at: now.toISOString(), owners });
     }
+    // Séances EVALUATION → onglet Contrôles (table exams, source edt).
+    if (owners.length > 0) {
+      const examRows = [...current.values()].map(examRowFromSnapshot).filter((x) => x !== null);
+      if (examRows.length) await db.from("exams").upsert(examRows, { onConflict: "edt_uid" });
+      if (complete) {
+        const keep = new Set(examRows.map((x) => x.edt_uid));
+        const { data: known } = await db.from("exams").select("id, edt_uid").eq("source", "edt").gte("exam_date", parisDay(now));
+        const gone = ((known ?? []) as { id: string; edt_uid: string }[]).filter((x) => !keep.has(x.edt_uid)).map((x) => x.id);
+        if (gone.length) await db.from("exams").delete().in("id", gone);
+      }
+      report.exams = examRows.length;
+    }
     report.timetable = { calendars: owners.length, failures, events: current.size, baseline, changes: changes.length };
   }
 
   // 3. Alertes de contrôle.
   if (channel) {
-    const { data: watched } = await db.from("timetable_watch").select("snap").gte("start_at", now.toISOString());
-    const exams: Exam[] = examsFromTimetable(((watched ?? []) as { snap: Snapshot }[]).map((w) => w.snap));
     const today = parisDay(now);
     const in8 = parisDay(new Date(now.getTime() + 8 * 86_400_000));
+    const { data: examTable } = await db.from("exams").select("*, subjects(name)").gte("exam_date", today).lte("exam_date", in8);
+    const exams: Exam[] = ((examTable ?? []) as ExamDbRow[]).map(examFromRow);
     const { data: hws } = await db.from("homeworks").select("id, title, due_date, subjects(name)").gte("due_date", today).lte("due_date", in8);
     for (const h of (hws ?? []) as { id: string; title: string; due_date: string; subjects: { name: string } | null }[]) {
       if (isExamTitle(h.title)) exams.push({ key: `hw:${h.id}`, subject: h.subjects?.name ?? "Sans matière", title: h.title, day: h.due_date });

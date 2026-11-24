@@ -6,6 +6,7 @@ import { ActionForm, type FormState } from "@/components/ActionForm";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { PageRefreshProvider } from "@/components/PageRefresh";
 import { callCalendar, getMyCalendar, type StoredCalendar } from "@/lib/api/calendar";
+import { examEvents, listExams } from "@/lib/api/exams";
 import { listHomeworks } from "@/lib/api/homeworks";
 import { listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
@@ -15,11 +16,12 @@ const RESYNC_AFTER_MS = 50_000;
 
 export default function TimetablePage() {
   const { data, error } = useData(async () => {
-    const [subjects, homeworks, calendar] = await Promise.all([listSubjects(), listHomeworks(), getMyCalendar()]);
+    const [subjects, homeworks, calendar, exams] = await Promise.all([listSubjects(), listHomeworks(), getMyCalendar(), listExams()]);
     return {
       subjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color, rules: s.rules })),
       homeworks,
       calendar,
+      examEvents: examEvents(exams),
     };
   }, []);
   const [calendar, setCalendar] = useState<StoredCalendar | null | undefined>(undefined);
@@ -60,6 +62,15 @@ export default function TimetablePage() {
         <p className="text-ink-2">Vos événements Boostcamp et Outlook, synchronisés à votre compte.</p>
       </header>
 
+      {data.examEvents.length > 0 && (
+        <p className="text-sm text-ink-2">
+          Les contrôles et projets ajoutés par la classe sont marqués <span className="rounded bg-danger px-1 text-[10px] font-bold uppercase text-white">Éval</span>{" "}
+          sur l&apos;emploi du temps.{" "}
+          <Link href="/controles" className="underline underline-offset-2">
+            Voir les contrôles
+          </Link>
+        </p>
+      )}
       {!calendar ? (
         <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
           <h2 className="text-base font-semibold">Aucun calendrier lié</h2>
@@ -71,7 +82,11 @@ export default function TimetablePage() {
             Lier un calendrier dans les paramètres
           </Link>
         </section>
-      ) : (
+      ) : null}
+      {!calendar && data.examEvents.length > 0 && (
+        <CalendarView events={data.examEvents} subjects={data.subjects} homeworks={data.homeworks} />
+      )}
+      {calendar && (
         <>
           {syncError && (
             <p role="alert" className="rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger">
@@ -96,7 +111,7 @@ export default function TimetablePage() {
             </div>
           </div>
           <PageRefreshProvider value={() => void sync()}>
-            <CalendarView events={calendar.events} subjects={data.subjects} homeworks={data.homeworks} />
+            <CalendarView events={[...calendar.events, ...data.examEvents]} subjects={data.subjects} homeworks={data.homeworks} />
           </PageRefreshProvider>
         </>
       )}

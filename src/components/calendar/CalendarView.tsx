@@ -9,6 +9,7 @@ import {
   cleanEventDescription,
   dateKeyInParis,
   homeworksForEvent,
+  isExamEvent,
   labelDate,
   matchEventSubject,
   mondayOfWeek,
@@ -155,6 +156,7 @@ function EventBlock({
   const subject = matchEventSubject(segment.event, subjects);
   const due = homeworksForEvent(segment.event, day, subjects, homeworks);
   const cancelled = segment.event.status === "cancelled";
+  const exam = !cancelled && isExamEvent(segment.event);
 
   const colorStyle =
     !cancelled && subject
@@ -196,6 +198,7 @@ function EventBlock({
         </span>
       )}
       <span className={`block truncate font-semibold ${due.length > 0 ? "pr-6" : ""}`}>
+        {exam && <span className="mr-1 rounded bg-danger px-1 text-[10px] font-bold uppercase text-white">Éval</span>}
         {segment.event.title}
       </span>
       <span className="block truncate text-ink-2">
@@ -404,6 +407,9 @@ export function CalendarView({
                           : undefined
                       }
                     >
+                      {!cancelled && isExamEvent(event) && (
+                        <span className="shrink-0 rounded bg-danger px-1 text-[10px] font-bold uppercase text-white">Éval</span>
+                      )}
                       <span className="min-w-0 flex-1 truncate">{event.title}</span>
                       {due.length > 0 && <IconHomework size={11} className="shrink-0" />}
                     </button>
