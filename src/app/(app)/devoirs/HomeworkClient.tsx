@@ -38,7 +38,7 @@ function HomeworkItem({ hw, onDeleted }: { hw: HomeworkRow; onDeleted: () => voi
       <div className="flex flex-wrap items-start justify-between gap-2 pl-1.5">
         <div className="flex flex-wrap items-center gap-2">
           {hw.isFinalProject && (
-            <span className="rounded bg-danger px-1.5 py-0.5 text-[11px] font-bold uppercase text-white">Projet final</span>
+            <span className="rounded badge-alert px-1.5 py-0.5 text-[11px] font-bold uppercase">Projet final</span>
           )}
           <span className="text-sm font-semibold text-ink">{hw.subjectName}</span>
           {hw.englishGroup && (

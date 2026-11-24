@@ -64,7 +64,7 @@ export default function TimetablePage() {
 
       {data.examEvents.length > 0 && (
         <p className="text-sm text-ink-2">
-          Les contrôles et projets ajoutés par la classe sont marqués <span className="rounded bg-danger px-1 text-[10px] font-bold uppercase text-white">Éval</span>{" "}
+          Les contrôles et projets ajoutés par la classe sont marqués <span className="rounded badge-alert px-1 text-[10px] font-bold uppercase">Éval</span>{" "}
           sur l&apos;emploi du temps.{" "}
           <Link href="/controles" className="underline underline-offset-2">
             Voir les contrôles

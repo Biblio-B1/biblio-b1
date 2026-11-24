@@ -35,6 +35,8 @@ export type CalendarHomework = {
   title: string;
   dueDate: string;
   englishGroup?: string | null;
+  /** Projet final : signalé à part sur le cours (badge rouge). */
+  isFinalProject?: boolean;
   attachmentPath?: string | null;
   attachmentName?: string | null;
 };

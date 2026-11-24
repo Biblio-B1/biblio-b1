@@ -68,6 +68,9 @@ export const IconCalendar = ({ className, size }: P) => (
 export const IconExam = ({ className, size }: P) => (
   <svg {...base(size)} className={className}><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="m9 14 2 2 4-4" /></svg>
 );
+export const IconFlag = ({ className, size }: P) => (
+  <svg {...base(size)} className={className}><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></svg>
+);
 export const IconHomework = ({ className, size }: P) => (
   <svg {...base(size)} className={className}><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></svg>
 );

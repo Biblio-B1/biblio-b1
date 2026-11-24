@@ -123,7 +123,7 @@ function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void })
     <li className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-4" style={{ boxShadow: `inset 4px 0 0 ${exam.subjectColor}` }}>
       <div className="flex flex-wrap items-start justify-between gap-2 pl-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded bg-danger px-1.5 py-0.5 text-[11px] font-bold uppercase text-white">Contrôle</span>
+          <span className="rounded badge-alert px-1.5 py-0.5 text-[11px] font-bold uppercase">Contrôle</span>
           <span className="text-sm font-semibold text-ink">{exam.subjectName}</span>
           {exam.source === "edt" && (
             <span className="rounded-full border border-line bg-sunken px-2 py-0.5 text-xs text-ink-2">Emploi du temps Boostcamp</span>

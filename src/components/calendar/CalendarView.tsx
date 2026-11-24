@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePageRefresh } from "@/components/PageRefresh";
-import { IconChevron, IconHomework } from "@/components/layout/Icons";
+import { IconChevron, IconFlag, IconHomework } from "@/components/layout/Icons";
 import {
   allDayEventsForDay,
   cleanEventDescription,
@@ -54,8 +54,66 @@ function eventStatus(event: ScheduleEvent): string {
 
 function homeworkTooltip(hws: CalendarHomework[]): string {
   return hws
-    .map((h) => `${h.englishGroup ? `[${h.englishGroup}] ` : ""}${h.title}`)
+    .map((h) => `${h.isFinalProject ? "[Projet final] " : ""}${h.englishGroup ? `[${h.englishGroup}] ` : ""}${h.title}`)
     .join(" · ");
+}
+
+/** « 1 projet final », « 2 devoirs », « 1 projet final + 1 devoir ». */
+function dueLabel(due: CalendarHomework[]): string {
+  const projects = due.filter((h) => h.isFinalProject).length;
+  const others = due.length - projects;
+  const parts: string[] = [];
+  if (projects) parts.push(projects > 1 ? `${projects} projets finaux` : "1 projet final");
+  if (others) parts.push(`${others} devoir${others > 1 ? "s" : ""}`);
+  return parts.join(" + ");
+}
+
+/**
+ * Signale ce qui est à rendre pour un cours. Un projet final a son propre badge, rouge et plein
+ * (drapeau), plus visible que celui d'un devoir.
+ *  - chip : liste du jour (texte complet) ;
+ *  - corner : coin d'une séance de la grille semaine ;
+ *  - icon : séance « toute la journée » (icône seule).
+ */
+function DueBadge({ due, variant }: { due: CalendarHomework[]; variant: "chip" | "corner" | "icon" }) {
+  if (due.length === 0) return null;
+  const project = due.some((h) => h.isFinalProject);
+  const label = dueLabel(due);
+  const tooltip = `À rendre : ${homeworkTooltip(due)}`;
+  if (variant === "icon") {
+    return project ? (
+      <span title={tooltip} aria-label={label} className="inline-flex shrink-0 rounded badge-alert p-0.5">
+        <IconFlag size={11} />
+      </span>
+    ) : (
+      <IconHomework size={11} className="shrink-0" />
+    );
+  }
+  if (variant === "corner") {
+    return (
+      <span
+        aria-label={label}
+        title={tooltip}
+        className={`absolute top-1 right-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] shadow-xs ${
+          project ? "badge-alert font-bold" : "bg-surface/90 font-semibold text-ink ring-1 ring-line-strong"
+        }`}
+      >
+        {project ? <IconFlag size={11} /> : <IconHomework size={11} />}
+        {project ? <span className="uppercase">Projet</span> : due.length > 1 && <span>{due.length}</span>}
+      </span>
+    );
+  }
+  return (
+    <span
+      title={tooltip}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${
+        project ? "badge-alert font-bold" : "border border-line-strong bg-sunken font-medium text-ink"
+      }`}
+    >
+      {project ? <IconFlag size={12} /> : <IconHomework size={12} />}
+      <span>{label}</span>
+    </span>
+  );
 }
 
 function DayAgenda({
@@ -109,15 +167,7 @@ function DayAgenda({
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-2 font-medium break-words">
                   {event.title}
-                  {due.length > 0 && (
-                    <span
-                      title={`Devoir à rendre : ${homeworkTooltip(due)}`}
-                      className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-sunken px-2 py-0.5 text-[11px] font-medium text-ink"
-                    >
-                      <IconHomework size={12} />
-                      <span>{due.length} devoir{due.length > 1 ? "s" : ""}</span>
-                    </span>
-                  )}
+                  <DueBadge due={due} variant="chip" />
                   {event.status === "cancelled" && <span className="text-xs text-danger">Annulé</span>}
                   {event.status === "tentative" && <span className="text-xs text-ink-3">À confirmer</span>}
                 </span>
@@ -169,8 +219,8 @@ function EventBlock({
   return (
     <button
       type="button"
-      title={`${start} · ${segment.event.title}${segment.event.location ? ` · ${segment.event.location}` : ""}${due.length ? ` · Devoir : ${homeworkTooltip(due)}` : ""}`}
-      aria-label={`${start}, ${segment.event.title}, ${eventStatus(segment.event)}${segment.event.location ? `, ${segment.event.location}` : ""}${due.length ? `, ${due.length} devoir à rendre` : ""}`}
+      title={`${start} · ${segment.event.title}${segment.event.location ? ` · ${segment.event.location}` : ""}${due.length ? ` · À rendre : ${homeworkTooltip(due)}` : ""}`}
+      aria-label={`${start}, ${segment.event.title}, ${eventStatus(segment.event)}${segment.event.location ? `, ${segment.event.location}` : ""}${due.length ? `, à rendre : ${dueLabel(due)}` : ""}`}
       onClick={() => onSelect(segment.event, day)}
       className={`absolute z-10 overflow-hidden rounded border-l-[3px] px-1.5 py-1 text-left text-[11px] leading-tight transition-opacity hover:opacity-95 ${
         cancelled
@@ -185,20 +235,13 @@ function EventBlock({
         left: `calc(${(segment.lane * 100) / segment.laneCount}% + 2px)`,
         width: `calc(${100 / segment.laneCount}% - 4px)`,
         ...colorStyle,
+        // Projet final à rendre : contour rouge sur tout le cours.
+        ...(!cancelled && due.some((h) => h.isFinalProject) ? { boxShadow: "inset 0 0 0 2px #dc2626" } : {}),
       }}
     >
-      {due.length > 0 && (
-        <span
-          aria-label={`${due.length} devoir à rendre`}
-          title={`Devoir à rendre : ${homeworkTooltip(due)}`}
-          className="absolute top-1 right-1 inline-flex items-center gap-0.5 rounded bg-surface/90 px-1 py-0.5 text-[10px] font-semibold text-ink shadow-xs ring-1 ring-line-strong"
-        >
-          <IconHomework size={11} />
-          {due.length > 1 && <span>{due.length}</span>}
-        </span>
-      )}
-      <span className={`block truncate font-semibold ${due.length > 0 ? "pr-6" : ""}`}>
-        {exam && <span className="mr-1 rounded bg-danger px-1 text-[10px] font-bold uppercase text-white">Éval</span>}
+      <DueBadge due={due} variant="corner" />
+      <span className={`block truncate font-semibold ${due.length > 0 ? (due.some((h) => h.isFinalProject) ? "pr-16" : "pr-6") : ""}`}>
+        {exam && <span className="mr-1 rounded badge-alert px-1 text-[10px] font-bold uppercase">Éval</span>}
         {segment.event.title}
       </span>
       <span className="block truncate text-ink-2">
@@ -408,10 +451,10 @@ export function CalendarView({
                       }
                     >
                       {!cancelled && isExamEvent(event) && (
-                        <span className="shrink-0 rounded bg-danger px-1 text-[10px] font-bold uppercase text-white">Éval</span>
+                        <span className="shrink-0 rounded badge-alert px-1 text-[10px] font-bold uppercase">Éval</span>
                       )}
                       <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                      {due.length > 0 && <IconHomework size={11} className="shrink-0" />}
+                      <DueBadge due={due} variant="icon" />
                     </button>
                   );
                 })}
@@ -556,8 +599,8 @@ function EventDetails({
           <div className="mt-4 flex flex-col gap-2 rounded-lg border border-line-strong bg-sunken p-3.5">
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-                <IconHomework size={16} />
-                Devoir{due.length > 1 ? "s" : ""} à rendre pour ce cours
+                {due.some((h) => h.isFinalProject) ? <IconFlag size={16} className="text-danger" /> : <IconHomework size={16} />}
+                À rendre pour ce cours
               </span>
               <Link href="/devoirs" onClick={onClose} className="text-xs font-medium text-ink underline underline-offset-2">
                 Voir les devoirs
@@ -565,7 +608,16 @@ function EventDetails({
             </div>
             <ul className="flex flex-col gap-2">
               {due.map((hw) => (
-                <li key={hw.id} className="rounded-md border border-line bg-surface p-2.5 text-sm">
+                <li
+                  key={hw.id}
+                  className={`rounded-md border bg-surface p-2.5 text-sm ${hw.isFinalProject ? "border-danger/50 ring-1 ring-danger/20" : "border-line"}`}
+                >
+                  {hw.isFinalProject && (
+                    <span className="mr-1.5 mb-1 inline-flex items-center gap-1 rounded badge-alert px-1.5 py-0.5 text-[11px] font-bold uppercase">
+                      <IconFlag size={11} />
+                      Projet final
+                    </span>
+                  )}
                   {hw.englishGroup && (
                     <span className="mb-1 inline-block rounded-full bg-sunken px-2 py-0.5 text-xs font-medium text-ink-2">
                       Groupe : {hw.englishGroup}
