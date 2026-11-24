@@ -66,6 +66,9 @@ PC de l'administrateur (clé secrète dans .env, jamais publiée)
    - créer le canal dans Telegram et y nommer le bot **administrateur** (droit de publier) : le bot
      envoie à l'administrateur un bouton « Utiliser ce canal pour la classe » (sinon, écrire
      `/relier` dans le canal). Un groupe Telegram fonctionne aussi.
+   - publications : chaque document, devoir, contrôle ou projet final ajouté ; rappels des contrôles
+     et projets finaux 3, 2 et 1 semaine(s) avant puis la veille (à partir de 17 h), des devoirs la
+     veille ; changements d'emploi du temps.
 8. L'adresse du projet et la clé **publiable** (`sb_publishable_…`, publique par conception) sont
    dans `src/lib/supabase/client.ts` (surchargeables par `NEXT_PUBLIC_SUPABASE_URL` /
    `NEXT_PUBLIC_SUPABASE_ANON_KEY`). **Ne jamais y mettre la clé secrète.**

@@ -234,7 +234,7 @@ export default function ControlesPage() {
           <Link href="/timetable" className="underline underline-offset-2">
             emploi du temps
           </Link>{" "}
-          et déclenchent une alerte Telegram une semaine avant et la veille.
+          sont annoncés sur Telegram dès leur ajout, puis rappelés 3, 2 et 1 semaine(s) avant et la veille au soir.
         </p>
       </header>
       {error ? (

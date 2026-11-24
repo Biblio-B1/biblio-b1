@@ -3,14 +3,16 @@
 //  1. documents et devoirs ajoutés (channel_outbox) : un message par devoir, un récapitulatif des documents ;
 //  2. toutes les 30 minutes : relit les emplois du temps Boostcamp des membres, compare avec l'état
 //     connu (timetable_watch) et annonce salle, visio/présentiel, horaire, ajout, suppression, annulation ;
-//  3. alertes de contrôle (table exams : ajouts du site et séances EVALUATION recopiées au relevé ;
-//     devoirs « contrôle/DS/partiel… ») : J-7 et la veille.
+//  3. alertes de contrôle et de projet final (table exams : ajouts du site et séances EVALUATION
+//     recopiées au relevé ; devoirs « contrôle/DS/partiel… ») : 3, 2 et 1 semaine(s) avant, puis la
+//     veille ; rappel des autres devoirs la veille. Le palier en cours à l'annonce n'est pas répété.
 // Le canal est choisi par l'administrateur depuis Telegram (fonction `telegram`, app_settings).
 // Secrets : TELEGRAM_BOT_TOKEN, CHANNEL_CRON_SECRET, CALENDAR_ENCRYPTION_KEY, APP_URL (facultatif).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { decryptUrl, fetchCalendarFeed, parseCalendar, validateCalendarFeedUrl } from "../_shared/calendar-core.ts";
 import {
   diffTimetable,
+  alertStage,
   examAlerts,
   examFromRow,
   examRowFromSnapshot,
@@ -18,12 +20,14 @@ import {
   formatDocuments,
   formatHomework,
   formatTimetableChanges,
+  homeworkReminders,
   isExamTitle,
   parisDay,
   snapshot,
   type Exam,
   type ExamDbRow,
   type NewDocument,
+  type NewHomework,
   type Snapshot,
 } from "../_shared/channel-core.ts";
 import { telegramApi } from "../_shared/telegram-core.ts";
@@ -68,6 +72,8 @@ Deno.serve(async (req) => {
   const { data: queue } = await db.from("channel_outbox").select("id, kind, ref, created_at").is("sent_at", null).order("id").limit(1000);
   const rows = (queue ?? []) as { id: number; kind: string; ref: string; created_at: string }[];
   const done: number[] = [];
+  // Palier d'alerte en cours au moment de l'annonce : déjà couvert par l'annonce, pas de second message.
+  const covered: string[] = [];
   const stale = (r: { created_at: string }) => now.getTime() - Date.parse(r.created_at) > 86_400_000;
   if (rows.length) {
     const docIds = rows.filter((r) => r.kind === "document").map((r) => r.ref);
@@ -95,6 +101,8 @@ Deno.serve(async (req) => {
         ? await post(formatHomework({ id: h.id, title: h.title, subject: h.subjects?.name ?? "Sans matière", dueDate: h.due_date, englishGroup: h.english_group, attachmentName: h.attachment_name }, appUrl))
         : true; // supprimé entre-temps
       if (ok || stale(r)) done.push(r.id);
+      const stage = h && ok ? alertStage(h.due_date, now) : null;
+      if (h && stage) covered.push(isExamTitle(h.title) ? `hw:${h.id}:${stage}` : `hwr:${h.id}:${stage}`);
     }
     const { data: exs } = examIds.length
       ? await db.from("exams").select("*, subjects(name)").in("id", examIds)
@@ -104,8 +112,11 @@ Deno.serve(async (req) => {
       const x = examById.get(r.ref);
       const ok = x ? await post(formatExamAnnounce({ ...examFromRow(x), details: x.details }, appUrl)) : true;
       if (ok || stale(r)) done.push(r.id);
+      const stage = x && ok ? alertStage(x.exam_date, now) : null;
+      if (x && stage) covered.push(`${examFromRow(x).key}:${stage}`);
     }
     if (done.length) await db.from("channel_outbox").update({ sent_at: now.toISOString() }).in("id", done);
+    if (covered.length) await db.from("channel_alerts").upsert(covered.map((key) => ({ key })), { onConflict: "key", ignoreDuplicates: true });
     report.outbox = { pending: rows.length, sent: done.length };
   }
 
@@ -173,16 +184,19 @@ Deno.serve(async (req) => {
   // 3. Alertes de contrôle.
   if (channel) {
     const today = parisDay(now);
-    const in8 = parisDay(new Date(now.getTime() + 8 * 86_400_000));
-    const { data: examTable } = await db.from("exams").select("*, subjects(name)").gte("exam_date", today).lte("exam_date", in8);
+    const in22 = parisDay(new Date(now.getTime() + 22 * 86_400_000));
+    const { data: examTable } = await db.from("exams").select("*, subjects(name)").gte("exam_date", today).lte("exam_date", in22);
     const exams: Exam[] = ((examTable ?? []) as ExamDbRow[]).map(examFromRow);
-    const { data: hws } = await db.from("homeworks").select("id, title, due_date, subjects(name)").gte("due_date", today).lte("due_date", in8);
-    for (const h of (hws ?? []) as { id: string; title: string; due_date: string; subjects: { name: string } | null }[]) {
-      if (isExamTitle(h.title)) exams.push({ key: `hw:${h.id}`, subject: h.subjects?.name ?? "Sans matière", title: h.title, day: h.due_date });
+    const { data: hws } = await db.from("homeworks").select("id, title, due_date, english_group, subjects(name)").gte("due_date", today).lte("due_date", in22);
+    const homeworks: NewHomework[] = [];
+    for (const h of (hws ?? []) as { id: string; title: string; due_date: string; english_group: string | null; subjects: { name: string } | null }[]) {
+      const subject = h.subjects?.name ?? "Sans matière";
+      if (isExamTitle(h.title)) exams.push({ key: `hw:${h.id}`, subject, title: h.title, day: h.due_date });
+      else homeworks.push({ id: h.id, title: h.title, subject, dueDate: h.due_date, englishGroup: h.english_group });
     }
     const { data: sentRows } = await db.from("channel_alerts").select("key");
     const sentKeys = new Set(((sentRows ?? []) as { key: string }[]).map((r) => r.key));
-    const alerts = examAlerts(exams, sentKeys, now, appUrl);
+    const alerts = [...examAlerts(exams, sentKeys, now, appUrl), ...homeworkReminders(homeworks, sentKeys, now, appUrl)];
     for (const a of alerts) if (await post(a.text)) await db.from("channel_alerts").insert({ key: a.key });
     report.alerts = alerts.length;
   }

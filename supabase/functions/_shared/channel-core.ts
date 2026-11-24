@@ -319,21 +319,63 @@ function examText(head: string, e: Exam, footer: string): string {
   ].join("\n");
 }
 
+/**
+ * Palier d'alerte atteint pour une échéance `day` : 3 semaines (15 à 21 jours), 2 semaines (8 à 14),
+ * 1 semaine (2 à 7), puis la veille à partir de 17 h (heure de Paris). Un seul message par palier ;
+ * un palier manqué (contrôle ajouté tard) n'est pas rattrapé, seul le palier en cours part.
+ * Le palier « semaine » garde son ancien nom de clé (alertes déjà envoyées).
+ */
+export type AlertStage = "3sem" | "2sem" | "semaine" | "veille";
+export function alertStage(day: string, now: Date): AlertStage | null {
+  const n = daysUntil(day, now);
+  if (n === 1) return parisHour(now) >= 17 ? "veille" : null;
+  if (n >= 2 && n <= 7) return "semaine";
+  if (n >= 8 && n <= 14) return "2sem";
+  if (n >= 15 && n <= 21) return "3sem";
+  return null;
+}
+
+/** « dans 3 semaines », « dans 1 semaine », « dans 10 jours ». */
+function inDays(n: number): string {
+  if (n % 7 === 0) return `dans ${n / 7} semaine${n > 7 ? "s" : ""}`;
+  return `dans ${n} jours`;
+}
+
 export function examAlerts(exams: Exam[], sent: Set<string>, now: Date, appUrl: string): ExamAlert[] {
   const out: ExamAlert[] = [];
   const revise = `<a href="${appUrl}/controles/">Voir les contrôles</a>`;
   for (const e of exams) {
-    const n = daysUntil(e.day, now);
+    const stage = alertStage(e.day, now);
+    if (!stage || sent.has(`${e.key}:${stage}`)) continue;
     const projet = e.kind === "projet";
-    if (n === 1 && parisHour(now) >= 17 && !sent.has(`${e.key}:veille`)) {
+    if (stage === "veille") {
       const head = projet ? "⚠️ <b>Projet final à rendre demain</b>" : "⚠️ <b>Contrôle demain</b>";
       out.push({ key: `${e.key}:veille`, text: examText(head, e, `Bon courage ! ${revise}`) });
-    } else if (n >= 2 && n <= 7 && !sent.has(`${e.key}:semaine`)) {
-      const head = projet ? `📣 <b>Projet final à rendre dans ${n} jours</b>` : `📣 <b>Contrôle dans ${n} jours</b>`;
-      out.push({ key: `${e.key}:semaine`, text: examText(head, e, revise) });
+    } else {
+      const when = inDays(daysUntil(e.day, now));
+      const head = projet ? `📣 <b>Projet final à rendre ${when}</b>` : `📣 <b>Contrôle ${when}</b>`;
+      out.push({ key: `${e.key}:${stage}`, text: examText(head, e, revise) });
     }
   }
   return out;
+}
+
+/** Rappel des devoirs (hors contrôles) la veille à partir de 17 h. Clé « hwr:<id>:veille ». */
+export function homeworkReminders(hws: NewHomework[], sent: Set<string>, now: Date, appUrl: string): ExamAlert[] {
+  return hws
+    .filter((h) => !isExamTitle(h.title) && alertStage(h.dueDate, now) === "veille" && !sent.has(`hwr:${h.id}:veille`))
+    .map((h) => ({
+      key: `hwr:${h.id}:veille`,
+      text: [
+        "⏰ <b>Devoir à rendre demain</b>",
+        "",
+        `📚 Matière : <b>${escapeHtml(h.subject)}</b>${h.englishGroup ? ` (groupe ${escapeHtml(h.englishGroup)})` : ""}`,
+        `📝 Devoir : ${escapeHtml(h.title)}`,
+        `📅 À rendre le : <b>${dayLabel(h.dueDate)}</b>`,
+        "",
+        `<a href="${appUrl}/devoirs/">Voir les devoirs</a>`,
+      ].join("\n"),
+    }));
 }
 
 // ---------------------------------------------------------------------------------------------

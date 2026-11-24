@@ -7,6 +7,8 @@ import {
   examFromRow,
   examRowFromSnapshot,
   formatExamAnnounce,
+  alertStage,
+  homeworkReminders,
   formatDocuments,
   formatHomework,
   formatTimetableChanges,
@@ -166,7 +168,7 @@ describe("alertes de contrôle", () => {
     expect(daysUntil("2026-11-30", NOW)).toBe(7);
     const a = examAlerts(exam, new Set(), NOW, APP);
     expect(a.map((x) => x.key)).toEqual(["hw:1:semaine"]);
-    expect(a[0].text).toContain("📣 <b>Contrôle dans 7 jours</b>");
+    expect(a[0].text).toContain("📣 <b>Contrôle dans 1 semaine</b>");
     expect(a[0].text).toContain("📚 Matière : <b>Algorithmique et programmation C</b>");
     expect(a[0].text).toContain("📝 Contrôle pointeurs");
     expect(a[0].text).toContain("📅 Date : <b>lundi 30 novembre</b>");
@@ -185,6 +187,46 @@ describe("alertes de contrôle", () => {
     ]);
     const [alert] = examAlerts(e, new Set(), NOW, APP);
     expect(alert.text).toContain("📅 Date : <b>mercredi 25 novembre</b>\n🕒 Horaire : <b>09:00–12:00</b>\n📍 Lieu : Salle EM319 - EIFFEL 1");
+  });
+
+  it("paliers : 3, 2 et 1 semaine(s) avant, puis la veille au soir", () => {
+    // NOW : lundi 23 novembre, 11 h à Paris.
+    expect(alertStage("2026-12-14", NOW)).toBe("3sem"); // 21 jours
+    expect(alertStage("2026-12-08", NOW)).toBe("3sem"); // 15 jours
+    expect(alertStage("2026-12-07", NOW)).toBe("2sem"); // 14 jours
+    expect(alertStage("2026-12-01", NOW)).toBe("2sem"); // 8 jours
+    expect(alertStage("2026-11-30", NOW)).toBe("semaine");
+    expect(alertStage("2026-11-25", NOW)).toBe("semaine");
+    expect(alertStage("2026-11-24", NOW)).toBeNull(); // demain, mais avant 17 h
+    expect(alertStage("2026-11-24", new Date("2026-11-23T16:00:00Z"))).toBe("veille");
+    expect(alertStage("2026-12-15", NOW)).toBeNull(); // 22 jours
+    expect(alertStage("2026-11-23", NOW)).toBeNull(); // aujourd'hui
+
+    const exam = [{ key: "exam:1", subject: "Maths", day: "2026-12-14", kind: "controle" as const }];
+    const [three] = examAlerts(exam, new Set(), NOW, APP);
+    expect(three).toMatchObject({ key: "exam:1:3sem" });
+    expect(three.text).toContain("📣 <b>Contrôle dans 3 semaines</b>");
+    expect(examAlerts(exam, new Set(["exam:1:3sem"]), NOW, APP)).toEqual([]);
+    const later = new Date("2026-11-30T10:00:00Z"); // 14 jours avant
+    expect(examAlerts(exam, new Set(["exam:1:3sem"]), later, APP)[0]).toMatchObject({ key: "exam:1:2sem" });
+    const projet = [{ ...exam[0], kind: "projet" as const, day: "2026-12-03" }]; // 10 jours
+    expect(examAlerts(projet, new Set(), NOW, APP)[0].text).toContain("📣 <b>Projet final à rendre dans 10 jours</b>");
+  });
+
+  it("devoirs : rappel la veille au soir seulement, sauf ceux qui sont des contrôles", () => {
+    const hws = [
+      { id: "h1", title: "Exercices 1 à 5", subject: "Maths", dueDate: "2026-11-24", englishGroup: null },
+      { id: "h2", title: "Contrôle chapitre 2", subject: "Maths", dueDate: "2026-11-24" },
+      { id: "h3", title: "TP réseau", subject: "Réseaux", dueDate: "2026-11-30" },
+    ];
+    expect(homeworkReminders(hws, new Set(), NOW, APP)).toEqual([]);
+    const eve = new Date("2026-11-23T17:30:00Z"); // 18 h 30 à Paris
+    const r = homeworkReminders(hws, new Set(), eve, APP);
+    expect(r.map((x) => x.key)).toEqual(["hwr:h1:veille"]);
+    expect(r[0].text).toContain("⏰ <b>Devoir à rendre demain</b>");
+    expect(r[0].text).toContain("📝 Devoir : Exercices 1 à 5");
+    expect(r[0].text).toContain("📅 À rendre le : <b>mardi 24 novembre</b>");
+    expect(homeworkReminders(hws, new Set(["hwr:h1:veille"]), eve, APP)).toEqual([]);
   });
 });
 
