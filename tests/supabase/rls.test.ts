@@ -72,6 +72,18 @@ describe("compte en attente", () => {
 });
 
 describe("compte actif", () => {
+  it("enregistre la fin de son tutoriel, pas celle d'un autre", async () => {
+    await t.as(activeId);
+    await t.db.query("update public.profiles set tutorial_done_at = now() where id = $1", [activeId]);
+    await t.db.query("update public.profiles set tutorial_done_at = now() where id = $1", [adminId]);
+    await t.as("service");
+    const r = await t.db.query<{ id: string; done: boolean }>(
+      "select id, tutorial_done_at is not null as done from public.profiles where id in ($1, $2)",
+      [activeId, adminId],
+    );
+    expect(Object.fromEntries(r.rows.map((x) => [x.id, x.done]))).toEqual({ [activeId]: true, [adminId]: false });
+  });
+
   it("lit tous les documents et les fichiers", async () => {
     await t.as(activeId);
     expect(await t.count("select 1 from public.documents")).toBe(1);

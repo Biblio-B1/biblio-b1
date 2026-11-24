@@ -2,6 +2,7 @@
 
 import { PageRefreshProvider } from "@/components/PageRefresh";
 import { getMyCalendar } from "@/lib/api/calendar";
+import { listExams } from "@/lib/api/exams";
 import { listHomeworks } from "@/lib/api/homeworks";
 import { listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
@@ -10,15 +11,17 @@ import { HomeworkClient } from "./HomeworkClient";
 export default function DevoirsPage() {
   const { data, error, reload } = useData(async () => {
     // Le calendrier est facultatif : sans lui, la page fonctionne (choix de la date seulement).
-    const [subjects, homeworks, calendar] = await Promise.all([
+    const [subjects, homeworks, calendar, exams] = await Promise.all([
       listSubjects(),
       listHomeworks(),
       getMyCalendar().catch(() => null),
+      listExams().catch(() => []),
     ]);
     return {
       subjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color })),
       calendarSubjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color, rules: s.rules })),
       homeworks,
+      exams,
       courses: calendar ? calendar.events : null,
     };
   }, []);
@@ -42,6 +45,7 @@ export default function DevoirsPage() {
             homeworks={data.homeworks}
             courses={data.courses}
             calendarSubjects={data.calendarSubjects}
+            exams={data.exams}
           />
         </PageRefreshProvider>
       )}

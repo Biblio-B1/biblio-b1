@@ -7,7 +7,14 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 
-export type Profile = { id: string; name: string; role: "admin" | "member"; status: "active" | "pending" };
+export type Profile = {
+  id: string;
+  name: string;
+  role: "admin" | "member";
+  status: "active" | "pending";
+  /** Tutoriel de première connexion terminé ou passé (null : à montrer). */
+  tutorial_done_at?: string | null;
+};
 
 type AuthState = {
   session: Session | null;
@@ -21,7 +28,7 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 async function loadProfile(userId: string): Promise<Profile | null> {
-  const { data } = await getSupabase().from("profiles").select("id, name, role, status").eq("id", userId).maybeSingle();
+  const { data } = await getSupabase().from("profiles").select("id, name, role, status, tutorial_done_at").eq("id", userId).maybeSingle();
   return (data as Profile | null) ?? null;
 }
 

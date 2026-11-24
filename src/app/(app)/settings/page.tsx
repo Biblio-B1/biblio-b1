@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ActionForm, Field, type FormState } from "@/components/ActionForm";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { TUTORIAL_EVENT } from "@/components/Tutorial";
 import {
   browserNotificationsOn,
   disableBrowserNotifications,
@@ -322,6 +323,16 @@ function DeleteSection({ email }: { email: string }) {
   );
 }
 
+function TutorialSection() {
+  return (
+    <Section title="Tutoriel" intro="La visite guidée du site : quoi y mettre, où trouver les cours, et les autres fonctionnalités.">
+      <button type="button" onClick={() => window.dispatchEvent(new Event(TUTORIAL_EVENT))} className="btn self-start">
+        Revoir le tutoriel
+      </button>
+    </Section>
+  );
+}
+
 export default function SettingsPage() {
   const { session, profile } = useAuth();
   const email = session?.user.email ?? "";
@@ -337,6 +348,7 @@ export default function SettingsPage() {
       <ProfileSection key={profile?.name} />
       <DirectorySection email={email} />
       <PasswordSection email={email} />
+      <TutorialSection />
       {profile?.role === "admin" && <NotificationSection />}
       <DeleteSection email={email} />
     </div>

@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useMemo, useRef, useState, useTransition } from "react";
 import type { FormState } from "@/components/ActionForm";
 import { AttachmentField, AttachmentList } from "@/components/AttachmentList";
+import { DuplicateWarning, useDuplicateGuard } from "@/components/DuplicateWarning";
+import { listHomeworks, type HomeworkRow } from "@/lib/api/homeworks";
+import { examItems, homeworkItems, type DueItem } from "@/lib/duplicates";
 import { PageRefreshProvider, usePageRefresh } from "@/components/PageRefresh";
 import { IconCalendar } from "@/components/layout/Icons";
 import { Spine } from "@/components/layout/Spine";
@@ -83,13 +86,17 @@ function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void })
   );
 }
 
-function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamRow[] }) {
+function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; exams: ExamRow[]; homeworks: HomeworkRow[] }) {
   const router = usePageRefresh();
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
   const [formKey, setFormKey] = useState(0);
   const [pickError, setPickError] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
   const selected = subjects.find((s) => s.id === subjectId);
+  const [dupes, setDupes] = useState<DueItem[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+  const existing = useMemo(() => [...examItems(exams), ...homeworkItems(homeworks)], [exams, homeworks]);
+  const guard = useDuplicateGuard(existing);
 
   const [state, formAction, pending] = useActionState(async (prev: FormState, fd: FormData) => {
     const res = await createExamAction(prev, fd);
@@ -114,7 +121,21 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
             Ajouter un contrôle
           </h2>
         </div>
-        <form key={formKey} action={formAction} className="flex flex-col gap-4">
+        <form
+          key={formKey}
+          ref={formRef}
+          action={formAction}
+          onSubmit={(e) => {
+            // Même matière, même jour : on demande confirmation avant de publier (doublon possible).
+            const date = String(new FormData(e.currentTarget).get("date") ?? "");
+            if (guard.check({ subjectId, subjectName: selected?.name ?? "", date }, setDupes)) e.preventDefault();
+          }}
+          onChange={(e) => {
+            const name = (e.target as unknown as HTMLInputElement).name;
+            if (name === "date" || name === "subjectId") setDupes([]);
+          }}
+          className="flex flex-col gap-4"
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="label">
               Matière
@@ -161,6 +182,15 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
             <textarea name="details" rows={3} maxLength={2000} placeholder="Chapitres à réviser, documents autorisés…" className="input min-h-20 py-2" />
           </label>
           <AttachmentField hint="facultatif : sujet, consignes, fiches…" onError={setPickError} />
+          <DuplicateWarning
+            matches={dupes}
+            what="ce contrôle"
+            onConfirm={() => {
+              setDupes([]);
+              guard.confirm(formRef.current);
+            }}
+            onCancel={() => setDupes([])}
+          />
           <div className="flex flex-wrap items-center gap-3">
             <button type="submit" disabled={pending || Boolean(pickError)} className="btn btn-primary">
               {pending ? "Enregistrement…" : "Enregistrer"}
@@ -215,8 +245,8 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
 
 export default function ControlesPage() {
   const { data, error, reload } = useData(async () => {
-    const [subjects, exams] = await Promise.all([listSubjects(), listExams()]);
-    return { subjects: subjects.map((s) => ({ id: s.id, name: s.name, color: s.color })), exams };
+    const [subjects, exams, homeworks] = await Promise.all([listSubjects(), listExams(), listHomeworks().catch(() => [])]);
+    return { subjects: subjects.map((s) => ({ id: s.id, name: s.name, color: s.color })), exams, homeworks };
   }, []);
 
   return (
@@ -243,7 +273,7 @@ export default function ControlesPage() {
         <p className="text-sm text-ink-3">Chargement…</p>
       ) : (
         <PageRefreshProvider value={reload}>
-          <ExamsClient subjects={data.subjects} exams={data.exams} />
+          <ExamsClient subjects={data.subjects} exams={data.exams} homeworks={data.homeworks} />
         </PageRefreshProvider>
       )}
     </div>

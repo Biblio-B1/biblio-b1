@@ -1,9 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePageRefresh } from "@/components/PageRefresh";
 import type { FormState } from "@/components/ActionForm";
 import { AttachmentField, AttachmentList } from "@/components/AttachmentList";
+import { DuplicateWarning, useDuplicateGuard } from "@/components/DuplicateWarning";
+import type { ExamRow } from "@/lib/api/exams";
+import { examItems, homeworkItems, type DueItem } from "@/lib/duplicates";
 import { HOMEWORK_DONE_EVENT, HomeworkDoneToggle } from "@/components/HomeworkDone";
 import { Spine } from "@/components/layout/Spine";
 import { IconHomework } from "@/components/layout/Icons";
@@ -103,9 +106,12 @@ export function HomeworkClient({
   homeworks,
   courses = null,
   calendarSubjects = [],
+  exams = [],
 }: {
   subjects: SubjectOpt[];
   homeworks: HomeworkRow[];
+  /** Contrôles, pour repérer un doublon possible (même matière, même jour). */
+  exams?: ExamRow[];
   /** Cours de l'emploi du temps de l'élève (null : aucun calendrier lié). */
   courses?: ScheduleEvent[] | null;
   /** Matières avec leurs règles, pour reconnaître la matière d'un cours. */
@@ -120,6 +126,10 @@ export function HomeworkClient({
   const [formKey, setFormKey] = useState(0);
   const [hideDone, setHideDone] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [dupes, setDupes] = useState<DueItem[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+  const existing = useMemo(() => [...homeworkItems(homeworks), ...examItems(exams)], [homeworks, exams]);
+  const guard = useDuplicateGuard(existing);
 
   const selectedSubject = subjects.find((s) => s.id === subjectId);
   const englishSelected = isEnglish(selectedSubject);
@@ -173,7 +183,15 @@ export function HomeworkClient({
           </h2>
         </div>
 
-        <form action={formAction} className="flex flex-col gap-4">
+        <form
+          ref={formRef}
+          action={formAction}
+          onSubmit={(e) => {
+            // Même matière, même jour : on demande confirmation avant de publier (doublon possible).
+            if (guard.check({ subjectId, subjectName: selectedSubject?.name ?? "", date: dueDate }, setDupes)) e.preventDefault();
+          }}
+          className="flex flex-col gap-4"
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="label">
               Matière
@@ -186,6 +204,7 @@ export function HomeworkClient({
                   onChange={(e) => {
                     setSubjectId(e.target.value);
                     setEnglishGroup("");
+                    setDupes([]);
                   }}
                   className="input flex-1"
                 >
@@ -205,7 +224,10 @@ export function HomeworkClient({
                 name="dueDate"
                 required
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  setDupes([]);
+                }}
                 className="input"
               />
             </label>
@@ -218,6 +240,7 @@ export function HomeworkClient({
             dueDate={dueDate}
             onPick={(dayKey, pickedSubject) => {
               setDueDate(dayKey);
+              setDupes([]);
               if (pickedSubject && pickedSubject !== subjectId) {
                 setSubjectId(pickedSubject);
                 setEnglishGroup("");
@@ -271,6 +294,16 @@ export function HomeworkClient({
           </label>
 
           <AttachmentField key={formKey} hint="facultatif : sujet, consignes, fichiers…" onError={setFileError} />
+
+          <DuplicateWarning
+            matches={dupes}
+            what="ce devoir"
+            onConfirm={() => {
+              setDupes([]);
+              guard.confirm(formRef.current);
+            }}
+            onCancel={() => setDupes([])}
+          />
 
           {state?.error && (
             <p role="alert" className="rounded-md border border-danger/30 bg-danger-bg p-2.5 text-sm text-danger">

@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import { PendingBanner, usePendingRequests } from "@/components/admin/PendingRequests";
 import { RequireAuth } from "@/components/auth/RequireAuth";
+import { Tutorial } from "@/components/Tutorial";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -47,6 +48,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <Tutorial />
     </div>
   );
 }
