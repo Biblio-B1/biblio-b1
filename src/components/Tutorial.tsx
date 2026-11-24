@@ -6,10 +6,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { MENU_CLOSE_EVENT, MENU_EVENT } from "@/components/layout/Sidebar";
 import { getSupabase } from "@/lib/supabase/client";
 import { TUTORIAL_STEPS, targetSelector } from "@/lib/tutorial";
 
 export const TUTORIAL_EVENT = "bb1-tutorial";
+
+/** Téléphone : le menu est un tiroir fermé, qu'il faut ouvrir pour montrer ses liens. */
+const isPhone = () => window.matchMedia("(max-width: 767px)").matches;
 
 type Rect = { top: number; left: number; width: number; height: number };
 
@@ -46,6 +50,7 @@ export function Tutorial() {
 
   const finish = useCallback(async () => {
     setOpen(false);
+    if (isPhone()) window.dispatchEvent(new Event(MENU_CLOSE_EVENT));
     if (profile && !profile.tutorial_done_at) {
       await getSupabase().from("profiles").update({ tutorial_done_at: new Date().toISOString() }).eq("id", profile.id);
       await refreshProfile();
@@ -59,15 +64,27 @@ export function Tutorial() {
   useLayoutEffect(() => {
     if (!open || !current?.target) {
       setRect(null);
+      if (open && isPhone()) window.dispatchEvent(new Event(MENU_CLOSE_EVENT));
       return;
     }
     const sel = targetSelector(current.target);
     const update = () => setRect(visibleRect(sel));
+    // Sur téléphone, on ouvre le menu puis on mesure le lien une fois le tiroir affiché.
+    if (isPhone()) window.dispatchEvent(new Event(MENU_EVENT));
     update();
-    document.querySelector(sel)?.scrollIntoView({ block: "nearest" });
+    const raf = window.requestAnimationFrame(() => {
+      for (const el of document.querySelectorAll(sel)) {
+        if (el.getBoundingClientRect().width > 0) {
+          el.scrollIntoView({ block: "nearest" });
+          break;
+        }
+      }
+      update();
+    });
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
+      window.cancelAnimationFrame(raf);
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
@@ -87,6 +104,8 @@ export function Tutorial() {
   if (!open || !current) return null;
 
   const pad = 6;
+  // Téléphone : la carte se place en haut si le lien mis en avant est dans la moitié basse.
+  const cardOnTop = rect !== null && rect.top + rect.height / 2 > window.innerHeight / 2;
   return (
     <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-labelledby="tutorial-title" aria-describedby="tutorial-body">
       {rect ? (
@@ -107,7 +126,9 @@ export function Tutorial() {
       )}
 
       <div
-        className={`absolute inset-x-3 bottom-3 mx-auto max-w-md rounded-xl border border-line bg-surface p-5 shadow-2xl sm:inset-x-6 md:bottom-auto md:top-1/2 md:-translate-y-1/2 ${
+        className={`absolute inset-x-3 mx-auto max-w-md rounded-xl border border-line bg-surface p-5 shadow-2xl sm:inset-x-6 md:bottom-auto md:top-1/2 md:-translate-y-1/2 ${
+          cardOnTop ? "top-3" : "bottom-3"
+        } ${
           rect ? "md:left-72 md:right-auto md:mx-0 md:w-[28rem]" : ""
         }`}
       >

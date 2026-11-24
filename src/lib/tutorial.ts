@@ -103,6 +103,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
 /** Sélecteur du lien du menu (barre latérale) pour un chemin de page. */
 export function targetSelector(target: string): string {
   if (target.startsWith("[")) return target;
-  if (target === "/") return 'aside a[href="/"], aside a[href$="/biblio-b1"], aside a[href$="/biblio-b1/"]';
-  return `aside a[href$="${target}"], aside a[href$="${target}/"]`;
+  // Liens du menu principal (pas le logo, qui mène aussi à l'accueil).
+  if (target === "/") return 'aside nav a[href="/"], aside nav a[href$="/biblio-b1"], aside nav a[href$="/biblio-b1/"]';
+  return `aside nav a[href$="${target}"], aside nav a[href$="${target}/"]`;
 }

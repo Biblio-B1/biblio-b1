@@ -11,6 +11,8 @@ import { IconBooks, IconCalendar, IconCheckList, IconClose, IconExam, IconHome, 
 export type SidebarSubject = { slug: string; name: string; color: string; count: number };
 
 export const MENU_EVENT = "bb1:menu";
+/** Ferme le menu du téléphone (fin d'une étape du tutoriel). */
+export const MENU_CLOSE_EVENT = "bb1:menu-close";
 
 type Props = {
   subjects: SidebarSubject[];
@@ -161,13 +163,16 @@ export function Sidebar(props: Props) {
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
     const onMenu = () => setOpen(true);
+    const onClose = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener(MENU_EVENT, onMenu);
+    window.addEventListener(MENU_CLOSE_EVENT, onClose);
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener(MENU_EVENT, onMenu);
+      window.removeEventListener(MENU_CLOSE_EVENT, onClose);
       window.removeEventListener("keydown", onKey);
     };
   }, []);

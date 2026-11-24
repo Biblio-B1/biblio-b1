@@ -20,8 +20,8 @@ describe("tutoriel", () => {
 
   it("met en avant le lien du menu, avec ou sans le préfixe du site", () => {
     const sel = targetSelector("/upload");
-    expect(sel).toBe('aside a[href$="/upload"], aside a[href$="/upload/"]');
-    expect(targetSelector("/")).toContain('aside a[href$="/biblio-b1"]');
+    expect(sel).toBe('aside nav a[href$="/upload"], aside nav a[href$="/upload/"]');
+    expect(targetSelector("/")).toContain('aside nav a[href$="/biblio-b1"]');
     expect(targetSelector("[data-x]")).toBe("[data-x]");
   });
 });
