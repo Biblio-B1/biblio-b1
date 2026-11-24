@@ -9,27 +9,25 @@ import { IconCamera, IconPen, IconUpload } from "@/components/layout/Icons";
 import { getMyCalendar } from "@/lib/api/calendar";
 import { examEvents, listExams } from "@/lib/api/exams";
 import { listHomeworks } from "@/lib/api/homeworks";
-import { countBySubject, listDocuments, listSubjects } from "@/lib/api/library";
+import { listDocuments, listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
 import { todayKeyInParis } from "@/lib/calendar-view";
-import { subjectHref } from "@/lib/routes";
 
 export default function Dashboard() {
   const { profile } = useAuth();
   const { data, error } = useData(async () => {
-    const [subjects, docs, counts, homeworks, calendar, exams] = await Promise.all([
+    const [subjects, docs, homeworks, calendar, exams] = await Promise.all([
       listSubjects(),
       listDocuments({ limit: 9 }),
-      countBySubject(),
       listHomeworks(),
       getMyCalendar(),
       listExams(),
     ]);
-    return { subjects, docs, counts, homeworks, calendar, exams };
+    return { subjects, docs, homeworks, calendar, exams };
   }, []);
   if (error) return <p role="alert" className="text-danger">{error}</p>;
   if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
-  const { subjects, docs, counts, homeworks, calendar, exams } = data;
+  const { subjects, docs, homeworks, calendar, exams } = data;
   const calendarSubjects = subjects.map((s) => ({
     id: s.id,
     name: s.name,
@@ -56,26 +54,6 @@ export default function Dashboard() {
       </section>
 
       <UpcomingWork homeworks={homeworks} exams={exams} today={todayKeyInParis()} />
-
-      <section aria-labelledby="shelf" className="flex flex-col gap-3">
-        <h2 id="shelf" className="text-[15px] font-semibold">Matières</h2>
-        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {subjects.map((s) => (
-            <li key={s.id}>
-              <Link
-                href={subjectHref(s.slug)}
-                className="flex h-full flex-col justify-between gap-6 rounded-lg border border-line bg-surface p-3 transition-colors hover:border-line-strong"
-                style={{ boxShadow: `inset 4px 0 0 ${s.color}` }}
-              >
-                <span className="pl-1.5 text-[14px] leading-snug font-medium">{s.name}</span>
-                <span className="pl-1.5 text-[13px] text-ink-3 tabular-nums">
-                  {counts.get(s.id) ?? 0} document{(counts.get(s.id) ?? 0) > 1 ? "s" : ""}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
 
       <section aria-labelledby="timetable-preview" className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-2">
