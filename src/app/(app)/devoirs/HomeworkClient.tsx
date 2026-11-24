@@ -9,7 +9,7 @@ import type { ExamRow } from "@/lib/api/exams";
 import { examItems, homeworkItems, type DueItem } from "@/lib/duplicates";
 import { HOMEWORK_DONE_EVENT, HomeworkDoneToggle } from "@/components/HomeworkDone";
 import { Spine } from "@/components/layout/Spine";
-import { IconHomework } from "@/components/layout/Icons";
+import { IconCalendar, IconHomework } from "@/components/layout/Icons";
 import { labelDate, todayKeyInParis } from "@/lib/calendar-view";
 import { HOMEWORK_FILES } from "@/lib/api/attachments";
 import { createHomeworkAction, deleteHomeworkAction, type HomeworkRow } from "@/lib/api/homeworks";
@@ -127,6 +127,7 @@ export function HomeworkClient({
   const [hideDone, setHideDone] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [dupes, setDupes] = useState<DueItem[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const existing = useMemo(() => [...homeworkItems(homeworks), ...examItems(exams)], [homeworks, exams]);
   const guard = useDuplicateGuard(existing);
@@ -217,36 +218,59 @@ export function HomeworkClient({
               </div>
             </label>
 
-            <label className="label">
-              Date de rendu
-              <input
-                type="date"
-                name="dueDate"
-                required
-                value={dueDate}
-                onChange={(e) => {
-                  setDueDate(e.target.value);
-                  setDupes([]);
-                }}
-                className="input"
-              />
-            </label>
+            <div className="label">
+              <label htmlFor="hw-due-date">Date de rendu</label>
+              <div className="relative">
+                {/* L'icône calendrier ouvre l'emploi du temps (et non le calendrier du navigateur). */}
+                <input
+                  id="hw-due-date"
+                  type="date"
+                  name="dueDate"
+                  required
+                  value={dueDate}
+                  onChange={(e) => {
+                    setDueDate(e.target.value);
+                    setDupes([]);
+                  }}
+                  className="input w-full pr-11 [&::-webkit-calendar-picker-indicator]:hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((o) => !o)}
+                  aria-expanded={pickerOpen}
+                  aria-controls="course-picker-panel"
+                  aria-label="Choisir la date sur l'emploi du temps"
+                  title="Choisir sur l'emploi du temps"
+                  className={`absolute inset-y-1 right-1 grid w-9 place-items-center rounded-md transition-colors ${
+                    pickerOpen ? "bg-ink text-surface" : "text-ink-2 hover:bg-sunken hover:text-ink"
+                  }`}
+                >
+                  <IconCalendar size={18} />
+                </button>
+              </div>
+            </div>
           </div>
 
-          <CoursePicker
-            events={courses}
-            subjects={calendarSubjects}
-            subjectId={subjectId}
-            dueDate={dueDate}
-            onPick={(dayKey, pickedSubject) => {
-              setDueDate(dayKey);
-              setDupes([]);
-              if (pickedSubject && pickedSubject !== subjectId) {
-                setSubjectId(pickedSubject);
-                setEnglishGroup("");
-              }
-            }}
-          />
+          {pickerOpen && (
+            <div id="course-picker-panel">
+              <CoursePicker
+                events={courses}
+                subjects={calendarSubjects}
+                subjectId={subjectId}
+                dueDate={dueDate}
+                onClose={() => setPickerOpen(false)}
+                onPick={(dayKey, pickedSubject) => {
+                  setDueDate(dayKey);
+                  setDupes([]);
+                  if (pickedSubject && pickedSubject !== subjectId) {
+                    setSubjectId(pickedSubject);
+                    setEnglishGroup("");
+                  }
+                  setPickerOpen(false);
+                }}
+              />
+            </div>
+          )}
 
           <label className="flex items-start gap-2.5 rounded-lg border border-line bg-sunken p-3 text-sm text-ink">
             <input type="checkbox" name="finalProject" className="mt-0.5 h-4 w-4 accent-[var(--danger)]" />
