@@ -72,7 +72,7 @@ export function toExam(r: Joined): ExamRow {
 export async function listExams(): Promise<ExamRow[]> {
   const { data, error } = await getSupabase()
     .from("exams")
-    .select("*, subjects(name, color), profiles(name), exam_attachments(id, path, name, size, author_id, created_at)")
+    .select("*, subjects(name, color), profiles!exams_author_id_fkey(name), exam_attachments(id, path, name, size, author_id, created_at)")
     .order("exam_date")
     .order("start_time", { nullsFirst: true });
   if (error) throw new Error(`Contrôles : ${error.message}`);

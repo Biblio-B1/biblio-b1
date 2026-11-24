@@ -68,7 +68,7 @@ export function toHomework(r: Joined): HomeworkRow {
 export async function listHomeworks(): Promise<HomeworkRow[]> {
   const { data, error } = await getSupabase()
     .from("homeworks")
-    .select(`*, subjects(name, slug, color), profiles(name), homework_attachments(${ATTACHMENT_COLUMNS}), homework_done(user_id)`)
+    .select(`*, subjects(name, slug, color), profiles!homeworks_author_id_fkey(name), homework_attachments(${ATTACHMENT_COLUMNS}), homework_done(user_id)`)
     .order("due_date")
     .order("created_at");
   if (error) throw new Error(`Devoirs : ${error.message}`);
