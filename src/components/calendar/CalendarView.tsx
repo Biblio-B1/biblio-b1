@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { HOMEWORK_DONE_EVENT, HomeworkDoneToggle } from "@/components/HomeworkDone";
 import { usePageRefresh } from "@/components/PageRefresh";
 import { IconChevron, IconFlag, IconHomework } from "@/components/layout/Icons";
 import {
@@ -77,7 +78,9 @@ function dueLabel(due: CalendarHomework[]): string {
  */
 function DueBadge({ due, variant }: { due: CalendarHomework[]; variant: "chip" | "corner" | "icon" }) {
   if (due.length === 0) return null;
-  const project = due.some((h) => h.isFinalProject);
+  const allDone = due.every((h) => h.done);
+  if (allDone) return <DoneBadge due={due} variant={variant} />;
+  const project = due.some((h) => h.isFinalProject && !h.done);
   const label = dueLabel(due);
   const tooltip = `À rendre : ${homeworkTooltip(due)}`;
   if (variant === "icon") {
@@ -111,6 +114,41 @@ function DueBadge({ due, variant }: { due: CalendarHomework[]; variant: "chip" |
       }`}
     >
       {project ? <IconFlag size={12} /> : <IconHomework size={12} />}
+      <span>{label}</span>
+    </span>
+  );
+}
+
+/** Tout ce qui est à rendre pour ce cours est fait (par l'élève connecté). */
+function DoneBadge({ due, variant }: { due: CalendarHomework[]; variant: "chip" | "corner" | "icon" }) {
+  const label = `${dueLabel(due)} : fait`;
+  const check = (size: number) => (
+    <svg viewBox="0 0 12 12" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+      <path d="m2.5 6.2 2.3 2.3 4.7-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+  if (variant === "icon") {
+    return (
+      <span title={label} aria-label={label} className="inline-flex shrink-0 text-ok">
+        {check(11)}
+      </span>
+    );
+  }
+  if (variant === "corner") {
+    return (
+      <span
+        aria-label={label}
+        title={label}
+        className="absolute top-1 right-1 inline-flex items-center gap-0.5 rounded bg-surface/90 px-1 py-0.5 text-[10px] font-semibold text-ok shadow-xs ring-1 ring-ok/40"
+      >
+        {check(10)}
+        <span>Fait</span>
+      </span>
+    );
+  }
+  return (
+    <span title={label} className="inline-flex items-center gap-1 rounded-full border border-ok/40 bg-ok/10 px-2 py-0.5 text-[11px] font-medium text-ok">
+      {check(11)}
       <span>{label}</span>
     </span>
   );
@@ -236,11 +274,11 @@ function EventBlock({
         width: `calc(${100 / segment.laneCount}% - 4px)`,
         ...colorStyle,
         // Projet final à rendre : contour rouge sur tout le cours.
-        ...(!cancelled && due.some((h) => h.isFinalProject) ? { boxShadow: "inset 0 0 0 2px #dc2626" } : {}),
+        ...(!cancelled && due.some((h) => h.isFinalProject && !h.done) ? { boxShadow: "inset 0 0 0 2px #dc2626" } : {}),
       }}
     >
       <DueBadge due={due} variant="corner" />
-      <span className={`block truncate font-semibold ${due.length > 0 ? (due.some((h) => h.isFinalProject) ? "pr-16" : "pr-6") : ""}`}>
+      <span className={`block truncate font-semibold ${due.length > 0 ? (due.some((h) => h.isFinalProject && !h.done) ? "pr-16" : due.every((h) => h.done) ? "pr-10" : "pr-6") : ""}`}>
         {exam && <span className="mr-1 rounded badge-alert px-1 text-[10px] font-bold uppercase">Éval</span>}
         {segment.event.title}
       </span>
@@ -264,12 +302,25 @@ function CurrentTimeLine({ minute, startHour }: { minute: number; startHour: num
 export function CalendarView({
   events,
   subjects = [],
-  homeworks = [],
+  homeworks: homeworksIn = [],
 }: {
   events: ScheduleEvent[];
   subjects?: CalendarSubject[];
   homeworks?: CalendarHomework[];
 }) {
+  const [doneOverride, setDoneOverride] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    const onDone = (e: Event) => {
+      const { id, done } = (e as CustomEvent<{ id: string; done: boolean }>).detail;
+      setDoneOverride((o) => ({ ...o, [id]: done }));
+    };
+    window.addEventListener(HOMEWORK_DONE_EVENT, onDone);
+    return () => window.removeEventListener(HOMEWORK_DONE_EVENT, onDone);
+  }, []);
+  const homeworks = useMemo(
+    () => homeworksIn.map((h) => (h.id in doneOverride ? { ...h, done: doneOverride[h.id] } : h)),
+    [homeworksIn, doneOverride],
+  );
   // Actualisation toutes les minutes : fournie par la page (PageRefreshProvider), sinon sans effet.
   const router = usePageRefresh();
   const [today, setToday] = useState<string>();
@@ -599,7 +650,7 @@ function EventDetails({
           <div className="mt-4 flex flex-col gap-2 rounded-lg border border-line-strong bg-sunken p-3.5">
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-                {due.some((h) => h.isFinalProject) ? <IconFlag size={16} className="text-danger" /> : <IconHomework size={16} />}
+                {due.some((h) => h.isFinalProject && !h.done) ? <IconFlag size={16} className="text-danger" /> : <IconHomework size={16} />}
                 À rendre pour ce cours
               </span>
               <Link href="/devoirs" onClick={onClose} className="text-xs font-medium text-ink underline underline-offset-2">
@@ -610,8 +661,21 @@ function EventDetails({
               {due.map((hw) => (
                 <li
                   key={hw.id}
-                  className={`rounded-md border bg-surface p-2.5 text-sm ${hw.isFinalProject ? "border-danger/50 ring-1 ring-danger/20" : "border-line"}`}
+                  className={`flex flex-col gap-1.5 rounded-md border bg-surface p-2.5 text-sm ${
+                    hw.isFinalProject && !hw.done ? "border-danger/50 ring-1 ring-danger/20" : "border-line"
+                  } ${hw.done ? "opacity-75" : ""}`}
                 >
+                  <div className="flex items-center justify-between gap-2">
+                    <HomeworkDoneToggle
+                      id={hw.id}
+                      done={hw.done ?? false}
+                      size="sm"
+                      label={`${hw.isFinalProject ? "Projet final" : "Devoir"} de ${hw.subjectName}`}
+                    />
+                    <Link href={`/devoirs#devoir-${hw.id}`} onClick={onClose} className="text-xs text-ink-2 underline underline-offset-2 hover:text-ink">
+                      Ouvrir
+                    </Link>
+                  </div>
                   {hw.isFinalProject && (
                     <span className="mr-1.5 mb-1 inline-flex items-center gap-1 rounded badge-alert px-1.5 py-0.5 text-[11px] font-bold uppercase">
                       <IconFlag size={11} />
@@ -623,7 +687,7 @@ function EventDetails({
                       Groupe : {hw.englishGroup}
                     </span>
                   )}
-                  <p className="whitespace-pre-wrap text-ink">{hw.title}</p>
+                  <p className={`whitespace-pre-wrap text-ink ${hw.done ? "line-through decoration-ink-3" : ""}`}>{hw.title}</p>
                 </li>
               ))}
             </ul>

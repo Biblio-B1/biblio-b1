@@ -14,6 +14,13 @@ import { PROGRESS_STATUS_LABELS, PROGRESS_STATUS_VALUES, parseStatus } from "@/l
 const LANGS = ["fr", "en"] as const;
 const PAGE_SIZE = 50;
 
+/** Lien épinglé dans l'entraînement d'Algorithmique et programmation C. */
+const CODEX_C_URL = "https://s-l-a-k-e-r.github.io/CODEX_C/#path";
+function isAlgoC(s: { name: string; slug: string }): boolean {
+  const n = `${s.name} ${s.slug}`.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  return n.includes("algo") && /(^|[^a-z])c([^a-z+#]|$)/.test(n);
+}
+
 function Bar({ s }: { s: Summary }) {
   const pct = (n: number) => (s.total ? (n / s.total) * 100 : 0);
   return (
@@ -135,6 +142,25 @@ function Training() {
           ))}
         </div>
       </nav>
+
+      {subject && isAlgoC(subject) && (
+        <a
+          href={CODEX_C_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 rounded-lg border border-line-strong bg-surface p-3.5 transition-colors hover:border-ink"
+          style={{ boxShadow: `inset 4px 0 0 ${subject.color}` }}
+        >
+          <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-sunken text-base">
+            📌
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14.5px] font-semibold text-ink">CODEX C : parcours d&apos;entraînement</span>
+            <span className="block truncate text-xs text-ink-2">Exercices de C guidés, à faire dans l&apos;ordre (s-l-a-k-e-r.github.io)</span>
+          </span>
+          <span className="btn btn-primary h-8 shrink-0 px-3 text-xs">Ouvrir ↗</span>
+        </a>
+      )}
 
       {shown.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line-strong p-6 text-ink-2">

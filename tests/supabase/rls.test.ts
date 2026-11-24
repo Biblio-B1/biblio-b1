@@ -293,6 +293,38 @@ describe("canal Telegram", () => {
       t.db.query("insert into public.exams (kind, subject_id, exam_date) values ('projet', $1, '2026-12-14')", [subjectId]),
     ).rejects.toThrow();
   });
+
+  it("devoirs : plusieurs pièces jointes, et « fait » propre à chaque élève", async () => {
+    await t.as(activeId);
+    const hwId = (
+      await t.db.query<{ id: string }>(
+        "insert into public.homeworks (subject_id, title, due_date) values ($1, 'TD pointeurs', '2026-12-03') returning id",
+        [subjectId],
+      )
+    ).rows[0].id;
+    const add = (path: string) =>
+      t.db.query("insert into public.homework_attachments (homework_id, path, name, mime, size) values ($1, $2, 'td.pdf', 'application/pdf', 5)", [hwId, path]);
+    await add(`uploads/${activeId}/a.pdf`);
+    await add(`uploads/${activeId}/b.pdf`);
+    await expect(add(`uploads/${adminId}/c.pdf`)).rejects.toThrow();
+    expect(await t.count("select 1 from public.homework_attachments where homework_id = $1", [hwId])).toBe(2);
+
+    await t.db.query("insert into public.homework_done (homework_id) values ($1)", [hwId]);
+    await expect(t.db.query("insert into public.homework_done (homework_id, user_id) values ($1, $2)", [hwId, adminId])).rejects.toThrow();
+    await t.as(adminId);
+    expect(await t.count("select 1 from public.homework_done")).toBe(0); // ne voit pas les coches des autres
+    await t.db.query("insert into public.homework_done (homework_id) values ($1)", [hwId]);
+    await t.db.query("delete from public.homework_done where homework_id = $1", [hwId]); // ne retire que la sienne
+    await t.as(activeId);
+    expect(await t.count("select 1 from public.homework_done where homework_id = $1", [hwId])).toBe(1);
+    await t.as(pendingId);
+    expect(await t.count("select 1 from public.homework_attachments")).toBe(0);
+
+    await t.as("service");
+    await t.db.query("delete from public.homeworks where id = $1", [hwId]);
+    expect(await t.count("select 1 from public.homework_attachments where homework_id = $1", [hwId])).toBe(0);
+    expect(await t.count("select 1 from public.homework_done where homework_id = $1", [hwId])).toBe(0);
+  });
 });
 
 describe("contrôles", () => {

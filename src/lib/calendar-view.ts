@@ -37,6 +37,8 @@ export type CalendarHomework = {
   englishGroup?: string | null;
   /** Projet final : signalé à part sur le cours (badge rouge). */
   isFinalProject?: boolean;
+  /** Coché « fait » par l'élève connecté. */
+  done?: boolean;
   attachmentPath?: string | null;
   attachmentName?: string | null;
 };
@@ -394,4 +396,30 @@ export function homeworksForNextWeek<T extends { dueDate: string }>(homeworks: T
   const nextMonday = shiftDateKey(mondayOfWeek(todayKey), 7);
   const nextSunday = shiftDateKey(nextMonday, 6);
   return homeworks.filter((hw) => hw.dueDate >= nextMonday && hw.dueDate <= nextSunday);
+}
+
+/**
+ * Devoirs de l'accueil : ceux à rendre dans les 7 prochains jours (aujourd'hui compris). S'il n'y
+ * en a aucun, les 3 plus proches à venir (ou moins s'il y en a moins).
+ */
+export function homeworksForHome<T extends { dueDate: string }>(
+  homeworks: T[],
+  todayKey: string,
+): { mode: "week" | "next"; items: T[] } {
+  const upcoming = homeworks.filter((h) => h.dueDate >= todayKey).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const weekEnd = shiftDateKey(todayKey, 6);
+  const week = upcoming.filter((h) => h.dueDate <= weekEnd);
+  return week.length ? { mode: "week", items: week } : { mode: "next", items: upcoming.slice(0, 3) };
+}
+
+/** « Aujourd'hui », « Demain », sinon « mercredi 2 décembre ». */
+export function relativeDayLabel(dayKey: string, todayKey: string): string {
+  if (dayKey === todayKey) return "Aujourd'hui";
+  if (dayKey === shiftDateKey(todayKey, 1)) return "Demain";
+  return labelDate(dayKey, { weekday: "long", day: "numeric", month: "long" });
+}
+
+/** Jours calendaires de `fromKey` à `toKey` (« AAAA-MM-JJ »). */
+export function daysBetween(fromKey: string, toKey: string): number {
+  return Math.round((Date.parse(`${toKey}T00:00:00Z`) - Date.parse(`${fromKey}T00:00:00Z`)) / 86_400_000);
 }

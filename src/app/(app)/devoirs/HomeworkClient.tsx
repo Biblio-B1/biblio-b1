@@ -1,19 +1,17 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { usePageRefresh } from "@/components/PageRefresh";
 import type { FormState } from "@/components/ActionForm";
+import { AttachmentField, AttachmentList } from "@/components/AttachmentList";
+import { HOMEWORK_DONE_EVENT, HomeworkDoneToggle } from "@/components/HomeworkDone";
 import { Spine } from "@/components/layout/Spine";
-import { IconDownload, IconHomework } from "@/components/layout/Icons";
+import { IconHomework } from "@/components/layout/Icons";
 import { labelDate, todayKeyInParis } from "@/lib/calendar-view";
-import { signedFileUrl } from "@/lib/api/files";
-import { UPLOAD_ACCEPT, formatSize } from "@/lib/labels";
+import { HOMEWORK_FILES } from "@/lib/api/attachments";
 import { createHomeworkAction, deleteHomeworkAction, type HomeworkRow } from "@/lib/api/homeworks";
 import type { CalendarSubject, ScheduleEvent } from "@/lib/calendar-view";
 import { CoursePicker } from "./CoursePicker";
-
-const MAX_ATTACHMENT_MB = 30;
-const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024;
 
 type SubjectOpt = { id: string; name: string; slug: string; color: string };
 
@@ -28,17 +26,22 @@ function formatDueDate(dueDate: string): string {
   return labelDate(dueDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
-function HomeworkItem({ hw, onDeleted }: { hw: HomeworkRow; onDeleted: () => void }) {
+function HomeworkItem({ hw, highlighted, onChanged }: { hw: HomeworkRow; highlighted: boolean; onChanged: () => void }) {
   const [pending, startTransition] = useTransition();
   const [delError, setDelError] = useState<string | null>(null);
+  const kind = hw.isFinalProject ? "Projet final" : "Devoir";
 
   return (
     <li
-      className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-4"
+      id={`devoir-${hw.id}`}
+      className={`flex scroll-mt-24 flex-col gap-2.5 rounded-lg border bg-surface p-4 transition-opacity ${
+        highlighted ? "border-focus ring-2 ring-focus/40" : "border-line"
+      } ${hw.done ? "opacity-70" : ""}`}
       style={{ boxShadow: `inset 4px 0 0 ${hw.subjectColor}` }}
     >
       <div className="flex flex-wrap items-start justify-between gap-2 pl-1.5">
         <div className="flex flex-wrap items-center gap-2">
+          <HomeworkDoneToggle id={hw.id} done={hw.done} label={`${kind} de ${hw.subjectName} pour le ${formatDueDate(hw.dueDate)}`} />
           {hw.isFinalProject && (
             <span className="rounded badge-alert px-1.5 py-0.5 text-[11px] font-bold uppercase">Projet final</span>
           )}
@@ -57,11 +60,12 @@ function HomeworkItem({ hw, onDeleted }: { hw: HomeworkRow; onDeleted: () => voi
             type="button"
             disabled={pending}
             onClick={() => {
+              if (!window.confirm(`Supprimer ce ${kind.toLowerCase()} pour toute la classe ?`)) return;
               setDelError(null);
               startTransition(async () => {
                 const res = await deleteHomeworkAction(hw.id);
                 if (res.error) setDelError(res.error);
-                else onDeleted();
+                else onChanged();
               });
             }}
             className="btn btn-ghost h-7 px-2 text-xs text-danger"
@@ -71,27 +75,18 @@ function HomeworkItem({ hw, onDeleted }: { hw: HomeworkRow; onDeleted: () => voi
         </div>
       </div>
 
-      <p className="pl-1.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">{hw.title}</p>
+      <p className={`pl-1.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink ${hw.done ? "line-through decoration-ink-3" : ""}`}>
+        {hw.title}
+      </p>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 pl-1.5 text-xs text-ink-3">
-        <div>
-          {hw.attachmentPath && hw.attachmentName && (
-            <a
-              href="#"
-              onClick={async (e) => {
-                e.preventDefault();
-                window.location.href = await signedFileUrl(hw.attachmentPath!, { download: hw.attachmentName ?? true });
-              }}
-              className="inline-flex items-center gap-1.5 rounded-md border border-line bg-sunken px-2.5 py-1 text-xs font-medium text-ink hover:border-line-strong"
-            >
-              <IconDownload size={14} />
-              <span className="max-w-[18rem] truncate">{hw.attachmentName}</span>
-              {hw.attachmentSize != null && (
-                <span className="text-ink-3">({formatSize(hw.attachmentSize)})</span>
-              )}
-            </a>
-          )}
-        </div>
+      <div className="flex flex-wrap items-end justify-between gap-2 pl-1.5 text-xs text-ink-3">
+        <AttachmentList
+          target={HOMEWORK_FILES}
+          parentId={hw.id}
+          attachments={hw.attachments}
+          addLabel={`Ajouter des pièces jointes au ${kind.toLowerCase()} de ${hw.subjectName}`}
+          onChanged={onChanged}
+        />
         <span>Ajouté par {hw.authorName ?? "un élève"}</span>
       </div>
       {delError && (
@@ -122,22 +117,20 @@ export function HomeworkClient({
   const [title, setTitle] = useState("");
   const [englishGroup, setEnglishGroup] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [formKey, setFormKey] = useState(0);
+  const [hideDone, setHideDone] = useState(false);
+  const [highlight, setHighlight] = useState<string | null>(null);
 
   const selectedSubject = subjects.find((s) => s.id === subjectId);
   const englishSelected = isEnglish(selectedSubject);
 
   const [state, formAction, pending] = useActionState(async (prev: FormState, fd: FormData) => {
-    setFileError(null);
-    const file = fileRef.current?.files?.[0];
-    if (file && file.size > MAX_ATTACHMENT_BYTES) {
-      return { error: `La pièce jointe dépasse la limite de ${MAX_ATTACHMENT_MB} Mo.` };
-    }
     const res = await createHomeworkAction(prev, fd);
     if (!res?.error) {
       setTitle("");
       setEnglishGroup("");
-      if (fileRef.current) fileRef.current.value = "";
+      setFileError(null);
+      setFormKey((k) => k + 1); // vide le champ des pièces jointes
       router.refresh();
     }
     return res;
@@ -145,11 +138,29 @@ export function HomeworkClient({
 
   useEffect(() => {
     const timer = window.setInterval(() => router.refresh(), 30_000);
-    return () => window.clearInterval(timer);
+    // « Fait » coché ailleurs sur la page : on relit la liste (tri, filtre).
+    const onDone = () => router.refresh();
+    window.addEventListener(HOMEWORK_DONE_EVENT, onDone);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(HOMEWORK_DONE_EVENT, onDone);
+    };
   }, [router]);
 
+  // Lien depuis l'accueil ou l'emploi du temps (#devoir-<id>) : on montre le devoir visé.
+  useEffect(() => {
+    const id = window.location.hash.match(/^#devoir-(.+)$/)?.[1];
+    if (!id) return;
+    setHighlight(id);
+    window.setTimeout(() => document.getElementById(`devoir-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+    const t = window.setTimeout(() => setHighlight(null), 4000);
+    return () => window.clearTimeout(t);
+  }, []);
+
   const today = todayKeyInParis();
-  const upcoming = homeworks.filter((h) => h.dueDate >= today);
+  const upcomingAll = homeworks.filter((h) => h.dueDate >= today);
+  const doneCount = upcomingAll.filter((h) => h.done).length;
+  const upcoming = hideDone ? upcomingAll.filter((h) => !h.done) : upcomingAll;
   const past = homeworks.filter((h) => h.dueDate < today);
 
   return (
@@ -259,31 +270,11 @@ export function HomeworkClient({
             />
           </label>
 
-          <label className="label">
-            <span>
-              Pièce jointe <span className="font-normal text-ink-3">(optionnel, {MAX_ATTACHMENT_MB} Mo maximum)</span>
-            </span>
-            <input
-              ref={fileRef}
-              type="file"
-              name="attachment"
-              accept={UPLOAD_ACCEPT}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file && file.size > MAX_ATTACHMENT_BYTES) {
-                  setFileError(`La pièce jointe dépasse la limite de ${MAX_ATTACHMENT_MB} Mo.`);
-                  e.target.value = "";
-                } else {
-                  setFileError(null);
-                }
-              }}
-              className="block w-full text-sm text-ink-2 file:mr-3 file:rounded-md file:border file:border-line-strong file:bg-sunken file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-line"
-            />
-          </label>
+          <AttachmentField key={formKey} hint="facultatif : sujet, consignes, fichiers…" onError={setFileError} />
 
-          {(fileError || state?.error) && (
+          {state?.error && (
             <p role="alert" className="rounded-md border border-danger/30 bg-danger-bg p-2.5 text-sm text-danger">
-              {fileError ?? state?.error}
+              {state.error}
             </p>
           )}
           {state?.message && (
@@ -293,7 +284,7 @@ export function HomeworkClient({
           )}
 
           <div className="flex justify-end">
-            <button type="submit" disabled={pending || subjects.length === 0} className="btn btn-primary h-10 px-5">
+            <button type="submit" disabled={pending || subjects.length === 0 || Boolean(fileError)} className="btn btn-primary h-10 px-5">
               {pending ? "Enregistrement…" : "Publier le devoir"}
             </button>
           </div>
@@ -303,18 +294,28 @@ export function HomeworkClient({
       <section aria-labelledby="upcoming-homeworks" className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-2">
           <h2 id="upcoming-homeworks" className="text-[15px] font-semibold">
-            Devoirs à venir ({upcoming.length})
+            Devoirs à venir ({upcomingAll.length - doneCount} à faire{doneCount ? `, ${doneCount} fait${doneCount > 1 ? "s" : ""}` : ""})
           </h2>
-          <span className="text-xs text-ink-3">Synchronisé pour toute la classe · maj auto 30 s</span>
+          <div className="flex items-center gap-3 text-xs text-ink-3">
+            {doneCount > 0 && (
+              <label className="flex cursor-pointer items-center gap-1.5 text-ink-2">
+                <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} className="h-3.5 w-3.5" />
+                Masquer les devoirs faits
+              </label>
+            )}
+            <span>Synchronisé pour toute la classe · maj auto 30 s</span>
+          </div>
         </div>
         {upcoming.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line-strong p-6 text-sm text-ink-2">
-            Aucun devoir à venir pour le moment. Utilisez le formulaire ci-dessus pour en ajouter un.
+            {hideDone && doneCount > 0
+              ? "Tous les devoirs à venir sont faits."
+              : "Aucun devoir à venir pour le moment. Utilisez le formulaire ci-dessus pour en ajouter un."}
           </p>
         ) : (
           <ul className="flex flex-col gap-2.5">
             {upcoming.map((hw) => (
-              <HomeworkItem key={hw.id} hw={hw} onDeleted={() => router.refresh()} />
+              <HomeworkItem key={hw.id} hw={hw} highlighted={highlight === hw.id} onChanged={() => router.refresh()} />
             ))}
           </ul>
         )}
@@ -327,7 +328,7 @@ export function HomeworkClient({
           </h2>
           <ul className="flex flex-col gap-2.5 opacity-80">
             {past.map((hw) => (
-              <HomeworkItem key={hw.id} hw={hw} onDeleted={() => router.refresh()} />
+              <HomeworkItem key={hw.id} hw={hw} highlighted={highlight === hw.id} onChanged={() => router.refresh()} />
             ))}
           </ul>
         </section>

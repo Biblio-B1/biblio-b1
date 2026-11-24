@@ -144,12 +144,14 @@ describe("messages", () => {
   });
 
   it("devoir : matière, date, pièce jointe ; un contrôle est annoncé comme tel", () => {
-    const h = { id: "h", title: "Exercices 1 à 5", subject: "Maths", dueDate: "2026-11-26", attachmentName: "td.pdf" };
+    const h = { id: "h", title: "Exercices 1 à 5", subject: "Maths", dueDate: "2026-11-26", attachments: ["td.pdf"] };
     const m = formatHomework(h, APP);
     expect(m).toContain("📝 <b>Nouveau devoir</b>");
     expect(m).toContain("📚 Matière : <b>Maths</b>");
     expect(m).toContain("📅 À rendre le : <b>jeudi 26 novembre</b>");
     expect(m).toContain("📎 Pièce jointe : td.pdf");
+    expect(formatHomework({ ...h, attachments: ["td.pdf", "corrigé <v1>.pdf"] }, APP)).toContain("📎 2 pièces jointes :\n  • td.pdf\n  • corrigé &lt;v1&gt;.pdf");
+    expect(formatHomework({ ...h, attachments: [] }, APP)).not.toContain("📎");
     const c = formatHomework({ ...h, title: "Contrôle chapitre 3" }, APP);
     expect(c).toContain("📣 <b>Contrôle annoncé</b>");
     expect(c).toContain("📚 Matière : <b>Maths</b>");

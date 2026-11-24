@@ -4,30 +4,32 @@ import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { DocumentList } from "@/components/library/DocumentList";
-import { IconCamera, IconHomework, IconPen, IconUpload } from "@/components/layout/Icons";
+import { UpcomingWork } from "@/components/home/UpcomingWork";
+import { IconCamera, IconPen, IconUpload } from "@/components/layout/Icons";
 import { getMyCalendar } from "@/lib/api/calendar";
+import { examEvents, listExams } from "@/lib/api/exams";
 import { listHomeworks } from "@/lib/api/homeworks";
 import { countBySubject, listDocuments, listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
-import { homeworksForNextWeek, todayKeyInParis } from "@/lib/calendar-view";
+import { todayKeyInParis } from "@/lib/calendar-view";
 import { subjectHref } from "@/lib/routes";
 
 export default function Dashboard() {
   const { profile } = useAuth();
   const { data, error } = useData(async () => {
-    const [subjects, docs, counts, homeworks, calendar] = await Promise.all([
+    const [subjects, docs, counts, homeworks, calendar, exams] = await Promise.all([
       listSubjects(),
       listDocuments({ limit: 9 }),
       countBySubject(),
       listHomeworks(),
       getMyCalendar(),
+      listExams(),
     ]);
-    return { subjects, docs, counts, homeworks, calendar };
+    return { subjects, docs, counts, homeworks, calendar, exams };
   }, []);
   if (error) return <p role="alert" className="text-danger">{error}</p>;
   if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
-  const { subjects, docs, counts, homeworks, calendar } = data;
-  const nextWeekHomeworks = homeworksForNextWeek(homeworks, todayKeyInParis());
+  const { subjects, docs, counts, homeworks, calendar, exams } = data;
   const calendarSubjects = subjects.map((s) => ({
     id: s.id,
     name: s.name,
@@ -51,19 +53,9 @@ export default function Dashboard() {
             <IconPen size={16} /> Écrire une fiche
           </Link>
         </div>
-        <Link
-          href="/devoirs"
-          className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-[14.5px] transition-colors hover:border-line-strong hover:bg-sunken"
-        >
-          <span className="flex items-center gap-2.5 font-medium text-ink">
-            <IconHomework size={18} className="shrink-0 text-ink-2" />
-            <span>
-              {nextWeekHomeworks.length} devoir{nextWeekHomeworks.length > 1 ? "s" : ""} à faire pour la semaine prochaine
-            </span>
-          </span>
-          <span className="shrink-0 text-xs text-ink-3">Voir les devoirs →</span>
-        </Link>
       </section>
+
+      <UpcomingWork homeworks={homeworks} exams={exams} today={todayKeyInParis()} />
 
       <section aria-labelledby="shelf" className="flex flex-col gap-3">
         <h2 id="shelf" className="text-[15px] font-semibold">Matières</h2>
@@ -95,7 +87,7 @@ export default function Dashboard() {
           </Link>
         </div>
         {calendar ? (
-          <CalendarView events={calendar.events} subjects={calendarSubjects} homeworks={homeworks} />
+          <CalendarView events={[...calendar.events, ...examEvents(exams)]} subjects={calendarSubjects} homeworks={homeworks} />
         ) : (
           <div className="rounded-lg border border-dashed border-line-strong p-5 text-[14px] text-ink-2">
             Aucun emploi du temps lié pour l&apos;instant.{" "}

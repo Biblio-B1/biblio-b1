@@ -237,7 +237,8 @@ export type NewHomework = {
   subject: string;
   dueDate: string;
   englishGroup?: string | null;
-  attachmentName?: string | null;
+  /** Noms des pièces jointes. */
+  attachments?: string[];
   /** Projet final : annoncé comme tel et rappelé comme un contrôle. */
   finalProject?: boolean;
 };
@@ -294,7 +295,7 @@ export function formatHomework(h: NewHomework, appUrl: string): string {
     `📚 Matière : <b>${escapeHtml(h.subject)}</b>${h.englishGroup ? ` (groupe ${escapeHtml(h.englishGroup)})` : ""}`,
     `📝 ${projet ? "Projet" : exam ? "Contrôle" : "Devoir"} : ${escapeHtml(h.title)}`,
     `📅 ${exam ? "Date" : "À rendre le"} : <b>${dayLabel(h.dueDate)}</b>`,
-    ...(h.attachmentName ? [`📎 Pièce jointe : ${escapeHtml(h.attachmentName)}`] : []),
+    ...attachmentLines(h.attachments ?? []),
     "",
     `<a href="${appUrl}/devoirs/">Voir les devoirs</a>`,
   ].join("\n");
@@ -440,6 +441,13 @@ export function examRowFromSnapshot(s: Snapshot) {
 }
 
 /** Message « contrôle / projet annoncé » quand un élève l'ajoute sur le site. */
+/** « 📎 Pièce jointe : a.pdf » ou « 📎 2 pièces jointes : » suivi de la liste. */
+function attachmentLines(files: string[]): string[] {
+  if (files.length === 0) return [];
+  if (files.length === 1) return [`📎 Pièce jointe : ${escapeHtml(files[0])}`];
+  return [`📎 ${files.length} pièces jointes :`, ...files.map((f) => `  • ${escapeHtml(f)}`)];
+}
+
 export function formatExamAnnounce(e: Exam & { details?: string | null; attachments?: string[] }, appUrl: string): string {
   const files = e.attachments ?? [];
   const projet = e.kind === "projet";
@@ -452,8 +460,7 @@ export function formatExamAnnounce(e: Exam & { details?: string | null; attachme
     ...(e.time ? [`🕒 Horaire : <b>${e.time}</b>`] : []),
     ...(e.place ? [`📍 Lieu : ${e.place}`] : []),
     ...(e.details ? ["", escapeHtml(e.details)] : []),
-    ...(files.length === 1 ? ["", `📎 Pièce jointe : ${escapeHtml(files[0])}`] : []),
-    ...(files.length > 1 ? ["", `📎 ${files.length} pièces jointes :`, ...files.map((f) => `  • ${escapeHtml(f)}`)] : []),
+    ...(files.length ? ["", ...attachmentLines(files)] : []),
     "",
     `<a href="${appUrl}/controles/">${files.length ? "Voir les contrôles et télécharger les pièces jointes" : "Voir les contrôles"}</a>`,
   ].join("\n");

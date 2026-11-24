@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { examEvents, pickedFiles, validateExam, validateExamFiles, type ExamRow } from "@/lib/api/exams";
+import { pickedFiles, toAttachments, validateFiles } from "@/lib/api/attachments";
+import { examEvents, validateExam, type ExamRow } from "@/lib/api/exams";
 import { allDayEventsForDay, isExamEvent, timedEventsForDay } from "@/lib/calendar-view";
 
 const base = { subjectId: "s1", title: " DS  1 ", date: "2026-12-02", startTime: "", endTime: "", location: "", details: "" };
@@ -58,13 +59,19 @@ describe("examEvents", () => {
   });
 });
 
-describe("pièces jointes", () => {
+describe("pièces jointes (contrôles et devoirs)", () => {
   it("garde les fichiers choisis, au plus 10, 30 Mo chacun", () => {
     const f = (name: string, size: number) => new File([new Uint8Array(size)], name);
     expect(pickedFiles(["texte", f("", 0), f("vide.pdf", 0), f("sujet.pdf", 3)]).map((x) => x.name)).toEqual(["sujet.pdf"]);
-    expect(validateExamFiles([{ name: "a.pdf", size: 10 }])).toBeNull();
-    expect(validateExamFiles([{ name: "gros.pdf", size: 31 * 1024 * 1024 }])).toContain("« gros.pdf » dépasse la limite de 30 Mo");
-    expect(validateExamFiles(Array.from({ length: 11 }, () => ({ name: "a", size: 1 })))).toContain("10 pièces jointes maximum");
-    expect(validateExamFiles([{ name: "a", size: 1 }], 10)).toContain("10 pièces jointes maximum");
+    expect(validateFiles([{ name: "a.pdf", size: 10 }])).toBeNull();
+    expect(validateFiles([{ name: "gros.pdf", size: 31 * 1024 * 1024 }])).toContain("« gros.pdf » dépasse la limite de 30 Mo");
+    expect(validateFiles(Array.from({ length: 11 }, () => ({ name: "a", size: 1 })))).toContain("10 pièces jointes maximum");
+    expect(validateFiles([{ name: "a", size: 1 }], 10)).toContain("10 pièces jointes maximum");
+  });
+
+  it("trie les pièces jointes par date d'ajout", () => {
+    const row = (id: string, created_at: string) => ({ id, path: `uploads/u/${id}.pdf`, name: `${id}.pdf`, size: 1, author_id: "u", created_at });
+    expect(toAttachments([row("b", "2026-11-24T10:00:00Z"), row("a", "2026-11-24T09:00:00Z")]).map((a) => a.id)).toEqual(["a", "b"]);
+    expect(toAttachments(null)).toEqual([]);
   });
 });

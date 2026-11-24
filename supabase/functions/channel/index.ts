@@ -37,6 +37,13 @@ const HORIZON_DAYS = 21;
 const deps = { resolveDns: (host: string) => Deno.resolveDns(host, "A"), fetchImpl: fetch };
 type Db = ReturnType<typeof createClient>;
 
+/** Noms des pièces jointes d'un devoir (nouvelle table, sinon ancienne colonne unique). */
+function homeworkFiles(h: { attachment_name: string | null; homework_attachments: { name: string; created_at: string }[] | null }): string[] {
+  const rows = [...(h.homework_attachments ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  if (rows.length) return rows.map((a) => a.name);
+  return h.attachment_name ? [h.attachment_name] : [];
+}
+
 async function getSetting<T>(db: Db, key: string): Promise<T | null> {
   const { data } = await db.from("app_settings").select("value").eq("key", key).maybeSingle();
   return (data?.value as T) ?? null;
@@ -83,7 +90,7 @@ Deno.serve(async (req) => {
       ? await db.from("documents").select("id, title, type, subjects(name)").in("id", docIds)
       : { data: [] };
     const { data: hws } = hwIds.length
-      ? await db.from("homeworks").select("id, title, due_date, english_group, attachment_name, is_final_project, subjects(name)").in("id", hwIds)
+      ? await db.from("homeworks").select("id, title, due_date, english_group, attachment_name, is_final_project, subjects(name), homework_attachments(name, created_at)").in("id", hwIds)
       : { data: [] };
     const newDocs: NewDocument[] = ((docs ?? []) as { id: string; title: string; type: string; subjects: { name: string } | null }[]).map((d) => ({
       id: d.id,
@@ -94,11 +101,11 @@ Deno.serve(async (req) => {
     let docsOk = true;
     for (const m of formatDocuments(newDocs, appUrl)) docsOk = (await post(m)) && docsOk;
     for (const r of rows.filter((x) => x.kind === "document")) if (docsOk || stale(r)) done.push(r.id);
-    const byId = new Map(((hws ?? []) as { id: string; title: string; due_date: string; english_group: string | null; attachment_name: string | null; is_final_project: boolean; subjects: { name: string } | null }[]).map((h) => [h.id, h]));
+    const byId = new Map(((hws ?? []) as { id: string; title: string; due_date: string; english_group: string | null; attachment_name: string | null; is_final_project: boolean; subjects: { name: string } | null; homework_attachments: { name: string; created_at: string }[] | null }[]).map((h) => [h.id, h]));
     for (const r of rows.filter((x) => x.kind === "homework")) {
       const h = byId.get(r.ref);
       const ok = h
-        ? await post(formatHomework({ id: h.id, title: h.title, subject: h.subjects?.name ?? "Sans matière", dueDate: h.due_date, englishGroup: h.english_group, attachmentName: h.attachment_name, finalProject: h.is_final_project }, appUrl))
+        ? await post(formatHomework({ id: h.id, title: h.title, subject: h.subjects?.name ?? "Sans matière", dueDate: h.due_date, englishGroup: h.english_group, attachments: homeworkFiles(h), finalProject: h.is_final_project }, appUrl))
         : true; // supprimé entre-temps
       if (ok || stale(r)) done.push(r.id);
       const stage = h && ok ? alertStage(h.due_date, now) : null;
