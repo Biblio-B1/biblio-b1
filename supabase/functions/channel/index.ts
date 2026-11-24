@@ -105,12 +105,12 @@ Deno.serve(async (req) => {
       if (h && stage) covered.push(isExamTitle(h.title) ? `hw:${h.id}:${stage}` : `hwr:${h.id}:${stage}`);
     }
     const { data: exs } = examIds.length
-      ? await db.from("exams").select("*, subjects(name)").in("id", examIds)
+      ? await db.from("exams").select("*, subjects(name), exam_attachments(name, created_at)").in("id", examIds)
       : { data: [] };
     const examById = new Map(((exs ?? []) as ExamDbRow[]).map((x) => [x.id, x]));
     for (const r of rows.filter((x) => x.kind === "exam")) {
       const x = examById.get(r.ref);
-      const ok = x ? await post(formatExamAnnounce({ ...examFromRow(x), details: x.details }, appUrl)) : true;
+      const ok = x ? await post(formatExamAnnounce({ ...examFromRow(x), details: x.details, attachments: (x.exam_attachments ?? []).map((a) => a.name) }, appUrl)) : true;
       if (ok || stale(r)) done.push(r.id);
       const stage = x && ok ? alertStage(x.exam_date, now) : null;
       if (x && stage) covered.push(`${examFromRow(x).key}:${stage}`);

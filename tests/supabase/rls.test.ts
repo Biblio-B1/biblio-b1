@@ -309,4 +309,30 @@ describe("contrôles", () => {
     await t.db.query("delete from public.exams where id = $1", [id]);
     expect(await t.count("select 1 from public.exams where source = 'manual'")).toBe(0);
   });
+
+  it("pièces jointes : tout membre en joint (dans son dossier), seul l'auteur ou l'admin les retire", async () => {
+    await t.as("service");
+    const examId = (await t.db.query<{ id: string }>("select id from public.exams where edt_uid = 'u1'")).rows[0].id;
+    await t.as(activeId);
+    const add = (path: string) =>
+      t.db.query("insert into public.exam_attachments (exam_id, path, name, mime, size) values ($1, $2, 'sujet.pdf', 'application/pdf', 10) returning id", [examId, path]);
+    const attId = (await add(`uploads/${activeId}/abc.pdf`)).rows[0] as { id: string };
+    await add(`uploads/${activeId}/def.pdf`);
+    await expect(add(`uploads/${adminId}/vol.pdf`)).rejects.toThrow();
+    await t.as(pendingId);
+    expect(await t.count("select 1 from public.exam_attachments")).toBe(0);
+    await t.as(adminId);
+    expect(await t.count("select 1 from public.exam_attachments")).toBe(2);
+    const other = await t.signUp("joint@example.com", "Joint");
+    await t.admin(() => t.db.query("update public.profiles set status = 'active' where id = $1", [other]));
+    await t.as(other);
+    await t.db.query("delete from public.exam_attachments where id = $1", [attId.id]);
+    expect(await t.count("select 1 from public.exam_attachments")).toBe(2);
+    await t.as(activeId);
+    await t.db.query("delete from public.exam_attachments where id = $1", [attId.id]);
+    expect(await t.count("select 1 from public.exam_attachments")).toBe(1);
+    await t.as("service");
+    await t.db.query("delete from public.exams where id = $1", [examId]);
+    expect(await t.count("select 1 from public.exam_attachments")).toBe(0);
+  });
 });

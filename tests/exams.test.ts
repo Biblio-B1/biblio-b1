@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { examEvents, validateExam, type ExamRow } from "@/lib/api/exams";
+import { examEvents, pickedFiles, validateExam, validateExamFiles, type ExamRow } from "@/lib/api/exams";
 import { allDayEventsForDay, isExamEvent, timedEventsForDay } from "@/lib/calendar-view";
 
 const base = { kind: "controle", subjectId: "s1", title: " DS  1 ", date: "2026-12-02", startTime: "", endTime: "", location: "", details: "" };
@@ -38,6 +38,7 @@ const exam = (o: Partial<ExamRow>): ExamRow => ({
   edtUid: null,
   authorId: null,
   authorName: "Lea",
+  attachments: [],
   ...o,
 });
 
@@ -56,5 +57,16 @@ describe("examEvents", () => {
     expect(evs.every(isExamEvent)).toBe(true);
     expect(isExamEvent({ uid: "x", description: "Matière : C\nType : EVALUATION" })).toBe(true);
     expect(isExamEvent({ uid: "x", description: "Type : CRS" })).toBe(false);
+  });
+});
+
+describe("pièces jointes", () => {
+  it("garde les fichiers choisis, au plus 10, 30 Mo chacun", () => {
+    const f = (name: string, size: number) => new File([new Uint8Array(size)], name);
+    expect(pickedFiles(["texte", f("", 0), f("vide.pdf", 0), f("sujet.pdf", 3)]).map((x) => x.name)).toEqual(["sujet.pdf"]);
+    expect(validateExamFiles([{ name: "a.pdf", size: 10 }])).toBeNull();
+    expect(validateExamFiles([{ name: "gros.pdf", size: 31 * 1024 * 1024 }])).toContain("« gros.pdf » dépasse la limite de 30 Mo");
+    expect(validateExamFiles(Array.from({ length: 11 }, () => ({ name: "a", size: 1 })))).toContain("10 pièces jointes maximum");
+    expect(validateExamFiles([{ name: "a", size: 1 }], 10)).toContain("10 pièces jointes maximum");
   });
 });

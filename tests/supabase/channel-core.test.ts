@@ -268,6 +268,12 @@ describe("table des contrôles", () => {
     expect(t).toContain("🕒 Horaire : <b>14:00–16:30</b>");
     expect(t).toContain("Rendu sur Boostcamp");
     expect(t).toContain(`${APP}/controles/`);
+    expect(t).not.toContain("📎");
+    const one = formatExamAnnounce({ ...e, attachments: ["sujet.pdf"] }, APP);
+    expect(one).toContain("📎 Pièce jointe : sujet.pdf");
+    const two = formatExamAnnounce({ ...e, attachments: ["sujet.pdf", "barème <v2>.pdf"] }, APP);
+    expect(two).toContain("📎 2 pièces jointes :\n  • sujet.pdf\n  • barème &lt;v2&gt;.pdf");
+    expect(two).toContain("télécharger les pièces jointes</a>");
     expect(examAlerts([e], new Set(), NOW, APP)[0].text).toContain("Projet final à rendre dans 4 jours");
   });
 

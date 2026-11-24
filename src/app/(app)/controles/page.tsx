@@ -1,15 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import type { FormState } from "@/components/ActionForm";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { PageRefreshProvider, usePageRefresh } from "@/components/PageRefresh";
-import { IconCalendar } from "@/components/layout/Icons";
+import { IconCalendar, IconClose, IconDownload } from "@/components/layout/Icons";
 import { Spine } from "@/components/layout/Spine";
-import { createExamAction, deleteExamAction, EXAM_KIND_LABEL, listExams, type ExamRow } from "@/lib/api/exams";
+import {
+  addExamAttachments,
+  createExamAction,
+  deleteExamAction,
+  deleteExamAttachment,
+  EXAM_KIND_LABEL,
+  listExams,
+  MAX_EXAM_FILE_MB,
+  MAX_EXAM_FILES,
+  pickedFiles,
+  validateExamFiles,
+  type ExamRow,
+} from "@/lib/api/exams";
+import { signedFileUrl } from "@/lib/api/files";
 import { listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
 import { labelDate, todayKeyInParis } from "@/lib/calendar-view";
+import { formatSize, UPLOAD_ACCEPT } from "@/lib/labels";
 
 type SubjectOpt = { id: string; name: string; color: string };
 
@@ -19,6 +34,87 @@ function when(e: ExamRow): string {
   const day = labelDate(e.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   if (!e.startTime) return day;
   return `${day}, ${hour(e.startTime)}${e.endTime ? `–${hour(e.endTime)}` : ""}`;
+}
+
+/** Pièces jointes d'un contrôle : téléchargement, ajout (tout membre), retrait (auteur ou admin). */
+function Attachments({ exam, onChanged }: { exam: ExamRow; onChanged: () => void }) {
+  const { session, profile } = useAuth();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const uid = session?.user.id;
+  const full = exam.attachments.length >= MAX_EXAM_FILES;
+
+  const run = (job: () => Promise<{ error?: string }>) => {
+    setError(null);
+    startTransition(async () => {
+      const res = await job();
+      if (res.error) setError(res.error);
+      else onChanged();
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-2 pl-1.5">
+      {exam.attachments.length > 0 && (
+        <ul className="flex flex-wrap gap-2" aria-label="Pièces jointes">
+          {exam.attachments.map((a) => (
+            <li key={a.id} className="inline-flex items-center overflow-hidden rounded-md border border-line bg-sunken text-xs">
+              <a
+                href="#"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  window.location.href = await signedFileUrl(a.path, { download: a.name });
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 font-medium text-ink hover:bg-surface"
+              >
+                <IconDownload size={14} />
+                <span className="max-w-[16rem] truncate">{a.name}</span>
+                <span className="text-ink-3">({formatSize(a.size)})</span>
+              </a>
+              {(profile?.role === "admin" || a.authorId === uid) && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => run(() => deleteExamAttachment(a.id))}
+                  aria-label={`Retirer ${a.name}`}
+                  title="Retirer la pièce jointe"
+                  className="border-l border-line px-1.5 py-1 text-ink-3 hover:bg-surface hover:text-danger"
+                >
+                  <IconClose size={12} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!full && (
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={UPLOAD_ACCEPT}
+            className="sr-only"
+            aria-label={`Ajouter des pièces jointes à ${EXAM_KIND_LABEL[exam.kind].toLowerCase()} de ${exam.subjectName}`}
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])];
+              e.target.value = "";
+              if (files.length) run(() => addExamAttachments(exam.id, files, exam.attachments.length));
+            }}
+          />
+          <button type="button" disabled={pending} onClick={() => inputRef.current?.click()} className="btn btn-ghost h-7 px-2 text-xs">
+            {pending ? "Envoi…" : "+ Ajouter des pièces jointes"}
+          </button>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void }) {
@@ -65,6 +161,7 @@ function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void })
       </div>
       {exam.title && <p className="pl-1.5 text-[15px] leading-relaxed text-ink">{exam.title}</p>}
       {exam.details && <p className="pl-1.5 whitespace-pre-wrap text-sm text-ink-2">{exam.details}</p>}
+      <Attachments exam={exam} onChanged={onDeleted} />
       <div className="flex flex-wrap items-center justify-between gap-2 pl-1.5 text-xs text-ink-3">
         <span>{exam.location ? `📍 ${exam.location}` : ""}</span>
         {exam.source === "manual" && <span>Ajouté par {exam.authorName ?? "un élève"}</span>}
@@ -83,12 +180,16 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
   const [kind, setKind] = useState<"controle" | "projet">("controle");
   const [formKey, setFormKey] = useState(0);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [pickError, setPickError] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
   const selected = subjects.find((s) => s.id === subjectId);
 
   const [state, formAction, pending] = useActionState(async (prev: FormState, fd: FormData) => {
     const res = await createExamAction(prev, fd);
     if (!res?.error) {
+      setPicked([]);
+      setPickError(null);
       setFormKey((k) => k + 1);
       router.refresh();
     }
@@ -166,8 +267,29 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
             Précisions (facultatif)
             <textarea name="details" rows={3} maxLength={2000} placeholder="Chapitres à réviser, documents autorisés…" className="input min-h-20 py-2" />
           </label>
+          <label className="label">
+            Pièces jointes (facultatif : sujet, consignes, fiches… {MAX_EXAM_FILES} fichiers, {MAX_EXAM_FILE_MB} Mo chacun)
+            <input
+              type="file"
+              name="attachments"
+              multiple
+              accept={UPLOAD_ACCEPT}
+              onChange={(e) => {
+                const files = pickedFiles([...(e.target.files ?? [])]);
+                setPicked(files.map((f) => `${f.name} (${formatSize(f.size)})`));
+                setPickError(validateExamFiles(files));
+              }}
+              className="input h-auto py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-sunken file:px-2.5 file:py-1 file:text-ink"
+            />
+          </label>
+          {picked.length > 1 && <p className="-mt-2 text-xs text-ink-3">{picked.join(" · ")}</p>}
+          {pickError && (
+            <p role="alert" className="-mt-2 text-xs text-danger">
+              {pickError}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-3">
-            <button type="submit" disabled={pending} className="btn btn-primary">
+            <button type="submit" disabled={pending || Boolean(pickError)} className="btn btn-primary">
               {pending ? "Enregistrement…" : "Enregistrer"}
             </button>
             <p className="text-xs text-ink-3">Visible par toute la classe, ajouté à l&apos;emploi du temps et annoncé sur Telegram.</p>

@@ -394,6 +394,7 @@ export type ExamDbRow = {
   edt_uid: string | null;
   subject_label: string | null;
   subjects?: { name: string } | null;
+  exam_attachments?: { name: string }[] | null;
 };
 
 const hm = (t: string | null) => (t ? t.slice(0, 5) : "");
@@ -434,7 +435,8 @@ export function examRowFromSnapshot(s: Snapshot) {
 }
 
 /** Message « contrôle / projet annoncé » quand un élève l'ajoute sur le site. */
-export function formatExamAnnounce(e: Exam & { details?: string | null }, appUrl: string): string {
+export function formatExamAnnounce(e: Exam & { details?: string | null; attachments?: string[] }, appUrl: string): string {
+  const files = e.attachments ?? [];
   const projet = e.kind === "projet";
   return [
     projet ? "📣 <b>Projet final annoncé</b>" : "📣 <b>Contrôle annoncé</b>",
@@ -445,8 +447,10 @@ export function formatExamAnnounce(e: Exam & { details?: string | null }, appUrl
     ...(e.time ? [`🕒 Horaire : <b>${e.time}</b>`] : []),
     ...(e.place ? [`📍 Lieu : ${e.place}`] : []),
     ...(e.details ? ["", escapeHtml(e.details)] : []),
+    ...(files.length === 1 ? ["", `📎 Pièce jointe : ${escapeHtml(files[0])}`] : []),
+    ...(files.length > 1 ? ["", `📎 ${files.length} pièces jointes :`, ...files.map((f) => `  • ${escapeHtml(f)}`)] : []),
     "",
-    `<a href="${appUrl}/controles/">Voir les contrôles</a>`,
+    `<a href="${appUrl}/controles/">${files.length ? "Voir les contrôles et télécharger les pièces jointes" : "Voir les contrôles"}</a>`,
   ].join("\n");
 }
 
