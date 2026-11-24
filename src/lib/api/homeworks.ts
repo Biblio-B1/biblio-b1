@@ -13,6 +13,8 @@ export type HomeworkRow = {
   title: string;
   dueDate: string;
   englishGroup: string | null;
+  /** Projet final : annoncé et rappelé sur Telegram comme un contrôle. */
+  isFinalProject: boolean;
   attachmentPath: string | null;
   attachmentName: string | null;
   attachmentMime: string | null;
@@ -37,6 +39,7 @@ export function toHomework(r: Joined): HomeworkRow {
     title: String(r.title),
     dueDate: String(r.due_date),
     englishGroup: (r.english_group as string | null) ?? null,
+    isFinalProject: r.is_final_project === true,
     attachmentPath: (r.attachment_path as string | null) ?? null,
     attachmentName: (r.attachment_name as string | null) ?? null,
     attachmentMime: (r.attachment_mime as string | null) ?? null,
@@ -93,6 +96,7 @@ export async function createHomeworkAction(_prev: FormState, fd: FormData): Prom
     title: v.value.title,
     due_date: v.value.dueDate,
     english_group: v.value.englishGroup,
+    is_final_project: fd.get("finalProject") === "on",
     attachment_path: attachment?.path ?? null,
     attachment_name: attachment?.name ?? null,
     attachment_mime: attachment?.mime ?? null,
@@ -103,7 +107,12 @@ export async function createHomeworkAction(_prev: FormState, fd: FormData): Prom
     if (attachment) await supabase.storage.from(FILES_BUCKET).remove([attachment.path]);
     return { error: "Enregistrement impossible." };
   }
-  return { message: "Devoir enregistré et partagé avec toute la promo." };
+  return {
+    message:
+      fd.get("finalProject") === "on"
+        ? "Projet final enregistré : annoncé sur Telegram et rappelé 3, 2 et 1 semaine(s) avant, puis la veille."
+        : "Devoir enregistré et partagé avec toute la promo.",
+  };
 }
 
 /** Supprime un devoir (son auteur ou un admin, RLS) et sa pièce jointe. */

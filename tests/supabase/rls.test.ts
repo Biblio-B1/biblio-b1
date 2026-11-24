@@ -281,6 +281,18 @@ describe("canal Telegram", () => {
     expect(r.rows.map((x) => x.kind)).toContain("homework");
     expect(r.rows.map((x) => x.kind)).toContain("document");
   });
+
+  it("un devoir peut être un projet final ; l'onglet Contrôles n'accepte plus que des contrôles", async () => {
+    await t.as(activeId);
+    const r = await t.db.query<{ is_final_project: boolean }>(
+      "insert into public.homeworks (subject_id, title, due_date, is_final_project) values ($1, 'Projet web', '2026-12-14', true) returning is_final_project",
+      [subjectId],
+    );
+    expect(r.rows).toEqual([{ is_final_project: true }]);
+    await expect(
+      t.db.query("insert into public.exams (kind, subject_id, exam_date) values ('projet', $1, '2026-12-14')", [subjectId]),
+    ).rejects.toThrow();
+  });
 });
 
 describe("contrôles", () => {

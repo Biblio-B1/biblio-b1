@@ -213,6 +213,23 @@ describe("alertes de contrôle", () => {
     expect(examAlerts(projet, new Set(), NOW, APP)[0].text).toContain("📣 <b>Projet final à rendre dans 10 jours</b>");
   });
 
+  it("devoir coché « projet final » : annoncé comme projet, rappelé comme un contrôle, lien vers les devoirs", () => {
+    const hw = { id: "p1", title: "Site web de la promo", subject: "Développement web", dueDate: "2026-12-14", finalProject: true };
+    const t = formatHomework(hw, APP);
+    expect(t).toContain("📣 <b>Projet final annoncé</b>");
+    expect(t).toContain("📝 Projet : Site web de la promo");
+    expect(t).toContain("📅 À rendre le : <b>lundi 14 décembre</b>");
+    expect(t).toContain(`${APP}/devoirs/`);
+    const [alert] = examAlerts([{ key: "hw:p1", subject: hw.subject, title: hw.title, day: hw.dueDate, kind: "projet" }], new Set(), NOW, APP);
+    expect(alert.key).toBe("hw:p1:3sem");
+    expect(alert.text).toContain("📣 <b>Projet final à rendre dans 3 semaines</b>");
+    expect(alert.text).toContain("📅 À rendre le : <b>lundi 14 décembre</b>");
+    expect(alert.text).toContain(`<a href="${APP}/devoirs/">Voir les devoirs</a>`);
+    const eve = new Date("2026-12-13T17:30:00Z");
+    expect(homeworkReminders([{ ...hw }], new Set(), eve, APP)).toEqual([]); // rappel « contrôle », pas « devoir »
+    expect(formatHomework({ ...hw, finalProject: false }, APP)).toContain("📝 <b>Nouveau devoir</b>");
+  });
+
   it("devoirs : rappel la veille au soir seulement, sauf ceux qui sont des contrôles", () => {
     const hws = [
       { id: "h1", title: "Exercices 1 à 5", subject: "Maths", dueDate: "2026-11-24", englishGroup: null },

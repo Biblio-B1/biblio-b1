@@ -37,6 +37,9 @@ function HomeworkItem({ hw, onDeleted }: { hw: HomeworkRow; onDeleted: () => voi
     >
       <div className="flex flex-wrap items-start justify-between gap-2 pl-1.5">
         <div className="flex flex-wrap items-center gap-2">
+          {hw.isFinalProject && (
+            <span className="rounded bg-danger px-1.5 py-0.5 text-[11px] font-bold uppercase text-white">Projet final</span>
+          )}
           <span className="text-sm font-semibold text-ink">{hw.subjectName}</span>
           {hw.englishGroup && (
             <span className="rounded-full border border-focus/30 bg-focus/10 px-2.5 py-0.5 text-xs font-medium text-ink">
@@ -188,6 +191,16 @@ export function HomeworkClient({
               />
             </label>
           </div>
+
+          <label className="flex items-start gap-2.5 rounded-lg border border-line bg-sunken p-3 text-sm text-ink">
+            <input type="checkbox" name="finalProject" className="mt-0.5 h-4 w-4 accent-[var(--danger)]" />
+            <span>
+              <span className="font-medium">Projet final</span>
+              <span className="block text-xs text-ink-2">
+                Annoncé sur Telegram comme un projet final et rappelé comme un contrôle : 3, 2 et 1 semaine(s) avant, puis la veille.
+              </span>
+            </span>
+          </label>
 
           {englishSelected && (
             <div className="flex flex-col gap-3 rounded-lg border border-focus/40 bg-focus/10 p-3.5">

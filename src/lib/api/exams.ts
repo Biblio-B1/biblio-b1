@@ -1,4 +1,4 @@
-// Contrôles et projets finaux (onglet « Contrôles »). RLS : lus par les comptes actifs ; ceux ajoutés
+// Contrôles (onglet « Contrôles » ; les projets finaux sont des devoirs cochés « projet final »). RLS : lus par les comptes actifs ; ceux ajoutés
 // sur le site sont modifiables par leur auteur ou un admin ; ceux de l'emploi du temps (source edt)
 // sont recopiés par l'Edge Function `channel` et ne se modifient pas ici.
 import type { FormState } from "@/components/ActionForm";
@@ -7,8 +7,6 @@ import { mimeOf, sha256Hex, uploadStoragePath } from "@/lib/upload-core";
 import type { ScheduleEvent } from "@/lib/calendar-view";
 import { parisWallTimeToIso, shiftDateKey } from "@/lib/calendar-view";
 
-export type ExamKind = "controle" | "projet";
-export const EXAM_KIND_LABEL: Record<ExamKind, string> = { controle: "Contrôle", projet: "Projet final" };
 
 export const MAX_EXAM_FILES = 10;
 export const MAX_EXAM_FILE_MB = 30;
@@ -18,7 +16,6 @@ export type ExamAttachment = { id: string; path: string; name: string; size: num
 
 export type ExamRow = {
   id: string;
-  kind: ExamKind;
   subjectId: string | null;
   /** Nom affiché : matière du site, sinon matière Boostcamp. */
   subjectName: string;
@@ -47,7 +44,6 @@ const hhmm = (t: unknown) => (typeof t === "string" && t ? t.slice(0, 5) : null)
 export function toExam(r: Joined): ExamRow {
   return {
     id: String(r.id),
-    kind: r.kind === "projet" ? "projet" : "controle",
     subjectId: (r.subject_id as string | null) ?? null,
     subjectName: r.subjects?.name ?? (r.subject_label as string | null) ?? "Sans matière",
     subjectColor: r.subjects?.color ?? "#6b7280",
@@ -78,7 +74,6 @@ export async function listExams(): Promise<ExamRow[]> {
 }
 
 export type ExamInput = {
-  kind: string;
   subjectId: string;
   title: string;
   date: string;
@@ -89,7 +84,6 @@ export type ExamInput = {
 };
 
 export type ValidExam = {
-  kind: ExamKind;
   subjectId: string;
   title: string;
   date: string;
@@ -102,8 +96,6 @@ export type ValidExam = {
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export function validateExam(input: ExamInput, subjectIds: string[]): { ok: true; value: ValidExam } | { ok: false; error: string } {
-  const kind = input.kind === "projet" ? "projet" : input.kind === "controle" ? "controle" : null;
-  if (!kind) return { ok: false, error: "Choisissez : contrôle ou projet final." };
   if (!subjectIds.includes(input.subjectId)) return { ok: false, error: "Choisissez une matière." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || Number.isNaN(Date.parse(`${input.date}T00:00:00Z`))) {
     return { ok: false, error: "Indiquez une date valide." };
@@ -119,7 +111,7 @@ export function validateExam(input: ExamInput, subjectIds: string[]): { ok: true
   if (location && location.length > 200) return { ok: false, error: "Lieu trop long (200 caractères max.)." };
   const details = input.details.trim() || null;
   if (details && details.length > 2000) return { ok: false, error: "Précisions trop longues (2000 caractères max.)." };
-  return { ok: true, value: { kind, subjectId: input.subjectId, title, date: input.date, startTime, endTime, location, details } };
+  return { ok: true, value: { subjectId: input.subjectId, title, date: input.date, startTime, endTime, location, details } };
 }
 
 export async function createExamAction(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -129,7 +121,6 @@ export async function createExamAction(_prev: FormState, fd: FormData): Promise<
   const { data: subjects } = await supabase.from("subjects").select("id");
   const v = validateExam(
     {
-      kind: String(fd.get("kind") ?? ""),
       subjectId: String(fd.get("subjectId") ?? ""),
       title: String(fd.get("title") ?? ""),
       date: String(fd.get("date") ?? ""),
@@ -151,7 +142,6 @@ export async function createExamAction(_prev: FormState, fd: FormData): Promise<
   const { data: created, error } = await supabase
     .from("exams")
     .insert({
-      kind: v.value.kind,
       subject_id: v.value.subjectId,
       title: v.value.title,
       exam_date: v.value.date,
@@ -173,7 +163,7 @@ export async function createExamAction(_prev: FormState, fd: FormData): Promise<
       .insert(uploaded.files.map((f) => ({ ...f, exam_id: created.id, author_id: uid })));
     if (attError) return { error: "Contrôle enregistré, mais les pièces jointes n'ont pas pu être ajoutées." };
   }
-  return { message: `${EXAM_KIND_LABEL[v.value.kind]} enregistré : il apparaît sur l'emploi du temps et sera annoncé sur Telegram.` };
+  return { message: `Contrôle enregistré : il apparaît sur l'emploi du temps et sera annoncé sur Telegram.` };
 }
 
 export async function deleteExamAction(id: string): Promise<{ error?: string }> {
@@ -272,7 +262,6 @@ export function examEvents(exams: ExamRow[]): ScheduleEvent[] {
   return exams
     .filter((e) => e.source === "manual")
     .map((e) => {
-      const label = EXAM_KIND_LABEL[e.kind];
       const start = parisWallTimeToIso(e.date, e.startTime ?? "00:00");
       const end = !e.startTime
         ? parisWallTimeToIso(shiftDateKey(e.date, 1), "00:00")
@@ -281,13 +270,13 @@ export function examEvents(exams: ExamRow[]): ScheduleEvent[] {
           : new Date(Date.parse(start) + 60 * 60_000).toISOString();
       return {
         uid: `exam:${e.id}`,
-        title: `${label} · ${e.subjectName}${e.title ? ` — ${e.title}` : ""}`,
+        title: `Contrôle · ${e.subjectName}${e.title ? ` — ${e.title}` : ""}`,
         start,
         end,
         allDay: !e.startTime,
         categories: ["EVALUATION"],
         location: e.location ?? undefined,
-        description: [`Matière : ${e.subjectName}`, `Type : ${label}`, e.details ?? "", e.authorName ? `Ajouté par ${e.authorName}` : ""]
+        description: [`Matière : ${e.subjectName}`, "Type : Contrôle", e.details ?? "", e.authorName ? `Ajouté par ${e.authorName}` : ""]
           .filter(Boolean)
           .join("\n"),
       };

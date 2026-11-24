@@ -238,6 +238,8 @@ export type NewHomework = {
   dueDate: string;
   englishGroup?: string | null;
   attachmentName?: string | null;
+  /** Projet final : annoncé comme tel et rappelé comme un contrôle. */
+  finalProject?: boolean;
 };
 
 export const DOC_TYPES: Record<string, string> = {
@@ -284,12 +286,13 @@ export function isExamTitle(title: string): boolean {
 }
 
 export function formatHomework(h: NewHomework, appUrl: string): string {
-  const exam = isExamTitle(h.title);
+  const projet = h.finalProject === true;
+  const exam = !projet && isExamTitle(h.title);
   return [
-    exam ? "📣 <b>Contrôle annoncé</b>" : "📝 <b>Nouveau devoir</b>",
+    projet ? "📣 <b>Projet final annoncé</b>" : exam ? "📣 <b>Contrôle annoncé</b>" : "📝 <b>Nouveau devoir</b>",
     "",
     `📚 Matière : <b>${escapeHtml(h.subject)}</b>${h.englishGroup ? ` (groupe ${escapeHtml(h.englishGroup)})` : ""}`,
-    `📝 ${exam ? "Contrôle" : "Devoir"} : ${escapeHtml(h.title)}`,
+    `📝 ${projet ? "Projet" : exam ? "Contrôle" : "Devoir"} : ${escapeHtml(h.title)}`,
     `📅 ${exam ? "Date" : "À rendre le"} : <b>${dayLabel(h.dueDate)}</b>`,
     ...(h.attachmentName ? [`📎 Pièce jointe : ${escapeHtml(h.attachmentName)}`] : []),
     "",
@@ -311,7 +314,7 @@ function examText(head: string, e: Exam, footer: string): string {
     "",
     `📚 Matière : <b>${escapeHtml(e.subject)}</b>`,
     ...(e.title && e.title !== e.subject ? [`📝 ${escapeHtml(e.title)}`] : []),
-    `📅 Date : <b>${dayLabel(e.day)}</b>`,
+    `📅 ${e.kind === "projet" ? "À rendre le" : "Date"} : <b>${dayLabel(e.day)}</b>`,
     ...(e.time ? [`🕒 Horaire : <b>${e.time}</b>`] : []),
     ...(e.place ? [`📍 Lieu : ${e.place}`] : []),
     "",
@@ -343,11 +346,13 @@ function inDays(n: number): string {
 
 export function examAlerts(exams: Exam[], sent: Set<string>, now: Date, appUrl: string): ExamAlert[] {
   const out: ExamAlert[] = [];
-  const revise = `<a href="${appUrl}/controles/">Voir les contrôles</a>`;
   for (const e of exams) {
     const stage = alertStage(e.day, now);
     if (!stage || sent.has(`${e.key}:${stage}`)) continue;
     const projet = e.kind === "projet";
+    const revise = projet
+      ? `<a href="${appUrl}/devoirs/">Voir les devoirs</a>`
+      : `<a href="${appUrl}/controles/">Voir les contrôles</a>`;
     if (stage === "veille") {
       const head = projet ? "⚠️ <b>Projet final à rendre demain</b>" : "⚠️ <b>Contrôle demain</b>";
       out.push({ key: `${e.key}:veille`, text: examText(head, e, `Bon courage ! ${revise}`) });
@@ -363,7 +368,7 @@ export function examAlerts(exams: Exam[], sent: Set<string>, now: Date, appUrl: 
 /** Rappel des devoirs (hors contrôles) la veille à partir de 17 h. Clé « hwr:<id>:veille ». */
 export function homeworkReminders(hws: NewHomework[], sent: Set<string>, now: Date, appUrl: string): ExamAlert[] {
   return hws
-    .filter((h) => !isExamTitle(h.title) && alertStage(h.dueDate, now) === "veille" && !sent.has(`hwr:${h.id}:veille`))
+    .filter((h) => !h.finalProject && !isExamTitle(h.title) && alertStage(h.dueDate, now) === "veille" && !sent.has(`hwr:${h.id}:veille`))
     .map((h) => ({
       key: `hwr:${h.id}:veille`,
       text: [

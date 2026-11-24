@@ -12,7 +12,6 @@ import {
   createExamAction,
   deleteExamAction,
   deleteExamAttachment,
-  EXAM_KIND_LABEL,
   listExams,
   MAX_EXAM_FILE_MB,
   MAX_EXAM_FILES,
@@ -96,7 +95,7 @@ function Attachments({ exam, onChanged }: { exam: ExamRow; onChanged: () => void
             multiple
             accept={UPLOAD_ACCEPT}
             className="sr-only"
-            aria-label={`Ajouter des pièces jointes à ${EXAM_KIND_LABEL[exam.kind].toLowerCase()} de ${exam.subjectName}`}
+            aria-label={`Ajouter des pièces jointes au contrôle de ${exam.subjectName}`}
             onChange={(e) => {
               const files = [...(e.target.files ?? [])];
               e.target.value = "";
@@ -120,16 +119,11 @@ function Attachments({ exam, onChanged }: { exam: ExamRow; onChanged: () => void
 function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void }) {
   const [pending, startTransition] = useTransition();
   const [delError, setDelError] = useState<string | null>(null);
-  const projet = exam.kind === "projet";
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-4" style={{ boxShadow: `inset 4px 0 0 ${exam.subjectColor}` }}>
       <div className="flex flex-wrap items-start justify-between gap-2 pl-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase ${projet ? "bg-focus text-white" : "bg-danger text-white"}`}
-          >
-            {EXAM_KIND_LABEL[exam.kind]}
-          </span>
+          <span className="rounded bg-danger px-1.5 py-0.5 text-[11px] font-bold uppercase text-white">Contrôle</span>
           <span className="text-sm font-semibold text-ink">{exam.subjectName}</span>
           {exam.source === "edt" && (
             <span className="rounded-full border border-line bg-sunken px-2 py-0.5 text-xs text-ink-2">Emploi du temps Boostcamp</span>
@@ -137,7 +131,6 @@ function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void })
         </div>
         <div className="flex items-center gap-3">
           <time dateTime={exam.date} className="text-xs font-medium capitalize text-ink-2">
-            {projet && !exam.startTime ? "À rendre le " : ""}
             {when(exam)}
           </time>
           {exam.source === "manual" && (
@@ -178,7 +171,6 @@ function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void })
 function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamRow[] }) {
   const router = usePageRefresh();
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
-  const [kind, setKind] = useState<"controle" | "projet">("controle");
   const [formKey, setFormKey] = useState(0);
   const [picked, setPicked] = useState<string[]>([]);
   const [pickError, setPickError] = useState<string | null>(null);
@@ -206,22 +198,10 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
         <div className="mb-4 flex items-center gap-2">
           <IconCalendar size={18} className="text-ink-2" />
           <h2 id="new-exam" className="text-base font-semibold">
-            Ajouter un contrôle ou un projet final
+            Ajouter un contrôle
           </h2>
         </div>
         <form key={formKey} action={formAction} className="flex flex-col gap-4">
-          <fieldset className="flex flex-wrap gap-2">
-            <legend className="sr-only">Type</legend>
-            {(["controle", "projet"] as const).map((k) => (
-              <label
-                key={k}
-                className={`btn h-9 cursor-pointer ${kind === k ? "border-ink bg-ink text-surface" : ""}`}
-              >
-                <input type="radio" name="kind" value={k} checked={kind === k} onChange={() => setKind(k)} className="sr-only" />
-                {EXAM_KIND_LABEL[k]}
-              </label>
-            ))}
-          </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="label">
               Matière
@@ -237,7 +217,7 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
               </div>
             </label>
             <label className="label">
-              {kind === "projet" ? "Date de rendu" : "Date"}
+              Date
               <input type="date" name="date" required className="input" />
             </label>
             <label className="label">
@@ -255,7 +235,7 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
               type="text"
               name="title"
               maxLength={300}
-              placeholder={kind === "projet" ? "Ex. : projet final, soutenance…" : "Ex. : DS chapitres 1 à 3"}
+              placeholder="Ex. : DS chapitres 1 à 3"
               className="input"
             />
           </label>
@@ -312,7 +292,7 @@ function ExamsClient({ subjects, exams }: { subjects: SubjectOpt[]; exams: ExamR
           À venir ({upcoming.length})
         </h2>
         {upcoming.length === 0 ? (
-          <p className="text-sm text-ink-3">Aucun contrôle ni projet prévu.</p>
+          <p className="text-sm text-ink-3">Aucun contrôle prévu.</p>
         ) : (
           <ul className="flex flex-col gap-3">
             {upcoming.map((e) => (
@@ -351,12 +331,17 @@ export default function ControlesPage() {
       <header className="flex flex-col gap-1">
         <h1 className="page-title">Contrôles</h1>
         <p className="text-ink-2">
-          Contrôles et projets finaux de la classe : ceux de l&apos;emploi du temps Boostcamp sont ajoutés automatiquement, les autres
-          par les élèves. Ils apparaissent sur l&apos;
+          Contrôles de la classe : ceux de l&apos;emploi du temps Boostcamp sont ajoutés automatiquement, les autres par les
+          élèves. Ils apparaissent sur l&apos;
           <Link href="/timetable" className="underline underline-offset-2">
             emploi du temps
+          </Link>
+          , sont annoncés sur Telegram dès leur ajout, puis rappelés 3, 2 et 1 semaine(s) avant et la veille au soir. Un projet
+          final s&apos;ajoute dans les{" "}
+          <Link href="/devoirs" className="underline underline-offset-2">
+            devoirs
           </Link>{" "}
-          sont annoncés sur Telegram dès leur ajout, puis rappelés 3, 2 et 1 semaine(s) avant et la veille au soir.
+          (case « Projet final »).
         </p>
       </header>
       {error ? (
