@@ -98,6 +98,39 @@ function dateKeyStartInParis(dateKey: string): number {
   return result;
 }
 
+export type UpcomingCourse = { event: ScheduleEvent; time: string; subject?: CalendarSubject };
+export type UpcomingDay = { dayKey: string; courses: UpcomingCourse[] };
+
+const hourFmt = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
+
+/**
+ * Cours à venir des `days` prochains jours (à partir de `fromKey`, inclus), groupés par jour, pour
+ * choisir à quel cours rendre un devoir. Sans les séances annulées, les journées entières et les
+ * contrôles ajoutés sur le site. `subjectId` : seulement les cours de cette matière.
+ */
+export function upcomingCourses(
+  events: ScheduleEvent[],
+  subjects: CalendarSubject[],
+  fromKey: string,
+  days = 14,
+  subjectId?: string,
+): UpcomingDay[] {
+  const toKey = shiftDateKey(fromKey, days);
+  const byDay = new Map<string, UpcomingCourse[]>();
+  const sorted = [...events].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  for (const event of sorted) {
+    if (event.allDay || event.status === "cancelled" || event.uid.startsWith("exam:")) continue;
+    const dayKey = dateKeyInParis(new Date(event.start));
+    if (dayKey < fromKey || dayKey >= toKey) continue;
+    const subject = matchEventSubject(event, subjects);
+    if (subjectId && subject?.id !== subjectId) continue;
+    const list = byDay.get(dayKey) ?? [];
+    list.push({ event, time: `${hourFmt.format(new Date(event.start))}–${hourFmt.format(new Date(event.end))}`, subject });
+    byDay.set(dayKey, list);
+  }
+  return [...byDay.entries()].map(([dayKey, courses]) => ({ dayKey, courses }));
+}
+
 /** Séance d'évaluation Boostcamp (« Type : EVALUATION ») ou contrôle / projet ajouté sur le site. */
 export function isExamEvent(event: Pick<ScheduleEvent, "uid" | "description" | "categories">): boolean {
   return (

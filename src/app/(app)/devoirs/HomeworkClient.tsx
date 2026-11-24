@@ -9,6 +9,8 @@ import { labelDate, todayKeyInParis } from "@/lib/calendar-view";
 import { signedFileUrl } from "@/lib/api/files";
 import { UPLOAD_ACCEPT, formatSize } from "@/lib/labels";
 import { createHomeworkAction, deleteHomeworkAction, type HomeworkRow } from "@/lib/api/homeworks";
+import type { CalendarSubject, ScheduleEvent } from "@/lib/calendar-view";
+import { CoursePicker } from "./CoursePicker";
 
 const MAX_ATTACHMENT_MB = 30;
 const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024;
@@ -104,9 +106,15 @@ function HomeworkItem({ hw, onDeleted }: { hw: HomeworkRow; onDeleted: () => voi
 export function HomeworkClient({
   subjects,
   homeworks,
+  courses = null,
+  calendarSubjects = [],
 }: {
   subjects: SubjectOpt[];
   homeworks: HomeworkRow[];
+  /** Cours de l'emploi du temps de l'élève (null : aucun calendrier lié). */
+  courses?: ScheduleEvent[] | null;
+  /** Matières avec leurs règles, pour reconnaître la matière d'un cours. */
+  calendarSubjects?: CalendarSubject[];
 }) {
   const router = usePageRefresh();
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
@@ -191,6 +199,20 @@ export function HomeworkClient({
               />
             </label>
           </div>
+
+          <CoursePicker
+            events={courses}
+            subjects={calendarSubjects}
+            subjectId={subjectId}
+            dueDate={dueDate}
+            onPick={(dayKey, pickedSubject) => {
+              setDueDate(dayKey);
+              if (pickedSubject && pickedSubject !== subjectId) {
+                setSubjectId(pickedSubject);
+                setEnglishGroup("");
+              }
+            }}
+          />
 
           <label className="flex items-start gap-2.5 rounded-lg border border-line bg-sunken p-3 text-sm text-ink">
             <input type="checkbox" name="finalProject" className="mt-0.5 h-4 w-4 accent-[var(--danger)]" />
