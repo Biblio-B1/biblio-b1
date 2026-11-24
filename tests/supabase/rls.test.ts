@@ -153,6 +153,21 @@ describe("compte actif", () => {
 });
 
 describe("administrateur", () => {
+  it("seul l'admin change la catégorie d'un document", async () => {
+    await t.as(adminId);
+    await t.db.query("update public.documents set category = 'exams' where id = $1", [docId]);
+    await expect(t.db.query("update public.documents set category = 'nimporte' where id = $1", [docId])).rejects.toThrow();
+    await t.as("service");
+    await t.db.query("update public.documents set author_id = $1 where id = $2", [activeId, docId]);
+    await t.as(activeId);
+    await expect(t.db.query("update public.documents set category = 'course' where id = $1", [docId])).rejects.toThrow();
+    await t.db.query("update public.documents set title = title where id = $1", [docId]); // le reste reste modifiable
+    await t.as("service");
+    const r = await t.db.query<{ category: string }>("select category from public.documents where id = $1", [docId]);
+    expect(r.rows).toEqual([{ category: "exams" }]);
+    await t.db.query("update public.documents set category = null, author_id = null where id = $1", [docId]);
+  });
+
   it("liste les demandes en attente avec leur e-mail ; un membre ne voit rien", async () => {
     await t.as(adminId);
     const r = await t.db.query<{ name: string; email: string }>("select name, email from public.pending_requests()");

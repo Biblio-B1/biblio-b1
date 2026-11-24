@@ -16,6 +16,8 @@ import {
   IconSearch,
 } from "@/components/layout/Icons";
 import { Spine } from "@/components/layout/Spine";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { MoveCategory } from "@/components/library/MoveCategory";
 import { useSignedUrl } from "@/lib/api/files";
 import type { Document, Subject } from "@/lib/api/types";
 import {
@@ -105,18 +107,24 @@ export function CategoryFilter({
   );
 }
 
+/** Administrateur : déplacement d'un document vers une autre catégorie. */
+type MoveHandler = ((docId: string, category: DocCategoryId | null) => void) | null;
+
 function PhotoCard({
   doc,
   subject,
   showSubject,
+  onMove,
 }: {
   doc: Document;
   subject?: Subject;
   showSubject: boolean;
+  onMove: MoveHandler;
 }) {
   const isImage = doc.mime.startsWith("image/");
   const src = useSignedUrl(isImage ? doc.filePath : null);
   return (
+    <div className="flex flex-col gap-1.5">
     <Link
       href={docHref(doc.id)}
       className="group flex flex-col overflow-hidden rounded-lg border border-line bg-surface transition-colors hover:border-line-strong"
@@ -151,6 +159,8 @@ function PhotoCard({
         </div>
       </div>
     </Link>
+    {onMove && <MoveCategory doc={doc} compact onMoved={(c) => onMove(doc.id, c)} />}
+    </div>
   );
 }
 
@@ -159,11 +169,13 @@ function DocRow({
   subject,
   showSubject,
   hideSubGroup,
+  onMove,
 }: {
   doc: Document;
   subject?: Subject;
   showSubject: boolean;
   hideSubGroup?: string;
+  onMove: MoveHandler;
 }) {
   const badge = documentContextBadge(doc, { hideSubGroup });
   const parts = [formatFileKind(doc.filePath, doc.mime)];
@@ -171,10 +183,10 @@ function DocRow({
   if (showSubject) parts.push(subject ? subject.name : "sans matière");
 
   return (
-    <li>
+    <li className="flex items-center">
       <Link
         href={docHref(doc.id)}
-        className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-sunken sm:px-4"
+        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 transition-colors hover:bg-sunken sm:px-4"
       >
         <Spine color={subject?.color ?? null} className="h-8" />
         <span className="min-w-0 flex-1">
@@ -191,6 +203,11 @@ function DocRow({
           {formatDate(doc.createdAt)}
         </time>
       </Link>
+      {onMove && (
+        <span className="hidden shrink-0 pr-3 sm:block">
+          <MoveCategory doc={doc} compact onMoved={(c) => onMove(doc.id, c)} />
+        </span>
+      )}
     </li>
   );
 }
@@ -201,12 +218,14 @@ function CategorySection({
   showSubject,
   isOpen,
   onToggle,
+  onMove,
 }: {
   group: DocumentCategoryGroup<Document>;
   subjectsById: Map<string, Subject>;
   showSubject: boolean;
   isOpen: boolean;
   onToggle: () => void;
+  onMove: MoveHandler;
 }) {
   const panelId = useId();
   const { category, docs, subGroups } = group;
@@ -239,6 +258,7 @@ function CategorySection({
                     doc={d}
                     subject={d.subjectId ? subjectsById.get(d.subjectId) : undefined}
                     showSubject={showSubject}
+                    onMove={onMove}
                   />
                 </li>
               ))}
@@ -259,6 +279,7 @@ function CategorySection({
                         subject={d.subjectId ? subjectsById.get(d.subjectId) : undefined}
                         showSubject={showSubject}
                         hideSubGroup={sg.label}
+                        onMove={onMove}
                       />
                     ))}
                   </ul>
@@ -273,6 +294,7 @@ function CategorySection({
                   doc={d}
                   subject={d.subjectId ? subjectsById.get(d.subjectId) : undefined}
                   showSubject={showSubject}
+                  onMove={onMove}
                 />
               ))}
             </ul>
@@ -284,7 +306,7 @@ function CategorySection({
 }
 
 export function CategorizedDocumentList({
-  docs,
+  docs: docsIn,
   subjects,
   showSubject = false,
   activeCategory,
@@ -304,6 +326,20 @@ export function CategorizedDocumentList({
 }) {
   const [query, setQuery] = useState(initialQuery);
   const subjectsById = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
+  const { profile } = useAuth();
+  const [moved, setMoved] = useState<Record<string, DocCategoryId | null>>({});
+  const docs = useMemo(
+    () => docsIn.map((d) => (d.id in moved ? { ...d, category: moved[d.id] } : d)),
+    [docsIn, moved],
+  );
+  const onMove: MoveHandler =
+    profile?.role === "admin"
+      ? (docId, category) => {
+          setMoved((m) => ({ ...m, [docId]: category }));
+          // La catégorie d'arrivée s'ouvre pour montrer le document déplacé.
+          if (category) setOpenIds((prev) => new Set(prev).add(category));
+        }
+      : null;
 
   const trimmedQuery = query.trim();
 
@@ -454,6 +490,7 @@ export function CategorizedDocumentList({
               onToggle={() => {
                 if (!forceOpen) toggleGroup(group.category.id);
               }}
+              onMove={onMove}
             />
           ))}
         </div>

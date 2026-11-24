@@ -54,6 +54,8 @@ export type CategorizableDoc = {
   sourcePath: string | null;
   tags: string[];
   correctionOfId: string | null;
+  /** Catégorie choisie à la main (administrateur) : prioritaire sur la détection. */
+  category?: string | null;
   createdAt?: Date;
 };
 
@@ -142,6 +144,10 @@ const EXERCISE_NAME_RE =
 
 /** Classe automatiquement un document dans l'une des 8 catégories pédagogiques. */
 export function categorizeDocument(doc: CategorizableDoc): DocCategoryId {
+  // 0. Catégorie choisie par un administrateur
+  const forced = doc.category ? parseCategory(doc.category) : undefined;
+  if (forced) return forced;
+
   // 1. Photos & schémas
   if (doc.type === "photo" || doc.mime.startsWith("image/")) return "photos";
 

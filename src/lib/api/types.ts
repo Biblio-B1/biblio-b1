@@ -30,6 +30,8 @@ export type Document = {
   tags: string[];
   authorId: string | null;
   correctionOfId: string | null;
+  /** Catégorie choisie par un administrateur (null : détection automatique). */
+  category: string | null;
   createdAt: Date;
 };
 
@@ -62,10 +64,11 @@ export function toDocument(r: Row): Document {
     tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
     authorId: (r.author_id as string | null) ?? null,
     correctionOfId: (r.correction_of_id as string | null) ?? null,
+    category: (r.category as string | null) ?? null,
     createdAt: new Date(String(r.created_at)),
   };
 }
 
 /** Colonnes des listes de documents : tout sauf le texte extrait (volumineux). */
 export const DOCUMENT_LIST_COLUMNS =
-  "id, title, type, subject_id, subject_confirmed, file_path, mime, sha256, source, source_path, tags, author_id, correction_of_id, created_at";
+  "id, title, type, subject_id, subject_confirmed, file_path, mime, sha256, source, source_path, tags, author_id, correction_of_id, category, created_at";

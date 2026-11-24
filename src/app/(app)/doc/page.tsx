@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { IconDownload } from "@/components/layout/Icons";
 import { Spine } from "@/components/layout/Spine";
 import { DeleteDocumentButton } from "@/components/library/DeleteDocumentButton";
+import { MoveCategory } from "@/components/library/MoveCategory";
 import { QAPanel } from "@/components/qa/QAPanel";
 import { CodeView } from "@/components/viewers/CodeView";
 import { ImageGallery } from "@/components/viewers/ImageGallery";
@@ -216,6 +217,12 @@ function DocView() {
           </select>
           <button className={`btn h-8 ${needsReview ? "btn-primary" : ""}`}>{needsReview ? "Confirmer" : "Changer"}</button>
         </form>
+        {profile?.role === "admin" && (
+          <div className="-mt-2 flex flex-wrap items-center gap-2 text-[14px]">
+            <MoveCategory doc={doc} onMoved={() => reload()} />
+            <span className="text-[12.5px] text-ink-3">Classement dans la matière (administrateur)</span>
+          </div>
+        )}
       </header>
 
       <Viewer doc={doc} />

@@ -79,3 +79,10 @@ export async function deleteDocument(doc: Document): Promise<void> {
 export function canDeleteDocument(doc: Pick<Document, "source" | "authorId">, viewer: { id: string; role: string }): boolean {
   return viewer.role === "admin" || (doc.source === "upload" && doc.authorId === viewer.id);
 }
+
+/** Range un document dans une catégorie (administrateur) ; null : retour à la détection automatique. */
+export async function setDocumentCategory(id: string, category: string | null): Promise<{ error?: string }> {
+  const { data, error } = await getSupabase().from("documents").update({ category }).eq("id", id).select("id");
+  if (error || !data?.length) return { error: "Déplacement réservé aux administrateurs." };
+  return {};
+}

@@ -488,3 +488,16 @@ describe("utilitaires parseCategory, formatFileKind, documentContextBadge, match
     expect(matchesDocumentQuery(doc, "python")).toBe(false);
   });
 });
+
+describe("catégorie choisie par un administrateur", () => {
+  it("prime sur la détection ; une valeur inconnue ou vide la laisse faire", () => {
+    const doc = makeDoc({ title: "TD 3 - pointeurs" });
+    expect(categorizeDocument(doc)).toBe("exercises");
+    expect(categorizeDocument({ ...doc, category: "course" })).toBe("course");
+    expect(categorizeDocument({ ...doc, category: "photos" })).toBe("photos");
+    expect(categorizeDocument({ ...doc, category: "nimporte" })).toBe("exercises");
+    expect(categorizeDocument({ ...doc, category: null })).toBe("exercises");
+    const groups = groupDocumentsByCategory([{ ...doc, category: "syllabus" }]);
+    expect(groups.map((g) => g.category.id)).toEqual(["syllabus"]);
+  });
+});
