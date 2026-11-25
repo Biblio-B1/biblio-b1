@@ -189,7 +189,8 @@ export function HomeworkClient({
           action={formAction}
           onSubmit={(e) => {
             // Même matière, même jour : on demande confirmation avant de publier (doublon possible).
-            if (guard.check({ subjectId, subjectName: selectedSubject?.name ?? "", date: dueDate }, setDupes)) e.preventDefault();
+            if (guard.check({ subjectId, subjectName: selectedSubject?.name ?? "", date: dueDate, group: englishSelected ? englishGroup : null }, setDupes))
+              e.preventDefault();
           }}
           className="flex flex-col gap-4"
         >

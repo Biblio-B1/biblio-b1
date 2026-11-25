@@ -36,6 +36,7 @@ export function DuplicateWarning({
           <li key={`${m.kind}-${m.id}`} className="rounded-md border border-line bg-surface px-3 py-2 text-sm">
             <span className="mr-2 rounded bg-sunken px-1.5 py-0.5 text-[11px] font-semibold uppercase text-ink-2">{DUE_KIND_LABEL[m.kind]}</span>
             <span className="font-medium text-ink">{m.subjectName}</span>
+            {m.group && <span className="ml-1.5 text-xs text-ink-2">(groupe {m.group})</span>}
             {m.title && <span className="block truncate text-ink-2">{m.title}</span>}
             {m.authorName && <span className="block text-xs text-ink-3">Ajouté par {m.authorName}</span>}
           </li>
@@ -60,7 +61,7 @@ export function DuplicateWarning({
 export function useDuplicateGuard(existing: DueItem[]) {
   const skipNext = useRef(false);
   return {
-    check(draft: { subjectId: string; subjectName: string; date: string }, show: (m: DueItem[]) => void): boolean {
+    check(draft: { subjectId: string; subjectName: string; date: string; group?: string | null }, show: (m: DueItem[]) => void): boolean {
       if (skipNext.current) {
         skipNext.current = false;
         return false;

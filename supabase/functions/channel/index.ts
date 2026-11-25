@@ -198,8 +198,8 @@ Deno.serve(async (req) => {
     const homeworks: NewHomework[] = [];
     for (const h of (hws ?? []) as { id: string; title: string; due_date: string; english_group: string | null; is_final_project: boolean; subjects: { name: string } | null }[]) {
       const subject = h.subjects?.name ?? "Sans matière";
-      if (h.is_final_project) exams.push({ key: `hw:${h.id}`, subject, title: h.title, day: h.due_date, kind: "projet" });
-      else if (isExamTitle(h.title)) exams.push({ key: `hw:${h.id}`, subject, title: h.title, day: h.due_date });
+      if (h.is_final_project) exams.push({ key: `hw:${h.id}`, subject, title: h.title, day: h.due_date, kind: "projet", group: h.english_group });
+      else if (isExamTitle(h.title)) exams.push({ key: `hw:${h.id}`, subject, title: h.title, day: h.due_date, group: h.english_group });
       else homeworks.push({ id: h.id, title: h.title, subject, dueDate: h.due_date, englishGroup: h.english_group });
     }
     const { data: sentRows } = await db.from("channel_alerts").select("key");

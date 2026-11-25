@@ -13,10 +13,11 @@ import { Spine } from "@/components/layout/Spine";
 import { EXAM_FILES } from "@/lib/api/attachments";
 import { createExamAction, deleteExamAction, listExams, type ExamRow } from "@/lib/api/exams";
 import { listSubjects } from "@/lib/api/library";
+import { isEnglishSubject } from "@/lib/homework-rules";
 import { useData } from "@/lib/api/use-data";
 import { labelDate, todayKeyInParis } from "@/lib/calendar-view";
 
-type SubjectOpt = { id: string; name: string; color: string };
+type SubjectOpt = { id: string; name: string; slug: string; color: string };
 
 const hour = (t: string) => t.replace(":", "h");
 
@@ -35,6 +36,11 @@ function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void })
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded badge-alert px-1.5 py-0.5 text-[11px] font-bold uppercase">Contrôle</span>
           <span className="text-sm font-semibold text-ink">{exam.subjectName}</span>
+          {exam.englishGroup && (
+            <span className="rounded-full border border-focus/30 bg-focus/10 px-2.5 py-0.5 text-xs font-medium text-ink">
+              Groupe : {exam.englishGroup}
+            </span>
+          )}
           {exam.source === "edt" && (
             <span className="rounded-full border border-line bg-sunken px-2 py-0.5 text-xs text-ink-2">Emploi du temps Boostcamp</span>
           )}
@@ -93,6 +99,8 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
   const [pickError, setPickError] = useState<string | null>(null);
   const [showPast, setShowPast] = useState(false);
   const selected = subjects.find((s) => s.id === subjectId);
+  const englishSelected = selected ? isEnglishSubject(selected) : false;
+  const [englishGroup, setEnglishGroup] = useState("");
   const [dupes, setDupes] = useState<DueItem[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const existing = useMemo(() => [...examItems(exams), ...homeworkItems(homeworks)], [exams, homeworks]);
@@ -103,6 +111,7 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
     if (!res?.error) {
       setPickError(null);
       setFormKey((k) => k + 1);
+      setEnglishGroup("");
       router.refresh();
     }
     return res;
@@ -128,7 +137,8 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
           onSubmit={(e) => {
             // Même matière, même jour : on demande confirmation avant de publier (doublon possible).
             const date = String(new FormData(e.currentTarget).get("date") ?? "");
-            if (guard.check({ subjectId, subjectName: selected?.name ?? "", date }, setDupes)) e.preventDefault();
+            if (guard.check({ subjectId, subjectName: selected?.name ?? "", date, group: englishSelected ? englishGroup : null }, setDupes))
+              e.preventDefault();
           }}
           onChange={(e) => {
             const name = (e.target as unknown as HTMLInputElement).name;
@@ -141,7 +151,16 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
               Matière
               <div className="flex items-center gap-2">
                 <Spine color={selected?.color ?? null} className="h-6" />
-                <select name="subjectId" required value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className="input flex-1">
+                <select
+                  name="subjectId"
+                  required
+                  value={subjectId}
+                  onChange={(e) => {
+                    setSubjectId(e.target.value);
+                    setEnglishGroup("");
+                  }}
+                  className="input flex-1"
+                >
                   {subjects.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -163,6 +182,26 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
               <input type="time" name="endTime" className="input" />
             </label>
           </div>
+          {englishSelected && (
+            <div className="flex flex-col gap-3 rounded-lg border border-focus/40 bg-focus/10 p-3.5">
+              <p role="status" className="text-sm font-medium text-ink">
+                Attention : il y a plusieurs groupes en anglais. Précisez ci-dessous quel groupe passe ce contrôle.
+              </p>
+              <label className="label text-ink">
+                Groupe d&apos;anglais concerné *
+                <input
+                  type="text"
+                  name="englishGroup"
+                  required
+                  maxLength={120}
+                  value={englishGroup}
+                  onChange={(e) => setEnglishGroup(e.target.value)}
+                  placeholder="Ex : Anglais intermédiaire Gr1, Anglais avancé Gr2…"
+                  className="input"
+                />
+              </label>
+            </div>
+          )}
           <label className="label">
             Intitulé (facultatif)
             <input
@@ -246,7 +285,7 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
 export default function ControlesPage() {
   const { data, error, reload } = useData(async () => {
     const [subjects, exams, homeworks] = await Promise.all([listSubjects(), listExams(), listHomeworks().catch(() => [])]);
-    return { subjects: subjects.map((s) => ({ id: s.id, name: s.name, color: s.color })), exams, homeworks };
+    return { subjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color })), exams, homeworks };
   }, []);
 
   return (

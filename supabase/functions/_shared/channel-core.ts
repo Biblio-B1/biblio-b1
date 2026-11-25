@@ -306,14 +306,25 @@ export function formatHomework(h: NewHomework, appUrl: string): string {
 // ---------------------------------------------------------------------------------------------
 /** subject : matière ; title : intitulé (titre du devoir) s'il dit autre chose ; time / place : horaire et lieu (HTML échappé). */
 export type ExamKind = "controle" | "projet";
-export type Exam = { key: string; subject: string; title?: string; day: string; time?: string; place?: string; kind?: ExamKind };
+export type Exam = { key: string; subject: string; title?: string; day: string; time?: string; place?: string; kind?: ExamKind; group?: string | null };
+
+/** « 📚 Matière : <b>Anglais</b> (groupe Gr2) » */
+function examSubjectLine(e: Exam): string {
+  return `📚 Matière : <b>${escapeHtml(e.subject)}</b>${e.group ? ` (groupe ${escapeHtml(e.group)})` : ""}`;
+}
+
+/** Matière d'anglais (plusieurs groupes) : même règle que le site. */
+export function isEnglishLabel(label: string): boolean {
+  const n = label.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  return n.includes("anglais") || n.includes("english");
+}
 export type ExamAlert = { key: string; text: string };
 
 function examText(head: string, e: Exam, footer: string): string {
   return [
     head,
     "",
-    `📚 Matière : <b>${escapeHtml(e.subject)}</b>`,
+    examSubjectLine(e),
     ...(e.title && e.title !== e.subject ? [`📝 ${escapeHtml(e.title)}`] : []),
     `📅 ${e.kind === "projet" ? "À rendre le" : "Date"} : <b>${dayLabel(e.day)}</b>`,
     ...(e.time ? [`🕒 Horaire : <b>${e.time}</b>`] : []),
@@ -404,6 +415,7 @@ export type ExamDbRow = {
   source: "manual" | "edt";
   edt_uid: string | null;
   subject_label: string | null;
+  english_group?: string | null;
   subjects?: { name: string } | null;
   exam_attachments?: { name: string }[] | null;
 };
@@ -416,6 +428,7 @@ export function examFromRow(r: ExamDbRow): Exam {
   return {
     key: r.source === "edt" && r.edt_uid ? `edt:${r.edt_uid}` : `exam:${r.id}`,
     subject: r.subjects?.name ?? r.subject_label ?? "Sans matière",
+    group: r.english_group ?? null,
     title: r.title || undefined,
     day: r.exam_date,
     time: time ? escapeHtml(time) : undefined,
@@ -437,6 +450,8 @@ export function examRowFromSnapshot(s: Snapshot) {
     edt_uid: s.uid,
     kind: "controle" as const,
     subject_label: s.subject.slice(0, 200) || "Sans matière",
+    // Anglais : le groupe vient du champ « TD » de la séance.
+    english_group: isEnglishLabel(s.subject) && s.groups ? s.groups.slice(0, 120) : null,
     title: "",
     exam_date: parisDay(start),
     start_time: hmFmt.format(start),
@@ -459,7 +474,7 @@ export function formatExamAnnounce(e: Exam & { details?: string | null; attachme
   return [
     projet ? "📣 <b>Projet final annoncé</b>" : "📣 <b>Contrôle annoncé</b>",
     "",
-    `📚 Matière : <b>${escapeHtml(e.subject)}</b>`,
+    examSubjectLine(e),
     ...(e.title && e.title !== e.subject ? [`📝 ${escapeHtml(e.title)}`] : []),
     `📅 ${projet ? "À rendre le" : "Date"} : <b>${dayLabel(e.day)}</b>`,
     ...(e.time ? [`🕒 Horaire : <b>${e.time}</b>`] : []),

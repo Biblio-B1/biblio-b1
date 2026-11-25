@@ -286,6 +286,7 @@ describe("table des contrôles", () => {
       time: "14:00–16:30",
       place: "Salle EM319",
       kind: "projet",
+      group: null,
     });
     expect(examFromRow({ ...row, source: "edt", edt_uid: "u9", subjects: null, subject_label: "Maths" }).key).toBe("edt:u9");
   });
@@ -319,8 +320,36 @@ describe("table des contrôles", () => {
       start_time: "09:00",
       end_time: "12:00",
       location: "Salle EM319 - EIFFEL 1",
+      english_group: null,
     });
     expect(examRowFromSnapshot(S({ uid: "y" }))).toBeNull();
+    // Anglais : le groupe vient du champ « TD » de la séance.
+    const en = examRowFromSnapshot(S({ uid: "en", type: "EVALUATION", matiere: "Anglais professionnel & technique avancé" }));
+    expect(en?.english_group).toBe("IA Gr1");
     expect(examRowFromSnapshot(S({ uid: "z", type: "EVALUATION", status: "cancelled" }))).toBeNull();
+  });
+});
+
+describe("contrôles d'anglais : groupe", () => {
+  it("le groupe figure dans l'annonce et les rappels", () => {
+    const row = {
+      id: "g1",
+      kind: "controle" as const,
+      title: "Oral",
+      exam_date: "2026-11-30",
+      start_time: null,
+      end_time: null,
+      location: null,
+      source: "manual" as const,
+      edt_uid: null,
+      subject_label: null,
+      english_group: "Anglais avancé <Gr2>",
+      subjects: { name: "Anglais" },
+    };
+    const e = examFromRow(row);
+    expect(e.group).toBe("Anglais avancé <Gr2>");
+    expect(formatExamAnnounce(e, APP)).toContain("📚 Matière : <b>Anglais</b> (groupe Anglais avancé &lt;Gr2&gt;)");
+    expect(examAlerts([e], new Set(), NOW, APP)[0].text).toContain("(groupe Anglais avancé &lt;Gr2&gt;)");
+    expect(formatExamAnnounce(examFromRow({ ...row, english_group: null }), APP)).not.toContain("groupe");
   });
 });

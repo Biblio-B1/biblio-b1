@@ -28,3 +28,15 @@ describe("doublons possibles", () => {
     expect(findDuplicates({ subjectId: "c", subjectName: "Algorithmique et programmation C", date: "" }, existing)).toEqual([]);
   });
 });
+
+describe("doublons : groupes d'anglais", () => {
+  const en = homeworkItems([
+    { id: "a1", subjectId: "en", subjectName: "Anglais", dueDate: "2026-12-04", title: "Oral", isFinalProject: false, authorName: "Lea", englishGroup: "Anglais avancé Gr2" },
+  ]);
+  it("deux groupes différents ne sont pas un doublon ; le même groupe (ou sans groupe) l'est", () => {
+    const d = (group: string | null) => findDuplicates({ subjectId: "en", subjectName: "Anglais", date: "2026-12-04", group }, en).map((x) => x.id);
+    expect(d("Anglais intermédiaire Gr1")).toEqual([]);
+    expect(d("anglais  AVANCÉ gr2")).toEqual(["a1"]);
+    expect(d(null)).toEqual(["a1"]);
+  });
+});

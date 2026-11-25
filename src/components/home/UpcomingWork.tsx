@@ -60,7 +60,10 @@ function ExamLine({ exam, today }: { exam: ExamRow; today: string }) {
           </span>
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14px] font-semibold text-ink">{exam.subjectName}</span>
+          <span className="block truncate text-[14px] font-semibold text-ink">
+            {exam.subjectName}
+            {exam.englishGroup && <span className="font-normal text-ink-2"> · {exam.englishGroup}</span>}
+          </span>
           <span className="block truncate text-xs capitalize text-ink-2">
             {relativeDayLabel(exam.date, today)}
             {hour ? ` · ${hour}` : ""}

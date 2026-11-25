@@ -3,6 +3,7 @@
 // sont recopiés par l'Edge Function `channel` et ne se modifient pas ici.
 import type { FormState } from "@/components/ActionForm";
 import { getSupabase } from "@/lib/supabase/client";
+import { isEnglishSubject } from "@/lib/homework-rules";
 import {
   addAttachments,
   attachmentPaths,
@@ -34,6 +35,8 @@ export type ExamRow = {
   endTime: string | null;
   location: string | null;
   details: string | null;
+  /** Groupe d'anglais concerné (contrôles d'anglais). */
+  englishGroup: string | null;
   source: "manual" | "edt";
   edtUid: string | null;
   authorId: string | null;
@@ -61,6 +64,7 @@ export function toExam(r: Joined): ExamRow {
     endTime: hhmm(r.end_time),
     location: (r.location as string | null) ?? null,
     details: (r.details as string | null) ?? null,
+    englishGroup: (r.english_group as string | null) ?? null,
     source: r.source === "edt" ? "edt" : "manual",
     edtUid: (r.edt_uid as string | null) ?? null,
     authorId: (r.author_id as string | null) ?? null,
@@ -81,6 +85,7 @@ export async function listExams(): Promise<ExamRow[]> {
 
 export type ExamInput = {
   subjectId: string;
+  englishGroup?: string;
   title: string;
   date: string;
   startTime: string;
@@ -91,6 +96,7 @@ export type ExamInput = {
 
 export type ValidExam = {
   subjectId: string;
+  englishGroup: string | null;
   title: string;
   date: string;
   startTime: string | null;
@@ -101,8 +107,17 @@ export type ValidExam = {
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export function validateExam(input: ExamInput, subjectIds: string[]): { ok: true; value: ValidExam } | { ok: false; error: string } {
-  if (!subjectIds.includes(input.subjectId)) return { ok: false, error: "Choisissez une matière." };
+export function validateExam(
+  input: ExamInput,
+  subjects: { id: string; name: string; slug: string }[],
+): { ok: true; value: ValidExam } | { ok: false; error: string } {
+  const subject = subjects.find((s) => s.id === input.subjectId);
+  if (!subject) return { ok: false, error: "Choisissez une matière." };
+  // Anglais : plusieurs groupes, on précise lequel passe le contrôle (comme pour les devoirs).
+  const english = isEnglishSubject(subject);
+  const group = english ? (input.englishGroup ?? "").trim().replace(/\s+/g, " ") || null : null;
+  if (english && !group) return { ok: false, error: "Précisez quel groupe d'anglais passe ce contrôle." };
+  if (group && group.length > 120) return { ok: false, error: "Nom de groupe trop long (120 caractères max.)." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || Number.isNaN(Date.parse(`${input.date}T00:00:00Z`))) {
     return { ok: false, error: "Indiquez une date valide." };
   }
@@ -117,17 +132,18 @@ export function validateExam(input: ExamInput, subjectIds: string[]): { ok: true
   if (location && location.length > 200) return { ok: false, error: "Lieu trop long (200 caractères max.)." };
   const details = input.details.trim() || null;
   if (details && details.length > 2000) return { ok: false, error: "Précisions trop longues (2000 caractères max.)." };
-  return { ok: true, value: { subjectId: input.subjectId, title, date: input.date, startTime, endTime, location, details } };
+  return { ok: true, value: { subjectId: input.subjectId, englishGroup: group, title, date: input.date, startTime, endTime, location, details } };
 }
 
 export async function createExamAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const supabase = getSupabase();
   const uid = (await supabase.auth.getUser()).data.user?.id;
   if (!uid) return { error: "Session expirée : reconnectez-vous." };
-  const { data: subjects } = await supabase.from("subjects").select("id");
+  const { data: subjects } = await supabase.from("subjects").select("id, name, slug");
   const v = validateExam(
     {
       subjectId: String(fd.get("subjectId") ?? ""),
+      englishGroup: String(fd.get("englishGroup") ?? ""),
       title: String(fd.get("title") ?? ""),
       date: String(fd.get("date") ?? ""),
       startTime: String(fd.get("startTime") ?? ""),
@@ -135,7 +151,7 @@ export async function createExamAction(_prev: FormState, fd: FormData): Promise<
       location: String(fd.get("location") ?? ""),
       details: String(fd.get("details") ?? ""),
     },
-    ((subjects ?? []) as { id: string }[]).map((s) => s.id),
+    (subjects ?? []) as { id: string; name: string; slug: string }[],
   );
   if (!v.ok) return { error: v.error };
   const files = pickedFiles(fd.getAll("attachments"));
@@ -149,6 +165,7 @@ export async function createExamAction(_prev: FormState, fd: FormData): Promise<
     .from("exams")
     .insert({
       subject_id: v.value.subjectId,
+      english_group: v.value.englishGroup,
       title: v.value.title,
       exam_date: v.value.date,
       start_time: v.value.startTime,
@@ -197,13 +214,13 @@ export function examEvents(exams: ExamRow[]): ScheduleEvent[] {
           : new Date(Date.parse(start) + 60 * 60_000).toISOString();
       return {
         uid: `exam:${e.id}`,
-        title: `Contrôle · ${e.subjectName}${e.title ? ` — ${e.title}` : ""}`,
+        title: `Contrôle · ${e.subjectName}${e.englishGroup ? ` (${e.englishGroup})` : ""}${e.title ? ` — ${e.title}` : ""}`,
         start,
         end,
         allDay: !e.startTime,
         categories: ["EVALUATION"],
         location: e.location ?? undefined,
-        description: [`Matière : ${e.subjectName}`, "Type : Contrôle", e.details ?? "", e.authorName ? `Ajouté par ${e.authorName}` : ""]
+        description: [`Matière : ${e.subjectName}`, e.englishGroup ? `Groupe : ${e.englishGroup}` : "", "Type : Contrôle", e.details ?? "", e.authorName ? `Ajouté par ${e.authorName}` : ""]
           .filter(Boolean)
           .join("\n"),
       };
