@@ -1,8 +1,8 @@
 "use client";
 
-// Choix du cours où rendre un devoir, sur l'emploi du temps de l'élève (grille de la semaine).
-// S'ouvre depuis l'icône calendrier du champ « Date de rendu ». Un clic sur un cours règle la date
-// et la matière ; un clic sur l'en-tête d'un jour règle seulement la date.
+// Choix d'une date sur l'emploi du temps de l'élève (grille de la semaine), pour un devoir ou un
+// contrôle. S'ouvre depuis l'icône calendrier du champ de date. Un clic sur un cours renvoie la date,
+// la matière et la séance ; un clic sur l'en-tête d'un jour renvoie seulement la date.
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { IconCalendar, IconChevron, IconClose } from "@/components/layout/Icons";
@@ -33,13 +33,17 @@ export function CoursePicker({
   dueDate,
   onPick,
   onClose,
+  title = "Choisir le cours sur l'emploi du temps",
 }: {
   /** null : aucun calendrier lié. */
   events: ScheduleEvent[] | null;
   subjects: CalendarSubject[];
   subjectId: string;
   dueDate: string;
-  onPick: (dayKey: string, subjectId?: string) => void;
+  /** `course` : la séance cliquée (absente quand on clique sur un jour). */
+  onPick: (dayKey: string, subjectId?: string, course?: ScheduleEvent) => void;
+  /** Titre du panneau (« Choisir le cours… »). */
+  title?: string;
   onClose: () => void;
 }) {
   const today = todayKeyInParis();
@@ -69,7 +73,7 @@ export function CoursePicker({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id="course-picker" className="flex items-center gap-1.5 text-sm font-semibold text-ink">
           <IconCalendar size={16} />
-          Choisir le cours sur l&apos;emploi du temps
+          {title}
         </h3>
         <div className="flex items-center gap-1">
           <button
@@ -169,7 +173,7 @@ export function CoursePicker({
                           type="button"
                           disabled={past}
                           aria-pressed={selected}
-                          onClick={() => onPick(d, s?.id)}
+                          onClick={() => onPick(d, s?.id, seg.event)}
                           title={`${timeLabel(seg.startMinutes)}–${timeLabel(seg.endMinutes)} · ${seg.event.title}${seg.event.location ? ` · ${seg.event.location}` : ""}`}
                           className={`absolute overflow-hidden rounded border-l-[3px] px-1 py-0.5 text-left text-[10.5px] leading-tight text-ink transition-shadow hover:ring-2 hover:ring-focus/50 disabled:cursor-not-allowed disabled:opacity-40 ${
                             selected ? "ring-2 ring-focus" : ""

@@ -14,7 +14,7 @@ import { labelDate, todayKeyInParis } from "@/lib/calendar-view";
 import { HOMEWORK_FILES } from "@/lib/api/attachments";
 import { createHomeworkAction, deleteHomeworkAction, type HomeworkRow } from "@/lib/api/homeworks";
 import type { CalendarSubject, ScheduleEvent } from "@/lib/calendar-view";
-import { CoursePicker } from "./CoursePicker";
+import { CoursePicker } from "@/components/CoursePicker";
 
 type SubjectOpt = { id: string; name: string; slug: string; color: string };
 

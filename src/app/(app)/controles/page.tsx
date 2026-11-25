@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useActionState, useMemo, useRef, useState, useTransition } from "react";
 import type { FormState } from "@/components/ActionForm";
 import { AttachmentField, AttachmentList } from "@/components/AttachmentList";
+import { CoursePicker } from "@/components/CoursePicker";
 import { DuplicateWarning, useDuplicateGuard } from "@/components/DuplicateWarning";
+import { getMyCalendar } from "@/lib/api/calendar";
+import type { CalendarSubject, ScheduleEvent } from "@/lib/calendar-view";
 import { listHomeworks, type HomeworkRow } from "@/lib/api/homeworks";
 import { examItems, homeworkItems, type DueItem } from "@/lib/duplicates";
 import { PageRefreshProvider, usePageRefresh } from "@/components/PageRefresh";
@@ -92,7 +95,24 @@ function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void })
   );
 }
 
-function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; exams: ExamRow[]; homeworks: HomeworkRow[] }) {
+/** « 08:30 » à Paris pour un instant ISO. */
+const parisTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+
+function ExamsClient({
+  subjects,
+  exams,
+  homeworks,
+  courses,
+  calendarSubjects,
+}: {
+  subjects: SubjectOpt[];
+  exams: ExamRow[];
+  homeworks: HomeworkRow[];
+  /** Cours de l'emploi du temps de l'élève (null : aucun calendrier lié). */
+  courses: ScheduleEvent[] | null;
+  calendarSubjects: CalendarSubject[];
+}) {
   const router = usePageRefresh();
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
   const [formKey, setFormKey] = useState(0);
@@ -101,6 +121,11 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
   const selected = subjects.find((s) => s.id === subjectId);
   const englishSelected = selected ? isEnglishSubject(selected) : false;
   const [englishGroup, setEnglishGroup] = useState("");
+  const [date, setDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [location, setLocation] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [dupes, setDupes] = useState<DueItem[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const existing = useMemo(() => [...examItems(exams), ...homeworkItems(homeworks)], [exams, homeworks]);
@@ -112,6 +137,10 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
       setPickError(null);
       setFormKey((k) => k + 1);
       setEnglishGroup("");
+      setDate("");
+      setStartTime("");
+      setEndTime("");
+      setLocation("");
       router.refresh();
     }
     return res;
@@ -169,19 +198,70 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
                 </select>
               </div>
             </label>
-            <label className="label">
-              Date
-              <input type="date" name="date" required className="input" />
-            </label>
+            <div className="label">
+              <label htmlFor="exam-date">Date</label>
+              <div className="relative">
+                {/* L'icône calendrier ouvre l'emploi du temps (et non le calendrier du navigateur). */}
+                <input
+                  id="exam-date"
+                  type="date"
+                  name="date"
+                  required
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="input w-full pr-11 [&::-webkit-calendar-picker-indicator]:hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((o) => !o)}
+                  aria-expanded={pickerOpen}
+                  aria-controls="exam-picker-panel"
+                  aria-label="Choisir la date sur l'emploi du temps"
+                  title="Choisir sur l'emploi du temps"
+                  className={`absolute inset-y-1 right-1 grid w-9 place-items-center rounded-md transition-colors ${
+                    pickerOpen ? "bg-ink text-surface" : "text-ink-2 hover:bg-sunken hover:text-ink"
+                  }`}
+                >
+                  <IconCalendar size={18} />
+                </button>
+              </div>
+            </div>
             <label className="label">
               Heure de début (facultatif)
-              <input type="time" name="startTime" className="input" />
+              <input type="time" name="startTime" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="input" />
             </label>
             <label className="label">
               Heure de fin (facultatif)
-              <input type="time" name="endTime" className="input" />
+              <input type="time" name="endTime" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="input" />
             </label>
           </div>
+          {pickerOpen && (
+            <div id="exam-picker-panel">
+              <CoursePicker
+                title="Choisir le cours du contrôle"
+                events={courses}
+                subjects={calendarSubjects}
+                subjectId={subjectId}
+                dueDate={date}
+                onClose={() => setPickerOpen(false)}
+                onPick={(dayKey, pickedSubject, course) => {
+                  setDate(dayKey);
+                  setDupes([]);
+                  if (pickedSubject && pickedSubject !== subjectId) {
+                    setSubjectId(pickedSubject);
+                    setEnglishGroup("");
+                  }
+                  // Le contrôle a lieu pendant ce cours : on reprend son horaire et sa salle.
+                  if (course) {
+                    setStartTime(parisTime(course.start));
+                    setEndTime(parisTime(course.end));
+                    if (course.location) setLocation(course.location.slice(0, 200));
+                  }
+                  setPickerOpen(false);
+                }}
+              />
+            </div>
+          )}
           {englishSelected && (
             <div className="flex flex-col gap-3 rounded-lg border border-focus/40 bg-focus/10 p-3.5">
               <p role="status" className="text-sm font-medium text-ink">
@@ -214,7 +294,15 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
           </label>
           <label className="label">
             Lieu (facultatif)
-            <input type="text" name="location" maxLength={200} placeholder="Salle, visio…" className="input" />
+            <input
+              type="text"
+              name="location"
+              maxLength={200}
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Salle, visio…"
+              className="input"
+            />
           </label>
           <label className="label">
             Précisions (facultatif)
@@ -284,8 +372,20 @@ function ExamsClient({ subjects, exams, homeworks }: { subjects: SubjectOpt[]; e
 
 export default function ControlesPage() {
   const { data, error, reload } = useData(async () => {
-    const [subjects, exams, homeworks] = await Promise.all([listSubjects(), listExams(), listHomeworks().catch(() => [])]);
-    return { subjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color })), exams, homeworks };
+    const [subjects, exams, homeworks, calendar] = await Promise.all([
+      listSubjects(),
+      listExams(),
+      listHomeworks().catch(() => []),
+      // Facultatif : sans calendrier lié, la date se tape à la main.
+      getMyCalendar().catch(() => null),
+    ]);
+    return {
+      subjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color })),
+      calendarSubjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color, rules: s.rules })),
+      courses: calendar ? calendar.events : null,
+      exams,
+      homeworks,
+    };
   }, []);
 
   return (
@@ -312,7 +412,13 @@ export default function ControlesPage() {
         <p className="text-sm text-ink-3">Chargement…</p>
       ) : (
         <PageRefreshProvider value={reload}>
-          <ExamsClient subjects={data.subjects} exams={data.exams} homeworks={data.homeworks} />
+          <ExamsClient
+            subjects={data.subjects}
+            exams={data.exams}
+            homeworks={data.homeworks}
+            courses={data.courses}
+            calendarSubjects={data.calendarSubjects}
+          />
         </PageRefreshProvider>
       )}
     </div>
