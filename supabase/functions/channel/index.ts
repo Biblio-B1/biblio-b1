@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
         ? await post(formatHomework({ id: h.id, title: h.title, subject: h.subjects?.name ?? "Sans matière", dueDate: h.due_date, englishGroup: h.english_group, attachments: homeworkFiles(h), finalProject: h.is_final_project }, appUrl))
         : true; // supprimé entre-temps
       if (ok || stale(r)) done.push(r.id);
-      const stage = h && ok ? alertStage(h.due_date, now) : null;
+      const stage = h && ok ? alertStage(h.due_date, now, { anyHour: true }) : null;
       if (h && stage) covered.push(h.is_final_project || isExamTitle(h.title) ? `hw:${h.id}:${stage}` : `hwr:${h.id}:${stage}`);
     }
     const { data: exs } = examIds.length
@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
       const x = examById.get(r.ref);
       const ok = x ? await post(formatExamAnnounce({ ...examFromRow(x), details: x.details, attachments: (x.exam_attachments ?? []).map((a) => a.name) }, appUrl)) : true;
       if (ok || stale(r)) done.push(r.id);
-      const stage = x && ok ? alertStage(x.exam_date, now) : null;
+      const stage = x && ok ? alertStage(x.exam_date, now, { anyHour: true }) : null;
       if (x && stage) covered.push(`${examFromRow(x).key}:${stage}`);
     }
     if (done.length) await db.from("channel_outbox").update({ sent_at: now.toISOString() }).in("id", done);

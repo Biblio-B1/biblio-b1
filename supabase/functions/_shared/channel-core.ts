@@ -328,11 +328,16 @@ function examText(head: string, e: Exam, footer: string): string {
  * 1 semaine (2 à 7), puis la veille à partir de 17 h (heure de Paris). Un seul message par palier ;
  * un palier manqué (contrôle ajouté tard) n'est pas rattrapé, seul le palier en cours part.
  * Le palier « semaine » garde son ancien nom de clé (alertes déjà envoyées).
+ * Les paliers 3, 2 et 1 semaine(s) partent à partir de 8 h (heure de Paris), pas à minuit.
+ * `anyHour` : palier du jour quelle que soit l'heure du matin (un ajout annoncé la nuit couvre déjà
+ * le palier du jour, pour ne pas le répéter à 8 h) ; la veille reste à partir de 17 h.
  */
 export type AlertStage = "3sem" | "2sem" | "semaine" | "veille";
-export function alertStage(day: string, now: Date): AlertStage | null {
+export const MORNING_HOUR = 8;
+export function alertStage(day: string, now: Date, opts: { anyHour?: boolean } = {}): AlertStage | null {
   const n = daysUntil(day, now);
   if (n === 1) return parisHour(now) >= 17 ? "veille" : null;
+  if (!opts.anyHour && parisHour(now) < MORNING_HOUR) return null;
   if (n >= 2 && n <= 7) return "semaine";
   if (n >= 8 && n <= 14) return "2sem";
   if (n >= 15 && n <= 21) return "3sem";

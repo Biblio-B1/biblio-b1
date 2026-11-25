@@ -204,6 +204,18 @@ describe("alertes de contrôle", () => {
     expect(alertStage("2026-12-15", NOW)).toBeNull(); // 22 jours
     expect(alertStage("2026-11-23", NOW)).toBeNull(); // aujourd'hui
 
+    // Rappels à partir de 8 h (heure de Paris), pas à minuit ; la veille reste à 17 h.
+    const night = new Date("2026-11-22T23:05:00Z"); // lundi 23, 0 h 05 à Paris
+    const early = new Date("2026-11-23T06:55:00Z"); // 7 h 55
+    const eight = new Date("2026-11-23T07:00:00Z"); // 8 h 00
+    expect(alertStage("2026-11-30", night)).toBeNull();
+    expect(alertStage("2026-11-30", early)).toBeNull();
+    expect(alertStage("2026-11-30", eight)).toBe("semaine");
+    expect(alertStage("2026-12-14", eight)).toBe("3sem");
+    expect(alertStage("2026-11-30", night, { anyHour: true })).toBe("semaine"); // annonce de nuit : palier couvert
+    expect(alertStage("2026-11-24", night, { anyHour: true })).toBeNull(); // la veille attend 17 h
+    expect(examAlerts([{ key: "x", subject: "Maths", day: "2026-11-30" }], new Set(), night, APP)).toEqual([]);
+
     const exam = [{ key: "exam:1", subject: "Maths", day: "2026-12-14", kind: "controle" as const }];
     const [three] = examAlerts(exam, new Set(), NOW, APP);
     expect(three).toMatchObject({ key: "exam:1:3sem" });
