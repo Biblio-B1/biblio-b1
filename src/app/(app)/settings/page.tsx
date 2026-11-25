@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ActionForm, Field, type FormState } from "@/components/ActionForm";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { TelegramChannelLink } from "@/components/TelegramChannel";
 import { TUTORIAL_EVENT } from "@/components/Tutorial";
 import {
   browserNotificationsOn,
@@ -333,6 +334,17 @@ function TutorialSection() {
   );
 }
 
+function TelegramSection() {
+  return (
+    <Section
+      title="Canal Telegram"
+      intro="Les alertes de la promo sur Telegram : nouveaux devoirs, contrôles et projets finaux, avec des rappels avant la date."
+    >
+      <TelegramChannelLink className="btn btn-primary self-start" />
+    </Section>
+  );
+}
+
 export default function SettingsPage() {
   const { session, profile } = useAuth();
   const email = session?.user.email ?? "";
@@ -345,6 +357,7 @@ export default function SettingsPage() {
         </p>
       </header>
       <CalendarSection />
+      <TelegramSection />
       <ProfileSection key={profile?.name} />
       <DirectorySection email={email} />
       <PasswordSection email={email} />
