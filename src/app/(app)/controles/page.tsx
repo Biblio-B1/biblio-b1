@@ -238,7 +238,6 @@ function ExamsClient({
           {pickerOpen && (
             <div id="exam-picker-panel">
               <CoursePicker
-                title="Choisir le cours du contrôle"
                 events={courses}
                 subjects={calendarSubjects}
                 subjectId={subjectId}
