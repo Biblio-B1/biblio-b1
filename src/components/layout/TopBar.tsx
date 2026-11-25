@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CommandPalette } from "@/components/search/CommandPalette";
-import { IconMenu, IconSearch, IconUpload } from "./Icons";
+import { IconMenu, IconSearch, IconSettings, IconUpload } from "./Icons";
 import { MENU_EVENT } from "./Sidebar";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
- * Barre du haut : menu (mobile), recherche globale (palette, Ctrl/Cmd K), dépôt, thème.
+ * Barre du haut : menu (mobile), recherche globale (palette, Ctrl/Cmd K), dépôt, thème, paramètres.
  * Sans compte : recherche par titre dans la bibliothèque publique et lien de connexion.
  */
 export function TopBar({ signedIn }: { signedIn: boolean }) {
@@ -78,6 +78,11 @@ export function TopBar({ signedIn }: { signedIn: boolean }) {
           </Link>
         )}
         <ThemeToggle />
+        {signedIn && (
+          <Link href="/settings" className="btn btn-ghost btn-icon" aria-label="Paramètres" title="Paramètres">
+            <IconSettings size={18} />
+          </Link>
+        )}
       </div>
     </header>
   );
