@@ -16,7 +16,8 @@ import {
   type Teacher,
 } from "@/lib/api/teachers";
 import { useData } from "@/lib/api/use-data";
-import { displayTeacherName, extractTeachers, mailLinks, SCHOOL_OUTLOOK_URL } from "@/lib/teachers";
+import { OutlookLink } from "@/components/OutlookLink";
+import { displayTeacherName, extractTeachers, mailLinks } from "@/lib/teachers";
 
 /** Relève les profs de son emploi du temps (nouveaux noms ou matières), puis lit l'annuaire. */
 async function loadTeachers(): Promise<Teacher[]> {
@@ -100,14 +101,12 @@ function Composer({ teachers, to, setTo }: { teachers: Teacher[]; to: string[]; 
         <p className="text-sm text-ink-2">
           « Envoyer avec Outlook » ouvre un brouillon prêt dans Outlook en ligne : il ne reste qu&apos;à cliquer sur Envoyer.
         </p>
-        <div className="flex flex-col gap-2 rounded-md border border-line bg-sunken px-3 py-2.5 text-sm text-ink sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2.5 rounded-md border border-line bg-sunken px-3 py-2.5 text-sm text-ink">
           <p>
-            Connecte-toi d&apos;abord à Outlook avec ton adresse <strong>@edu.ece.fr</strong> : les professeurs ne répondent
-            qu&apos;aux mails de l&apos;école. Si Outlook s&apos;ouvre sur un autre compte, déconnecte-toi puis reconnecte-toi.
+            Écris depuis ton compte Outlook <strong>@edu.ece.fr</strong> : les professeurs ne répondent qu&apos;aux mails de
+            l&apos;école. Si Outlook s&apos;ouvre sur un autre compte, déconnecte-toi puis reconnecte-toi.
           </p>
-          <a href={SCHOOL_OUTLOOK_URL} target="_blank" rel="noreferrer" className="btn h-9 shrink-0 self-start sm:self-auto">
-            Se connecter à Outlook
-          </a>
+          <OutlookLink compact />
         </div>
       </div>
       {withEmail.length === 0 ? (

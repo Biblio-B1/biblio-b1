@@ -455,3 +455,18 @@ describe("délégué(e)", () => {
     await t.db.query("update public.documents set category = null where id = $1", [docId]);
   });
 });
+
+describe("compte Outlook lié", () => {
+  it("chacun ne voit et ne modifie que le sien", async () => {
+    await t.as(activeId);
+    await t.db.query("insert into public.outlook_links (user_id, email) values ($1, 'lea.martin@edu.ece.fr')", [activeId]);
+    await expect(t.db.query("insert into public.outlook_links (user_id, email) values ($1, 'x@edu.ece.fr')", [adminId])).rejects.toThrow();
+    await t.as(adminId);
+    expect((await t.db.query("select * from public.outlook_links")).rows).toEqual([]);
+    await t.as(pendingId);
+    await expect(t.db.query("insert into public.outlook_links (user_id, email) values ($1, 'n@edu.ece.fr')", [pendingId])).rejects.toThrow();
+    await t.as(activeId);
+    expect((await t.db.query<{ email: string }>("select email from public.outlook_links")).rows).toEqual([{ email: "lea.martin@edu.ece.fr" }]);
+    await t.db.query("delete from public.outlook_links where user_id = $1", [activeId]);
+  });
+});

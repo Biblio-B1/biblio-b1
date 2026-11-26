@@ -14,8 +14,7 @@ import {
 } from "@/lib/admin-notify";
 import { CALENDAR_SOURCES, callCalendar, getMyCalendar, type CalendarSource, type StoredCalendar } from "@/lib/api/calendar";
 import { getShowEmail, setShowEmail } from "@/lib/api/teachers";
-import { IconMail } from "@/components/layout/Icons";
-import { SCHOOL_OUTLOOK_URL } from "@/lib/teachers";
+import { OutlookLink } from "@/components/OutlookLink";
 import { useData } from "@/lib/api/use-data";
 import { renameErrorMessage, splitName, validatePasswordChange, validateRename } from "@/lib/auth/account-form";
 import { getSupabase } from "@/lib/supabase/client";
@@ -233,16 +232,13 @@ function OutlookSection() {
       title="Messagerie de l'école (Outlook)"
       intro={
         <>
-          Pour écrire aux professeurs depuis l&apos;annuaire, connectez-vous à Outlook avec votre adresse{" "}
-          <strong className="text-ink">@edu.ece.fr</strong> et votre mot de passe de l&apos;école. Biblio B1 ne voit ni votre
-          mot de passe ni vos mails.
+          Pour écrire aux professeurs depuis l&apos;annuaire, liez votre compte Outlook{" "}
+          <strong className="text-ink">@edu.ece.fr</strong>. Biblio B1 ne garde que l&apos;adresse du compte : il ne voit ni
+          votre mot de passe ni vos mails.
         </>
       }
     >
-      <a href={SCHOOL_OUTLOOK_URL} target="_blank" rel="noreferrer" className="btn btn-primary self-start">
-        <IconMail size={16} />
-        Se connecter à mon Outlook
-      </a>
+      <OutlookLink />
     </Section>
   );
 }
