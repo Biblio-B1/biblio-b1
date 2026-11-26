@@ -62,6 +62,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Pas de zoom au double tap (le pincement reste possible là où le navigateur l'autorise). */
+  touch-action: manipulation;
 }
 
 body {
@@ -90,7 +92,7 @@ body {
 :root {
   --code-font-size: 13.5px;
 }
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 767px) {
   :root {
     --code-font-size: 16px;
   }

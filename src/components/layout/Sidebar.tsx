@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { UNCLASSIFIED_SLUG, subjectHref } from "@/lib/routes";
 import { Spine } from "./Spine";
@@ -156,8 +156,15 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
   );
 }
 
+/** Glissement vers la gauche au-delà duquel le menu se ferme (fraction de sa largeur). */
+const CLOSE_RATIO = 0.3;
+
 export function Sidebar(props: Props) {
   const [open, setOpen] = useState(false);
+  // Décalage du menu pendant qu'on le fait glisser du doigt (≤ 0), null sinon.
+  const [drag, setDrag] = useState<number | null>(null);
+  const touch = useRef<{ x: number; y: number; t: number; axis: "x" | "y" | null } | null>(null);
+  const panel = useRef<HTMLElement>(null);
   const pathname = usePathname();
 
   useEffect(() => setOpen(false), [pathname]);
@@ -177,26 +184,89 @@ export function Sidebar(props: Props) {
     };
   }, []);
 
+  // Menu ouvert : la page derrière ne défile plus.
+  useEffect(() => {
+    if (!open) return;
+    const html = document.documentElement;
+    const before = html.style.overflow;
+    html.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = before;
+    };
+  }, [open]);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touch.current = { x: t.clientX, y: t.clientY, t: e.timeStamp, axis: null };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const s = touch.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    // On décide une fois le sens du geste : horizontal = on tire le menu, vertical = on fait défiler.
+    if (!s.axis && Math.hypot(dx, dy) > 8) s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    if (s.axis === "x") setDrag(Math.min(0, dx));
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = touch.current;
+    touch.current = null;
+    if (!s || s.axis !== "x" || drag === null) return setDrag(null);
+    const width = panel.current?.offsetWidth ?? 288;
+    const speed = drag / Math.max(1, e.timeStamp - s.t); // px/ms, négatif vers la gauche
+    if (drag < -width * CLOSE_RATIO || speed < -0.5) setOpen(false);
+    setDrag(null);
+  };
+
+  const dragging = drag !== null;
+  const width = panel.current?.offsetWidth ?? 288;
+  const shown = open ? 1 + (drag ?? 0) / width : 0;
+
   return (
     <>
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 overflow-y-auto border-r border-line bg-bg md:block">
         <SidebarContent {...props} />
       </aside>
-      {open && (
-        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
-          <button aria-label="Fermer le menu" className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-[min(18rem,85vw)] overflow-y-auto border-r border-line bg-bg shadow-xl">
-            <button
-              onClick={() => setOpen(false)}
-              className="btn btn-ghost btn-icon absolute top-3 right-3"
-              aria-label="Fermer le menu"
-            >
-              <IconClose />
-            </button>
-            <SidebarContent {...props} />
-          </aside>
-        </div>
-      )}
+      <div
+        className={`fixed inset-0 z-40 md:hidden ${open ? "" : "pointer-events-none"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        aria-hidden={!open}
+        inert={!open}
+      >
+        <button
+          aria-label="Fermer le menu"
+          tabIndex={-1}
+          className={`absolute inset-0 bg-black/40 ${dragging ? "" : "transition-opacity duration-200 motion-reduce:transition-none"}`}
+          style={{ opacity: shown }}
+          onClick={() => setOpen(false)}
+        />
+        <aside
+          ref={panel}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onTouchCancel={() => {
+            touch.current = null;
+            setDrag(null);
+          }}
+          className={`absolute inset-y-0 left-0 w-[min(18rem,85vw)] touch-pan-y overflow-y-auto overscroll-contain border-r border-line bg-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-xl ${
+            dragging ? "" : "transition-transform duration-200 ease-out motion-reduce:transition-none"
+          }`}
+          style={{ transform: open ? `translateX(${drag ?? 0}px)` : "translateX(-100%)" }}
+        >
+          <button
+            onClick={() => setOpen(false)}
+            className="btn btn-ghost btn-icon absolute top-3 right-3"
+            aria-label="Fermer le menu"
+          >
+            <IconClose />
+          </button>
+          <SidebarContent {...props} />
+        </aside>
+      </div>
     </>
   );
 }

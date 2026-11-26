@@ -97,8 +97,11 @@ function Composer({ teachers, to, setTo }: { teachers: Teacher[]; to: string[]; 
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold">Écrire à un professeur</h2>
         <p className="text-sm text-ink-2">
-          Le message part de votre propre adresse : « Envoyer avec Outlook » ouvre un brouillon prêt dans Outlook (compte de
-          l&apos;école), il ne reste qu&apos;à cliquer sur Envoyer.
+          « Envoyer avec Outlook » ouvre un brouillon prêt dans Outlook en ligne : il ne reste qu&apos;à cliquer sur Envoyer.
+        </p>
+        <p className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink">
+          Connecte-toi à Outlook avec ton adresse <strong>@edu.ece.fr</strong> : les professeurs ne répondent qu&apos;aux mails
+          de l&apos;école. Si Outlook s&apos;ouvre sur un autre compte, déconnecte-toi puis reconnecte-toi avec ton compte ECE.
         </p>
       </div>
       {withEmail.length === 0 ? (
@@ -152,13 +155,6 @@ function Composer({ teachers, to, setTo }: { teachers: Teacher[]; to: string[]; 
           className={`btn btn-primary h-10 ${disabled ? "pointer-events-none opacity-50" : ""}`}
         >
           Envoyer avec Outlook
-        </a>
-        <a
-          href={disabled ? undefined : links.mailto}
-          aria-disabled={disabled}
-          className={`btn h-10 ${disabled ? "pointer-events-none opacity-50" : ""}`}
-        >
-          Ouvrir dans ma messagerie
         </a>
         <button
           type="button"
@@ -270,7 +266,13 @@ function TeachersTab() {
                     <p className="font-medium">{displayTeacherName(t.name)}</p>
                     {t.subjects.length > 0 && <p className="text-sm text-ink-2">{t.subjects.join(" · ")}</p>}
                     {t.email ? (
-                      <a href={`mailto:${t.email}`} className="text-sm break-all text-ink underline-offset-2 hover:underline">
+                      <a
+                        href={mailLinks({ to: [t.email] }).outlook}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Écrire avec Outlook (compte @edu.ece.fr)"
+                        className="text-sm break-all text-ink underline-offset-2 hover:underline"
+                      >
                         {t.email}
                       </a>
                     ) : (

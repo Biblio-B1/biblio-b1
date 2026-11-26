@@ -86,9 +86,12 @@ export function Tutorial() {
       }
       update();
     });
+    // Le menu du téléphone glisse en 200 ms : on remesure une fois l'animation finie.
+    const settle = window.setTimeout(update, 260);
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
+      window.clearTimeout(settle);
       window.cancelAnimationFrame(raf);
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);

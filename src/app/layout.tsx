@@ -15,6 +15,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Téléphone : pas de zoom automatique quand on touche un champ (Safari), ni de page qui reste zoomée.
+  maximumScale: 1,
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fafaf8" },
     { media: "(prefers-color-scheme: dark)", color: "#0e0f11" },
