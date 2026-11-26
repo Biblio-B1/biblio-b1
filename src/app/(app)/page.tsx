@@ -1,5 +1,6 @@
 "use client";
 
+import { DashboardSkeleton } from "@/components/Skeleton";
 import Link from "next/link";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { CalendarView } from "@/components/calendar/CalendarView";
@@ -27,7 +28,7 @@ export default function Dashboard() {
     return { subjects, docs, homeworks, calendar, exams };
   }, []);
   if (error) return <p role="alert" className="text-danger">{error}</p>;
-  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!data) return <DashboardSkeleton />;
   const { subjects, docs, calendar } = data;
   // Devoirs et contrôles d'anglais : seulement ceux de son groupe.
   const homeworks = visibleForMe(data.homeworks, calendar?.events, profile?.id);

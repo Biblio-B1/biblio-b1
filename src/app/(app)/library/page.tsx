@@ -1,5 +1,6 @@
 "use client";
 
+import { ListSkeleton } from "@/components/Skeleton";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -60,7 +61,7 @@ function Library() {
           <h1 className="page-title">Bibliothèque</h1>
           <p className="text-ink-2">
             {!data
-              ? error ?? "Chargement…"
+              ? error ?? " "
               : q
                 ? `${recentDocs.length} résultat${recentDocs.length > 1 ? "s" : ""} pour « ${q} »`
                 : `${recentDocs.length} document${recentDocs.length > 1 ? "s" : ""}`}
@@ -93,6 +94,7 @@ function Library() {
         </div>
       </header>
 
+      {!data && !error && <ListSkeleton rows={6} />}
       {data &&
         (view === "categories" ? (
           <CategorizedDocumentList

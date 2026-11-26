@@ -1,5 +1,6 @@
 "use client";
 
+import { LinesSkeleton } from "@/components/Skeleton";
 import type { Role } from "@/lib/roles";
 import { PageRefreshProvider } from "@/components/PageRefresh";
 import { createThreadAction, listThreads } from "@/lib/api/threads";
@@ -27,7 +28,7 @@ export function QAPanel({
         {error ? (
           <p role="alert" className="text-[14px] text-danger">{error}</p>
         ) : !items ? (
-          <p className="text-[14px] text-ink-3">Chargement…</p>
+          <LinesSkeleton lines={3} />
         ) : items.length === 0 ? (
           <p className="text-[14px] text-ink-3">Aucune note ni question pour l&apos;instant.</p>
         ) : (

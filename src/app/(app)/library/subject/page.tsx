@@ -1,5 +1,6 @@
 "use client";
 
+import { CardsSkeleton } from "@/components/Skeleton";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -25,7 +26,7 @@ function SubjectView() {
   }, [slug]);
 
   if (error) return <p role="alert" className="text-danger">{error}</p>;
-  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!data) return <CardsSkeleton />;
   if (data.subject === undefined) return <p className="text-ink-2">Matière introuvable.</p>;
 
   const { subject, all, subjects } = data;

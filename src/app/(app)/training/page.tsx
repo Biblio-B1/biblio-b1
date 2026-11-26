@@ -1,5 +1,6 @@
 "use client";
 
+import { CardsSkeleton } from "@/components/Skeleton";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -43,7 +44,7 @@ function Training() {
     return { subjects, all: withStatus(exercises, progress) };
   }, []);
   if (error) return <p role="alert" className="text-danger">{error}</p>;
-  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!data) return <CardsSkeleton />;
   const { subjects, all } = data;
   const subject = subjects.find((s) => s.id === sp.get("subject"));
   const status = parseStatus(sp.get("status") ?? undefined);

@@ -1,5 +1,6 @@
 "use client";
 
+import { DocSkeleton } from "@/components/Skeleton";
 import { isModerator } from "@/lib/roles";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -153,7 +154,7 @@ function DocView() {
   }, [id]);
 
   if (error) return <p role="alert" className="text-danger">{error}</p>;
-  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!data) return <DocSkeleton />;
   const { doc, subjects, author } = data;
   if (!doc) return <p className="text-ink-2">Document introuvable.</p>;
 

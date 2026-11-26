@@ -1,5 +1,6 @@
 "use client";
 
+import { DocSkeleton } from "@/components/Skeleton";
 import { isModerator } from "@/lib/roles";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -35,7 +36,7 @@ function ExerciseView() {
   }, [id, isAdmin]);
 
   if (error) return <p role="alert" className="text-danger">{error}</p>;
-  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!data) return <DocSkeleton />;
   if (!data.detail) return <p className="text-ink-2">Exercice introuvable.</p>;
   const { exercise: ex, document: doc, variants, status, check, attempt } = data.detail;
   const subject = data.subjects.find((s) => s.id === ex.subjectId);

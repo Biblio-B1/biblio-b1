@@ -1,5 +1,6 @@
 "use client";
 
+import { FormSkeleton } from "@/components/Skeleton";
 import { listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
 import { UploadFlow } from "./UploadFlow";
@@ -15,7 +16,7 @@ export default function UploadPage() {
       {subjects ? (
         <UploadFlow subjects={subjects.map((s) => ({ id: s.id, name: s.name, color: s.color }))} />
       ) : (
-        <p className="text-sm text-ink-3">Chargement…</p>
+        <FormSkeleton fields={2} />
       )}
     </div>
   );

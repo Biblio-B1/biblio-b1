@@ -2,6 +2,7 @@
 
 // Garde d'accès des pages : visiteur → connexion, compte en attente → page d'attente, page admin
 // pour un non-admin → accueil. Confort d'affichage uniquement : la vraie barrière est la RLS.
+import { PageSkeleton } from "@/components/Skeleton";
 import { isModerator } from "@/lib/roles";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -37,9 +38,7 @@ export function RequireAuth({
 
   if (loading || target || !profile) {
     return (
-      <p role="status" className="py-10 text-center text-sm text-ink-3">
-        Chargement…
-      </p>
+      <PageSkeleton />
     );
   }
   return <>{children}</>;

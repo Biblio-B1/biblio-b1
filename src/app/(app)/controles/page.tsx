@@ -1,5 +1,6 @@
 "use client";
 
+import { FormSkeleton, ListSkeleton } from "@/components/Skeleton";
 import Link from "next/link";
 import { useActionState, useMemo, useRef, useState, useTransition } from "react";
 import type { FormState } from "@/components/ActionForm";
@@ -411,7 +412,7 @@ export default function ControlesPage() {
       {error ? (
         <p role="alert" className="text-danger">{error}</p>
       ) : !data ? (
-        <p className="text-sm text-ink-3">Chargement…</p>
+        <div className="flex flex-col gap-6"><FormSkeleton /><ListSkeleton /></div>
       ) : (
         <PageRefreshProvider value={reload}>
           <ExamsClient

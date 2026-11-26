@@ -2,6 +2,7 @@
 
 // État de la liaison Outlook (compte Microsoft de l'école) : « Lié : … » ou bouton « Lier mon Outlook ».
 // Déjà connecté à Outlook dans le navigateur : Microsoft renvoie aussitôt, sans mot de passe.
+import { LinesSkeleton } from "@/components/Skeleton";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -25,7 +26,7 @@ export function OutlookLink({ compact = false }: { compact?: boolean }) {
     </a>
   );
 
-  if (loading && !linked) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (loading && !linked) return <LinesSkeleton lines={1} />;
 
   if (linked) {
     return (

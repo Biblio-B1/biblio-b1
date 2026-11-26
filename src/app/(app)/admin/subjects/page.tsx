@@ -1,5 +1,6 @@
 "use client";
 
+import { ListSkeleton } from "@/components/Skeleton";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import type { FormState } from "@/components/ActionForm";
 import { Spine } from "@/components/layout/Spine";
@@ -24,7 +25,7 @@ function SubjectsAdmin() {
       if (r && !r.error) reload();
       return r;
     };
-  if (!subjects) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!subjects) return <ListSkeleton rows={6} />;
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-1">

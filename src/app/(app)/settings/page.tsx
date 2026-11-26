@@ -1,5 +1,6 @@
 "use client";
 
+import { LinesSkeleton } from "@/components/Skeleton";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ActionForm, Field, type FormState } from "@/components/ActionForm";
@@ -218,7 +219,7 @@ function CalendarSection() {
     >
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       {calendar === undefined ? (
-        <p className="text-sm text-ink-3">Chargement…</p>
+        <LinesSkeleton lines={3} />
       ) : (
         CALENDAR_SOURCES.map((s) => <CalendarCard key={s} source={s} calendar={calendar} onChange={setCalendar} />)
       )}

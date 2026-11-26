@@ -1,5 +1,6 @@
 "use client";
 
+import { ListSkeleton } from "@/components/Skeleton";
 import Link from "next/link";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { listOpenReports } from "@/lib/api/training";
@@ -21,7 +22,7 @@ function Reports() {
       {error ? (
         <p role="alert" className="text-sm text-danger">{error}</p>
       ) : !rows ? (
-        <p className="text-sm text-ink-3">Chargement…</p>
+        <ListSkeleton />
       ) : rows.length === 0 ? (
         <p className="text-sm text-ink-2">Aucun signalement en attente.</p>
       ) : (

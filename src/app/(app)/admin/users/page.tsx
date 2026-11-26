@@ -1,5 +1,6 @@
 "use client";
 
+import { ListSkeleton } from "@/components/Skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { PENDING_CHANGED } from "@/components/admin/PendingRequests";
 import { RequireAuth } from "@/components/auth/RequireAuth";
@@ -52,7 +53,7 @@ function PendingRequests() {
         </p>
       )}
       {requests === null ? (
-        <p className="text-sm text-ink-3">Chargement…</p>
+        <ListSkeleton />
       ) : requests.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line-strong p-5 text-[14px] text-ink-2">Aucune demande en attente.</p>
       ) : (

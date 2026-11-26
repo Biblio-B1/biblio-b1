@@ -62,8 +62,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
-  /* Pas de zoom au double tap (le pincement reste possible là où le navigateur l'autorise). */
-  touch-action: manipulation;
+  /* Ni pincement ni double tap pour zoomer : seulement le défilement. */
+  touch-action: pan-x pan-y;
 }
 
 body {

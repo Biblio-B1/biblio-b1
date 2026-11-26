@@ -1,5 +1,6 @@
 "use client";
 
+import { ListSkeleton } from "@/components/Skeleton";
 import { ROLE_BADGE } from "@/lib/roles";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -234,7 +235,7 @@ function TeachersTab() {
   }, [data, query]);
 
   if (error) return <p role="alert" className="text-danger">{error}</p>;
-  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!data) return <ListSkeleton rows={6} />;
 
   return (
     <div className="flex flex-col gap-6">
@@ -346,7 +347,7 @@ function StudentsTab() {
   }, [data, query]);
 
   if (error) return <p role="alert" className="text-danger">{error}</p>;
-  if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!data) return <ListSkeleton rows={6} />;
   const me = data.find((s) => s.id === profile?.id);
   const emails = data.filter((s) => s.email && s.id !== profile?.id).map((s) => s.email!);
 

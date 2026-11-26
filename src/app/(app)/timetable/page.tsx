@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarSkeleton } from "@/components/Skeleton";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ActionForm, type FormState } from "@/components/ActionForm";
@@ -56,7 +57,7 @@ export default function TimetablePage() {
   }
 
   if (error) return <p role="alert" className="text-danger">{error}</p>;
-  if (!data || calendar === undefined) return <p className="text-sm text-ink-3">Chargement…</p>;
+  if (!data || calendar === undefined) return <CalendarSkeleton />;
   // Devoirs et contrôles d'anglais : seulement ceux de son groupe.
   const myEvents = calendar?.events ?? data.calendar?.events;
   const myExamEvents = examEvents(visibleForMe(data.exams, myEvents, profile?.id));

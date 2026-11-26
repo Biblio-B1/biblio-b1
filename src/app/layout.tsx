@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { NoZoom } from "@/components/NoZoom";
 import { THEME_COOKIE } from "@/lib/labels";
 import "./globals.css";
 
@@ -17,6 +18,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Téléphone : pas de zoom automatique quand on touche un champ (Safari), ni de page qui reste zoomée.
   maximumScale: 1,
+  // Ni zoom ni dézoom sur téléphone (voir aussi NoZoom pour Safari sur iPhone).
+  userScalable: false,
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fafaf8" },
@@ -40,6 +43,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body className="min-h-dvh antialiased">
         <AuthProvider>{children}</AuthProvider>
+        <NoZoom />
       </body>
     </html>
   );

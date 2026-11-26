@@ -1,5 +1,6 @@
 "use client";
 
+import { FormSkeleton, ListSkeleton } from "@/components/Skeleton";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { PageRefreshProvider } from "@/components/PageRefresh";
 import { getMyCalendar } from "@/lib/api/calendar";
@@ -40,7 +41,7 @@ export default function DevoirsPage() {
       {error ? (
         <p role="alert" className="text-danger">{error}</p>
       ) : !data ? (
-        <p className="text-sm text-ink-3">Chargement…</p>
+        <div className="flex flex-col gap-6"><FormSkeleton /><ListSkeleton /></div>
       ) : (
         <PageRefreshProvider value={reload}>
           <HomeworkClient
