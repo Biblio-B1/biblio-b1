@@ -407,3 +407,51 @@ describe("contrôles", () => {
     expect(await t.count("select 1 from public.exam_attachments")).toBe(0);
   });
 });
+
+describe("délégué(e)", () => {
+  it("supprime les devoirs et contrôles des autres et change la catégorie d'un document, sans pouvoir gérer les comptes", async () => {
+    const delegateId = await t.signUp("deleguee.role@example.com", "DelegueRole");
+    const otherId = await t.signUp("membre.role@example.com", "MembreRole");
+    let hwA = "";
+    let hwB = "";
+    let examId = "";
+    await t.admin(async () => {
+      await t.db.query("update public.profiles set role = 'delegate', status = 'active' where id = $1", [delegateId]);
+      await t.db.query("update public.profiles set status = 'active' where id = $1", [otherId]);
+      const hw = (sql: string) => t.db.query<{ id: string }>(sql, [subjectId, activeId]).then((r) => r.rows[0].id);
+      hwA = await hw("insert into public.homeworks (subject_id, title, due_date, author_id) values ($1, 'TD A', '2026-12-10', $2) returning id");
+      hwB = await hw("insert into public.homeworks (subject_id, title, due_date, author_id) values ($1, 'TD B', '2026-12-11', $2) returning id");
+      examId = (
+        await t.db.query<{ id: string }>(
+          "insert into public.exams (source, subject_id, exam_date, author_id) values ('manual', $1, '2026-12-12', $2) returning id",
+          [subjectId, activeId],
+        )
+      ).rows[0].id;
+    });
+    const count = async (table: string, id: string) => {
+      await t.as("service");
+      return (await t.db.query(`select 1 from public.${table} where id = $1`, [id])).rows.length;
+    };
+
+    // Un simple membre ne supprime pas le devoir d'un autre.
+    await t.as(otherId);
+    await t.db.query("delete from public.homeworks where id = $1", [hwA]);
+    expect(await count("homeworks", hwA)).toBe(1);
+
+    await t.as(delegateId);
+    await t.db.query("delete from public.homeworks where id = $1", [hwA]);
+    await t.db.query("delete from public.exams where id = $1", [examId]);
+    expect(await count("homeworks", hwA)).toBe(0);
+    expect(await count("exams", examId)).toBe(0);
+    expect(await count("homeworks", hwB)).toBe(1);
+
+    await t.as(delegateId);
+    await t.db.query("update public.documents set category = 'notes' where id = $1", [docId]);
+    // Les comptes restent à l'administrateur : valider une demande ne fait rien.
+    await t.db.query("update public.profiles set status = 'active' where id = $1", [pendingId]).catch(() => undefined);
+    await t.as("service");
+    expect((await t.db.query<{ status: string }>("select status from public.profiles where id = $1", [pendingId])).rows[0].status).toBe("pending");
+    expect((await t.db.query<{ category: string }>("select category from public.documents where id = $1", [docId])).rows[0].category).toBe("notes");
+    await t.db.query("update public.documents set category = null where id = $1", [docId]);
+  });
+});

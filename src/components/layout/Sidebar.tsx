@@ -1,5 +1,6 @@
 "use client";
 
+import type { Role } from "@/lib/roles";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +19,7 @@ type Props = {
   subjects: SidebarSubject[];
   unclassified: number;
   /** null : visiteur sans compte (bibliothèque publique seulement). */
-  user: { name: string; role: "admin" | "member" } | null;
+  user: { name: string; role: Role } | null;
   /** Demandes de compte en attente (administrateur uniquement). */
   pendingUsers?: number;
 };
@@ -106,6 +107,15 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
           </NavLink>
         )}
       </nav>
+
+      {user?.role === "delegate" && (
+        <nav className="flex flex-col gap-0.5" aria-label="Délégué(e)">
+          <p className="px-2 pb-1 text-[12.5px] font-medium text-ink-3">Délégué(e)</p>
+          <NavLink href="/admin/reports" active={is("/admin/reports")}>
+            <IconCheckList /> Signalements
+          </NavLink>
+        </nav>
+      )}
 
       {user?.role === "admin" && (
         <nav className="flex flex-col gap-0.5" aria-label="Administration">

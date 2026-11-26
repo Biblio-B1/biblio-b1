@@ -1,5 +1,6 @@
 "use client";
 
+import type { Role } from "@/lib/roles";
 import { PageRefreshProvider } from "@/components/PageRefresh";
 import { createThreadAction, listThreads } from "@/lib/api/threads";
 import { useData } from "@/lib/api/use-data";
@@ -14,7 +15,7 @@ export function QAPanel({
 }: {
   targetType: "document" | "exercise";
   targetId: string;
-  viewer: { id: string; role: "admin" | "member" };
+  viewer: { id: string; role: Role };
 }) {
   const { data: items, error, reload } = useData(() => listThreads(targetType, targetId), [targetType, targetId]);
   return (

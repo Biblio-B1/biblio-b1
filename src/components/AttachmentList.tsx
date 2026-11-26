@@ -2,6 +2,7 @@
 
 // Pièces jointes d'un contrôle ou d'un devoir : téléchargement, ajout (tout membre), retrait (auteur
 // de la pièce jointe ou admin).
+import { isModerator } from "@/lib/roles";
 import { useRef, useState, useTransition } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { IconClose, IconDownload } from "@/components/layout/Icons";
@@ -65,7 +66,7 @@ export function AttachmentList({
                 <span className="max-w-[16rem] truncate">{a.name}</span>
                 <span className="shrink-0 text-ink-3">({formatSize(a.size)})</span>
               </a>
-              {(profile?.role === "admin" || a.authorId === uid) && (
+              {(isModerator(profile?.role) || a.authorId === uid) && (
                 <button
                   type="button"
                   disabled={pending}

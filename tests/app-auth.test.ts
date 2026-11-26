@@ -40,10 +40,10 @@ describe("pages membres", () => {
     expect(calls.length).toBeGreaterThanOrEqual(Math.max(1, exported.length));
   });
 
-  it("les pages admin converties passent par <RequireAuth admin>", () => {
+  it("les pages admin passent par <RequireAuth admin> (signalements : <RequireAuth moderator>)", () => {
     for (const f of pages(path.join(APP_DIR, "admin"))) {
       const src = fs.readFileSync(f, "utf8");
-      if (isClient(src)) expect(src, f).toMatch(/<RequireAuth admin>/);
+      if (isClient(src)) expect(src, f).toMatch(f.includes("reports") ? /<RequireAuth moderator>/ : /<RequireAuth admin>/);
     }
   });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { ROLE_BADGE } from "@/lib/roles";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -394,7 +395,7 @@ function StudentsTab() {
               <p className="font-medium">
                 {s.name}
                 {s.id === profile?.id && <span className="ml-2 text-sm font-normal text-ink-3">(vous)</span>}
-                {s.role === "admin" && <span className="ml-2 rounded-full bg-sunken px-2 py-0.5 text-[12px] font-normal text-ink-2">Admin</span>}
+                {ROLE_BADGE[s.role] && <span className="ml-2 rounded-full bg-sunken px-2 py-0.5 text-[12px] font-normal text-ink-2">{ROLE_BADGE[s.role]}</span>}
               </p>
               {s.email ? (
                 <a href={`mailto:${s.email}`} className="text-sm break-all text-ink underline-offset-2 hover:underline">

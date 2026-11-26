@@ -2,6 +2,7 @@
 
 // Session de l'utilisateur pour tout le site : compte Supabase + profil (nom, rôle, statut).
 // La session reste ouverte jusqu'à la déconnexion (pas de délai d'inactivité).
+import type { Role } from "@/lib/roles";
 import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
@@ -10,7 +11,7 @@ import { getSupabase } from "@/lib/supabase/client";
 export type Profile = {
   id: string;
   name: string;
-  role: "admin" | "member";
+  role: Role;
   status: "active" | "pending";
   /** Tutoriel de première connexion terminé ou passé (null : à montrer). */
   tutorial_done_at?: string | null;

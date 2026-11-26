@@ -1,5 +1,6 @@
 "use client";
 
+import type { Role } from "@/lib/roles";
 import { usePageRefresh } from "@/components/PageRefresh";
 import { useSignedUrl } from "@/lib/api/files";
 import { formatDate } from "@/lib/labels";
@@ -16,7 +17,7 @@ import {
 import { ConfirmDelete } from "./ConfirmDelete";
 import { PostEditor } from "./PostEditor";
 
-type Viewer = { id: string; role: "admin" | "member" };
+type Viewer = { id: string; role: Role };
 
 function Tag({ children, tone = "plain" }: { children: React.ReactNode; tone?: "plain" | "accent" }) {
   return (

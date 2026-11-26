@@ -16,7 +16,7 @@ function Reports() {
       <h1 className="page-title">Signalements</h1>
       <p className="max-w-2xl text-sm text-ink-2">
         Tests signalés comme faux par les étudiants. Ouvrez l&apos;exercice pour corriger les tests (outils
-        administrateur) puis marquez le signalement comme traité.
+        administrateur ou délégué) puis marquez le signalement comme traité.
       </p>
       {error ? (
         <p role="alert" className="text-sm text-danger">{error}</p>
@@ -45,7 +45,7 @@ function Reports() {
 
 export default function ReportsPage() {
   return (
-    <RequireAuth admin>
+    <RequireAuth moderator>
       <Reports />
     </RequireAuth>
   );

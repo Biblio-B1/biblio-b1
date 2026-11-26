@@ -1,5 +1,6 @@
 "use client";
 
+import { isModerator } from "@/lib/roles";
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import {
@@ -333,7 +334,7 @@ export function CategorizedDocumentList({
     [docsIn, moved],
   );
   const onMove: MoveHandler =
-    profile?.role === "admin"
+    isModerator(profile?.role)
       ? (docId, category) => {
           setMoved((m) => ({ ...m, [docId]: category }));
           // La catégorie d'arrivée s'ouvre pour montrer le document déplacé.

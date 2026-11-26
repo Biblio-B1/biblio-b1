@@ -1,4 +1,5 @@
 // Bibliothèque : matières et documents lus/écrits directement dans Supabase (RLS : comptes actifs).
+import { isModerator } from "@/lib/roles";
 import { getSupabase, FILES_BUCKET } from "@/lib/supabase/client";
 import { DOCUMENT_LIST_COLUMNS, toDocument, toSubject, type Document, type Subject } from "./types";
 
@@ -75,9 +76,9 @@ export async function deleteDocument(doc: Document): Promise<void> {
   if (!count) await supabase.storage.from(FILES_BUCKET).remove([doc.filePath]);
 }
 
-/** Même règle que l'ancien serveur : l'admin supprime tout, l'auteur ses propres dépôts. */
+/** L'admin et les délégués suppriment tout, l'auteur ses propres dépôts. */
 export function canDeleteDocument(doc: Pick<Document, "source" | "authorId">, viewer: { id: string; role: string }): boolean {
-  return viewer.role === "admin" || (doc.source === "upload" && doc.authorId === viewer.id);
+  return isModerator(viewer.role) || (doc.source === "upload" && doc.authorId === viewer.id);
 }
 
 /** Range un document dans une catégorie (administrateur) ; null : retour à la détection automatique. */

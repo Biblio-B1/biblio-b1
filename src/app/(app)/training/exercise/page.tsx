@@ -1,5 +1,6 @@
 "use client";
 
+import { isModerator } from "@/lib/roles";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -26,7 +27,8 @@ function Plain({ text }: { text: string }) {
 function ExerciseView() {
   const id = useSearchParams().get("id") ?? "";
   const { profile } = useAuth();
-  const isAdmin = profile?.role === "admin";
+  // Outils de correction des tests et signalements : administrateur et délégué(e)s.
+  const isAdmin = isModerator(profile?.role);
   const { data, error, reload } = useData(async () => {
     const [detail, subjects] = await Promise.all([getExerciseDetail(id, isAdmin), listSubjects()]);
     return { detail, subjects };

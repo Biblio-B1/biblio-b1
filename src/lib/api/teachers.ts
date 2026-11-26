@@ -1,4 +1,5 @@
 // Annuaire des professeurs (table teachers, RLS : comptes validés ; suppression : admin).
+import type { Role } from "@/lib/roles";
 import type { FoundTeacher } from "@/lib/teachers";
 import { getSupabase } from "@/lib/supabase/client";
 
@@ -40,7 +41,7 @@ export async function hideTeacher(id: string): Promise<void> {
   if (error) throw new Error("Retrait impossible.");
 }
 
-export type Student = { id: string; name: string; email: string | null; role: "admin" | "member" };
+export type Student = { id: string; name: string; email: string | null; role: Role };
 
 /** Membres validés du site ; e-mail seulement pour ceux qui ont choisi de l'afficher. */
 export async function listStudents(): Promise<Student[]> {

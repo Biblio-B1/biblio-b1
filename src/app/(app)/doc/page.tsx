@@ -1,5 +1,6 @@
 "use client";
 
+import { isModerator } from "@/lib/roles";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -217,10 +218,10 @@ function DocView() {
           </select>
           <button className={`btn h-8 ${needsReview ? "btn-primary" : ""}`}>{needsReview ? "Confirmer" : "Changer"}</button>
         </form>
-        {profile?.role === "admin" && (
+        {isModerator(profile?.role) && (
           <div className="-mt-2 flex flex-wrap items-center gap-2 text-[14px]">
             <MoveCategory doc={doc} onMoved={() => reload()} />
-            <span className="text-[12.5px] text-ink-3">Classement dans la matière (administrateur)</span>
+            <span className="text-[12.5px] text-ink-3">Classement dans la matière ({profile?.role === "admin" ? "administrateur" : "délégué(e)"})</span>
           </div>
         )}
       </header>
