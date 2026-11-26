@@ -6,7 +6,9 @@ import { ActionForm, type FormState } from "@/components/ActionForm";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { PageRefreshProvider } from "@/components/PageRefresh";
 import { callCalendar, getMyCalendar, type StoredCalendar } from "@/lib/api/calendar";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { examEvents, listExams } from "@/lib/api/exams";
+import { visibleForMe } from "@/lib/english-groups";
 import { listHomeworks } from "@/lib/api/homeworks";
 import { listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
@@ -15,13 +17,14 @@ import { useData } from "@/lib/api/use-data";
 const RESYNC_AFTER_MS = 50_000;
 
 export default function TimetablePage() {
+  const { profile } = useAuth();
   const { data, error } = useData(async () => {
     const [subjects, homeworks, calendar, exams] = await Promise.all([listSubjects(), listHomeworks(), getMyCalendar(), listExams()]);
     return {
       subjects: subjects.map((s) => ({ id: s.id, name: s.name, slug: s.slug, color: s.color, rules: s.rules })),
       homeworks,
       calendar,
-      examEvents: examEvents(exams),
+      exams,
     };
   }, []);
   const [calendar, setCalendar] = useState<StoredCalendar | null | undefined>(undefined);
@@ -54,6 +57,8 @@ export default function TimetablePage() {
 
   if (error) return <p role="alert" className="text-danger">{error}</p>;
   if (!data || calendar === undefined) return <p className="text-sm text-ink-3">Chargement…</p>;
+  // Contrôles d'anglais : seulement ceux de son groupe.
+  const myExamEvents = examEvents(visibleForMe(data.exams, calendar?.events ?? data.calendar?.events, profile?.id));
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,7 +67,7 @@ export default function TimetablePage() {
         <p className="text-ink-2">Vos événements Boostcamp et Outlook, synchronisés à votre compte.</p>
       </header>
 
-      {data.examEvents.length > 0 && (
+      {myExamEvents.length > 0 && (
         <p className="text-sm text-ink-2">
           Les contrôles et projets ajoutés par la classe sont marqués <span className="rounded badge-alert px-1 text-[10px] font-bold uppercase">Éval</span>{" "}
           sur l&apos;emploi du temps.{" "}
@@ -83,8 +88,8 @@ export default function TimetablePage() {
           </Link>
         </section>
       ) : null}
-      {!calendar && data.examEvents.length > 0 && (
-        <CalendarView events={data.examEvents} subjects={data.subjects} homeworks={data.homeworks} />
+      {!calendar && myExamEvents.length > 0 && (
+        <CalendarView events={myExamEvents} subjects={data.subjects} homeworks={data.homeworks} />
       )}
       {calendar && (
         <>
@@ -111,7 +116,7 @@ export default function TimetablePage() {
             </div>
           </div>
           <PageRefreshProvider value={() => void sync()}>
-            <CalendarView events={[...calendar.events, ...data.examEvents]} subjects={data.subjects} homeworks={data.homeworks} />
+            <CalendarView events={[...calendar.events, ...myExamEvents]} subjects={data.subjects} homeworks={data.homeworks} />
           </PageRefreshProvider>
         </>
       )}

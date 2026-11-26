@@ -8,6 +8,7 @@ import { UpcomingWork } from "@/components/home/UpcomingWork";
 import { IconCamera, IconPen, IconUpload } from "@/components/layout/Icons";
 import { getMyCalendar } from "@/lib/api/calendar";
 import { examEvents, listExams } from "@/lib/api/exams";
+import { visibleForMe } from "@/lib/english-groups";
 import { listHomeworks } from "@/lib/api/homeworks";
 import { listDocuments, listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
@@ -27,7 +28,9 @@ export default function Dashboard() {
   }, []);
   if (error) return <p role="alert" className="text-danger">{error}</p>;
   if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
-  const { subjects, docs, homeworks, calendar, exams } = data;
+  const { subjects, docs, homeworks, calendar } = data;
+  // Contrôles d'anglais : seulement ceux de son groupe.
+  const exams = visibleForMe(data.exams, calendar?.events, profile?.id);
   const calendarSubjects = subjects.map((s) => ({
     id: s.id,
     name: s.name,

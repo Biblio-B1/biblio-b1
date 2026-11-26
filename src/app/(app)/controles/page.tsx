@@ -14,7 +14,9 @@ import { PageRefreshProvider, usePageRefresh } from "@/components/PageRefresh";
 import { IconCalendar } from "@/components/layout/Icons";
 import { Spine } from "@/components/layout/Spine";
 import { EXAM_FILES } from "@/lib/api/attachments";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { createExamAction, deleteExamAction, listExams, type ExamRow } from "@/lib/api/exams";
+import { visibleForMe } from "@/lib/english-groups";
 import { listSubjects } from "@/lib/api/library";
 import { isEnglishSubject } from "@/lib/homework-rules";
 import { useData } from "@/lib/api/use-data";
@@ -370,6 +372,7 @@ function ExamsClient({
 }
 
 export default function ControlesPage() {
+  const { profile } = useAuth();
   const { data, error, reload } = useData(async () => {
     const [subjects, exams, homeworks, calendar] = await Promise.all([
       listSubjects(),
@@ -413,7 +416,7 @@ export default function ControlesPage() {
         <PageRefreshProvider value={reload}>
           <ExamsClient
             subjects={data.subjects}
-            exams={data.exams}
+            exams={visibleForMe(data.exams, data.courses, profile?.id)}
             homeworks={data.homeworks}
             courses={data.courses}
             calendarSubjects={data.calendarSubjects}
