@@ -5,6 +5,7 @@ import { PendingBanner, usePendingRequests } from "@/components/admin/PendingReq
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { Tutorial } from "@/components/Tutorial";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { countBySubject, listSubjects } from "@/lib/api/library";
@@ -43,11 +44,13 @@ function Shell({ children }: { children: React.ReactNode }) {
         <Suspense fallback={<div className="h-14 border-b border-line" />}>
           <TopBar signedIn />
         </Suspense>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-8">
+        {/* Téléphone : marge en bas pour la barre de navigation fixe (et la zone de sécurité de l'iPhone). */}
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-8">
           <PendingBanner requests={pending} />
           {children}
         </main>
       </div>
+      <BottomNav />
       <Tutorial />
     </div>
   );
