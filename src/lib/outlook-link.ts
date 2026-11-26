@@ -4,7 +4,7 @@
 // « Lié : … ») : aucun accès aux mails, aucun jeton conservé.
 
 /** Identifiant de l'application enregistrée sur portal.azure.com (vide : liaison indisponible). */
-export const MS_CLIENT_ID = "7c24bcf0-65ba-4ced-8345-23071d53b1f8";
+export const MS_CLIENT_ID: string = "7c24bcf0-65ba-4ced-8345-23071d53b1f8";
 const AUTHORITY = "https://login.microsoftonline.com/organizations/oauth2/v2.0";
 /** Domaine des adresses de l'école : Microsoft va directement à la connexion de l'école. */
 export const SCHOOL_DOMAIN = "edu.ece.fr";
