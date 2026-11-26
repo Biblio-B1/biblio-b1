@@ -10,9 +10,9 @@ type Item = { href: string; label: string; icon: typeof IconHome; active: (path:
 const ITEMS: Item[] = [
   { href: "/", label: "Accueil", icon: IconHome, active: (p) => p === "/" },
   { href: "/library", label: "Bibliothèque", icon: IconBooks, active: (p) => p.startsWith("/library") || p.startsWith("/doc") },
-  { href: "/timetable", label: "Emploi du temps", icon: IconCalendar, active: (p) => p.startsWith("/timetable") },
-  { href: "/annuaire", label: "Annuaire", icon: IconMail, active: (p) => p.startsWith("/annuaire") },
   { href: "/upload", label: "Déposer", icon: IconUpload, active: (p) => p.startsWith("/upload") },
+  { href: "/annuaire", label: "Annuaire", icon: IconMail, active: (p) => p.startsWith("/annuaire") },
+  { href: "/timetable", label: "Emploi du temps", icon: IconCalendar, active: (p) => p.startsWith("/timetable") },
 ];
 
 export function BottomNav() {
