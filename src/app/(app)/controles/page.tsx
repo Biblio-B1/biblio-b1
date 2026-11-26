@@ -417,7 +417,7 @@ export default function ControlesPage() {
           <ExamsClient
             subjects={data.subjects}
             exams={visibleForMe(data.exams, data.courses, profile?.id)}
-            homeworks={data.homeworks}
+            homeworks={visibleForMe(data.homeworks, data.courses, profile?.id)}
             courses={data.courses}
             calendarSubjects={data.calendarSubjects}
           />

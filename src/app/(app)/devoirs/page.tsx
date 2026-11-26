@@ -1,14 +1,17 @@
 "use client";
 
+import { useAuth } from "@/components/auth/AuthProvider";
 import { PageRefreshProvider } from "@/components/PageRefresh";
 import { getMyCalendar } from "@/lib/api/calendar";
 import { listExams } from "@/lib/api/exams";
 import { listHomeworks } from "@/lib/api/homeworks";
 import { listSubjects } from "@/lib/api/library";
 import { useData } from "@/lib/api/use-data";
+import { visibleForMe } from "@/lib/english-groups";
 import { HomeworkClient } from "./HomeworkClient";
 
 export default function DevoirsPage() {
+  const { profile } = useAuth();
   const { data, error, reload } = useData(async () => {
     // Le calendrier est facultatif : sans lui, la page fonctionne (choix de la date seulement).
     const [subjects, homeworks, calendar, exams] = await Promise.all([
@@ -42,10 +45,11 @@ export default function DevoirsPage() {
         <PageRefreshProvider value={reload}>
           <HomeworkClient
             subjects={data.subjects}
-            homeworks={data.homeworks}
+            // Devoirs et contrôles d'anglais : seulement ceux de son groupe.
+            homeworks={visibleForMe(data.homeworks, data.courses, profile?.id)}
             courses={data.courses}
             calendarSubjects={data.calendarSubjects}
-            exams={data.exams}
+            exams={visibleForMe(data.exams, data.courses, profile?.id)}
           />
         </PageRefreshProvider>
       )}

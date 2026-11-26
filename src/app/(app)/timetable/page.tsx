@@ -57,8 +57,10 @@ export default function TimetablePage() {
 
   if (error) return <p role="alert" className="text-danger">{error}</p>;
   if (!data || calendar === undefined) return <p className="text-sm text-ink-3">Chargement…</p>;
-  // Contrôles d'anglais : seulement ceux de son groupe.
-  const myExamEvents = examEvents(visibleForMe(data.exams, calendar?.events ?? data.calendar?.events, profile?.id));
+  // Devoirs et contrôles d'anglais : seulement ceux de son groupe.
+  const myEvents = calendar?.events ?? data.calendar?.events;
+  const myExamEvents = examEvents(visibleForMe(data.exams, myEvents, profile?.id));
+  const myHomeworks = visibleForMe(data.homeworks, myEvents, profile?.id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -89,7 +91,7 @@ export default function TimetablePage() {
         </section>
       ) : null}
       {!calendar && myExamEvents.length > 0 && (
-        <CalendarView events={myExamEvents} subjects={data.subjects} homeworks={data.homeworks} />
+        <CalendarView events={myExamEvents} subjects={data.subjects} homeworks={myHomeworks} />
       )}
       {calendar && (
         <>
@@ -116,7 +118,7 @@ export default function TimetablePage() {
             </div>
           </div>
           <PageRefreshProvider value={() => void sync()}>
-            <CalendarView events={[...calendar.events, ...myExamEvents]} subjects={data.subjects} homeworks={data.homeworks} />
+            <CalendarView events={[...calendar.events, ...myExamEvents]} subjects={data.subjects} homeworks={myHomeworks} />
           </PageRefreshProvider>
         </>
       )}

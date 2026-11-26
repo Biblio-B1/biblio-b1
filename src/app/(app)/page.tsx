@@ -28,8 +28,9 @@ export default function Dashboard() {
   }, []);
   if (error) return <p role="alert" className="text-danger">{error}</p>;
   if (!data) return <p className="text-sm text-ink-3">Chargement…</p>;
-  const { subjects, docs, homeworks, calendar } = data;
-  // Contrôles d'anglais : seulement ceux de son groupe.
+  const { subjects, docs, calendar } = data;
+  // Devoirs et contrôles d'anglais : seulement ceux de son groupe.
+  const homeworks = visibleForMe(data.homeworks, calendar?.events, profile?.id);
   const exams = visibleForMe(data.exams, calendar?.events, profile?.id);
   const calendarSubjects = subjects.map((s) => ({
     id: s.id,
