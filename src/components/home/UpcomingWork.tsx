@@ -26,7 +26,7 @@ function HomeworkLine({ hw, today }: { hw: HomeworkRow; today: string }) {
               Projet final
             </span>
           )}
-          <span className="font-semibold text-ink">{hw.subjectName}</span>
+          <span className="min-w-0 font-semibold break-words text-ink">{hw.subjectName}</span>
           <span className="capitalize text-ink-2">· {relativeDayLabel(hw.dueDate, today)}</span>
           {hw.attachments.length > 0 && (
             <span className="text-ink-3">
@@ -34,7 +34,7 @@ function HomeworkLine({ hw, today }: { hw: HomeworkRow; today: string }) {
             </span>
           )}
         </span>
-        <span className={`mt-1 line-clamp-2 block text-[14px] text-ink ${hw.done ? "line-through decoration-ink-3" : ""}`}>{hw.title}</span>
+        <span className={`mt-1 line-clamp-2 block break-words text-[14px] text-ink ${hw.done ? "line-through decoration-ink-3" : ""}`}>{hw.title}</span>
       </Link>
     </li>
   );
@@ -82,8 +82,8 @@ export function UpcomingWork({ homeworks, exams, today }: { homeworks: HomeworkR
   const moreExams = exams.filter((e) => e.date >= today).length - nextExams.length;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <section aria-labelledby="home-homeworks" className="flex flex-col gap-3">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <section aria-labelledby="home-homeworks" className="flex min-w-0 flex-col gap-3">
         <div className="flex items-baseline justify-between gap-2">
           <h2 id="home-homeworks" className="flex items-center gap-2 text-[15px] font-semibold">
             <IconHomework size={17} className="text-ink-2" />
@@ -113,7 +113,7 @@ export function UpcomingWork({ homeworks, exams, today }: { homeworks: HomeworkR
         )}
       </section>
 
-      <section aria-labelledby="home-exams" className="flex flex-col gap-3">
+      <section aria-labelledby="home-exams" className="flex min-w-0 flex-col gap-3">
         <div className="flex items-baseline justify-between gap-2">
           <h2 id="home-exams" className="flex items-center gap-2 text-[15px] font-semibold">
             <IconExam size={17} className="text-ink-2" />

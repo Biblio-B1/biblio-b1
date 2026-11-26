@@ -66,6 +66,25 @@ html {
   touch-action: pan-x pan-y;
 }
 
+/* Jamais de défilement horizontal de la page (clip : la barre du haut reste collée en haut). */
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Champs date et heure : sur iPhone, ils gardent une largeur minimale et dépassent de l'écran. */
+input[type="date"],
+input[type="time"] {
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
@@ -120,6 +139,11 @@ body {
 
 /* --- Composants de base ------------------------------------------------ */
 @layer components {
+  /* Grille sans colonnes déclarées (téléphone) : une colonne à la largeur de l'écran, que du texte
+     long ne peut pas élargir. Les classes grid-cols-* et les styles en ligne restent prioritaires. */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
   /* Badge d'alerte (Éval, Contrôle, Projet final) : rouge franc, lisible en clair comme en sombre. */
   .badge-alert {
     background-color: #dc2626;

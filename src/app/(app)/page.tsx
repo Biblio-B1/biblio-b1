@@ -61,12 +61,12 @@ export default function Dashboard() {
       <UpcomingWork homeworks={homeworks} exams={exams} today={todayKeyInParis()} />
 
       <section aria-labelledby="timetable-preview" className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 id="timetable-preview" className="text-[15px] font-semibold">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 id="timetable-preview" className="min-w-0 text-[15px] font-semibold">
             Aperçu de l&apos;emploi du temps
           </h2>
-          <Link href="/timetable" className="text-[14px] text-ink-2 hover:text-ink">
-            Ouvrir l&apos;emploi du temps
+          <Link href="/timetable" className="shrink-0 text-[14px] text-ink-2 hover:text-ink">
+            Ouvrir
           </Link>
         </div>
         {calendar ? (

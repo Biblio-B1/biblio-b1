@@ -39,7 +39,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           pendingUsers={pending.length}
         />
       </Suspense>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
         <Suspense fallback={<div className="h-14 border-b border-line" />}>
           <TopBar signedIn />
         </Suspense>
