@@ -16,7 +16,7 @@ import {
   type Teacher,
 } from "@/lib/api/teachers";
 import { useData } from "@/lib/api/use-data";
-import { displayTeacherName, extractTeachers, mailLinks } from "@/lib/teachers";
+import { displayTeacherName, extractTeachers, mailLinks, SCHOOL_OUTLOOK_URL } from "@/lib/teachers";
 
 /** Relève les profs de son emploi du temps (nouveaux noms ou matières), puis lit l'annuaire. */
 async function loadTeachers(): Promise<Teacher[]> {
@@ -100,10 +100,15 @@ function Composer({ teachers, to, setTo }: { teachers: Teacher[]; to: string[]; 
         <p className="text-sm text-ink-2">
           « Envoyer avec Outlook » ouvre un brouillon prêt dans Outlook en ligne : il ne reste qu&apos;à cliquer sur Envoyer.
         </p>
-        <p className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink">
-          Connecte-toi à Outlook avec ton adresse <strong>@edu.ece.fr</strong> : les professeurs ne répondent qu&apos;aux mails
-          de l&apos;école. Si Outlook s&apos;ouvre sur un autre compte, déconnecte-toi puis reconnecte-toi avec ton compte ECE.
-        </p>
+        <div className="flex flex-col gap-2 rounded-md border border-line bg-sunken px-3 py-2.5 text-sm text-ink sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Connecte-toi d&apos;abord à Outlook avec ton adresse <strong>@edu.ece.fr</strong> : les professeurs ne répondent
+            qu&apos;aux mails de l&apos;école. Si Outlook s&apos;ouvre sur un autre compte, déconnecte-toi puis reconnecte-toi.
+          </p>
+          <a href={SCHOOL_OUTLOOK_URL} target="_blank" rel="noreferrer" className="btn h-9 shrink-0 self-start sm:self-auto">
+            Se connecter à Outlook
+          </a>
+        </div>
       </div>
       {withEmail.length === 0 ? (
         <p className="text-sm text-ink-3">Aucun professeur n&apos;a encore d&apos;e-mail : ajoutez-en un dans la liste ci-dessous.</p>

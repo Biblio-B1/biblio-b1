@@ -21,7 +21,8 @@ const deps = {
   fetchImpl: fetch,
 };
 
-const SOURCES = ["boostcamp", "outlook"] as const;
+// Le calendrier Outlook a été retiré : seuls les liens Boostcamp sont lus (les anciens liens Outlook sont ignorés).
+const SOURCES = ["boostcamp"] as const;
 type Source = (typeof SOURCES)[number];
 type Row = { source: Source; encrypted_url: string; events: unknown[]; synced_at: string };
 
@@ -49,13 +50,14 @@ Deno.serve(async (req) => {
     return json({ error: "Corps invalide" }, 400, origin);
   }
   const source = (body.source ?? "boostcamp") as Source;
-  if (!SOURCES.includes(source)) return json({ error: "Calendrier inconnu : boostcamp ou outlook" }, 400, origin);
+  if (!SOURCES.includes(source)) return json({ error: "Calendrier inconnu : seul l'emploi du temps Boostcamp est pris en charge" }, 400, origin);
 
   async function state() {
     const { data } = await admin
       .from("calendar_links")
       .select("source, encrypted_url, events, synced_at")
-      .eq("user_id", user!.id);
+      .eq("user_id", user!.id)
+      .in("source", SOURCES);
     const rows = (data ?? []) as Row[];
     return {
       events: rows.flatMap((r) => r.events),
@@ -81,7 +83,7 @@ Deno.serve(async (req) => {
       await refresh(source, await encryptUrl(feedUrl.toString(), key), feedUrl);
     } else if (body.action === "sync") {
       // Sans « source » : tous les calendriers liés ; la première erreur est renvoyée après coup.
-      const { data } = await admin.from("calendar_links").select("source, encrypted_url").eq("user_id", user.id);
+      const { data } = await admin.from("calendar_links").select("source, encrypted_url").eq("user_id", user.id).in("source", SOURCES);
       const rows = ((data ?? []) as Pick<Row, "source" | "encrypted_url">[]).filter((r) => !body.source || r.source === source);
       if (rows.length === 0) return json({ error: "Aucun calendrier lié." }, 404, origin);
       let failure: CalendarError | null = null;
@@ -90,7 +92,7 @@ Deno.serve(async (req) => {
           await refresh(r.source, r.encrypted_url, validateCalendarFeedUrl(await decryptUrl(r.encrypted_url, key)));
         } catch (e) {
           if (!(e instanceof CalendarError)) throw e;
-          failure ??= new CalendarError(`${r.source === "outlook" ? "Outlook" : "Boostcamp"} : ${e.message}`, e.code);
+          failure ??= new CalendarError(`Boostcamp : ${e.message}`, e.code);
         }
       }
       if (failure) throw failure;

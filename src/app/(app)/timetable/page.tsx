@@ -66,7 +66,7 @@ export default function TimetablePage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h1 className="page-title">Emploi du temps</h1>
-        <p className="text-ink-2">Vos événements Boostcamp et Outlook, synchronisés à votre compte.</p>
+        <p className="text-ink-2">Vos cours Boostcamp, synchronisés à votre compte.</p>
       </header>
 
       {myExamEvents.length > 0 && (
@@ -82,8 +82,7 @@ export default function TimetablePage() {
         <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
           <h2 className="text-base font-semibold">Aucun calendrier lié</h2>
           <p className="text-sm text-ink-2">
-            Liez votre emploi du temps Boostcamp (iCal) et, si vous voulez, votre calendrier Outlook : leurs événements
-            s&apos;afficheront ici ensemble.
+            Liez votre emploi du temps Boostcamp (iCal) : vos cours s&apos;afficheront ici, avec les devoirs et les contrôles.
           </p>
           <Link href="/settings" className="btn btn-primary self-start">
             Lier un calendrier dans les paramètres

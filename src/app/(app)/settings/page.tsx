@@ -14,6 +14,8 @@ import {
 } from "@/lib/admin-notify";
 import { CALENDAR_SOURCES, callCalendar, getMyCalendar, type CalendarSource, type StoredCalendar } from "@/lib/api/calendar";
 import { getShowEmail, setShowEmail } from "@/lib/api/teachers";
+import { IconMail } from "@/components/layout/Icons";
+import { SCHOOL_OUTLOOK_URL } from "@/lib/teachers";
 import { useData } from "@/lib/api/use-data";
 import { renameErrorMessage, splitName, validatePasswordChange, validateRename } from "@/lib/auth/account-form";
 import { getSupabase } from "@/lib/supabase/client";
@@ -136,23 +138,6 @@ const SOURCE_INFO: Record<CalendarSource, { title: string; help: React.ReactNode
       </>
     ),
   },
-  outlook: {
-    title: "Calendrier Outlook",
-    help: (
-      <>
-        Dans Outlook sur le web : Paramètres → Calendrier → Calendriers partagés → « Publier un calendrier », choisissez
-        votre calendrier et « Peut afficher tous les détails », puis Publier et copiez le lien <strong>ICS</strong>.{" "}
-        <a
-          className="underline underline-offset-2"
-          href="https://outlook.office.com/calendar/options/calendar/SharedCalendars"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Ouvrir les réglages Outlook
-        </a>
-      </>
-    ),
-  },
 };
 
 function CalendarCard({
@@ -229,8 +214,8 @@ function CalendarSection() {
   }, [loading, data, error]);
   return (
     <Section
-      title="Calendriers"
-      intro="Les événements des calendriers liés s'affichent ensemble dans l'emploi du temps. Les liens sont enregistrés chiffrés ; Biblio B1 ne demande aucun mot de passe Boostcamp ou Outlook."
+      title="Emploi du temps"
+      intro="Vos cours Boostcamp s'affichent dans l'emploi du temps. Le lien est enregistré chiffré ; Biblio B1 ne demande aucun mot de passe Boostcamp."
     >
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       {calendar === undefined ? (
@@ -238,6 +223,26 @@ function CalendarSection() {
       ) : (
         CALENDAR_SOURCES.map((s) => <CalendarCard key={s} source={s} calendar={calendar} onChange={setCalendar} />)
       )}
+    </Section>
+  );
+}
+
+function OutlookSection() {
+  return (
+    <Section
+      title="Messagerie de l'école (Outlook)"
+      intro={
+        <>
+          Pour écrire aux professeurs depuis l&apos;annuaire, connectez-vous à Outlook avec votre adresse{" "}
+          <strong className="text-ink">@edu.ece.fr</strong> et votre mot de passe de l&apos;école. Biblio B1 ne voit ni votre
+          mot de passe ni vos mails.
+        </>
+      }
+    >
+      <a href={SCHOOL_OUTLOOK_URL} target="_blank" rel="noreferrer" className="btn btn-primary self-start">
+        <IconMail size={16} />
+        Se connecter à mon Outlook
+      </a>
     </Section>
   );
 }
@@ -358,6 +363,7 @@ export default function SettingsPage() {
       </header>
       <CalendarSection />
       <TelegramSection />
+      <OutlookSection />
       <ProfileSection key={profile?.name} />
       <DirectorySection email={email} />
       <PasswordSection email={email} />

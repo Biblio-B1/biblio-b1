@@ -28,14 +28,15 @@ describe("callCalendar", () => {
 
 describe("mergeCalendars", () => {
   const ev = (uid: string) => ({ uid, title: uid, start: "2026-11-23T08:00:00Z", end: "2026-11-23T09:00:00Z", allDay: false });
-  it("réunit Boostcamp et Outlook ; date de synchronisation = la plus ancienne", () => {
+  it("Boostcamp seulement : un ancien lien Outlook est ignoré (calendrier retiré)", () => {
     const m = mergeCalendars([
       { source: "boostcamp", events: [ev("a")], synced_at: "2026-11-23T10:00:00Z" },
       { source: "outlook", events: [ev("b")], synced_at: "2026-11-23T09:00:00Z" },
     ]);
-    expect(m?.events.map((e) => e.uid)).toEqual(["a", "b"]);
-    expect(m?.syncedAt).toEqual(new Date("2026-11-23T09:00:00Z"));
-    expect(m?.sources.map((s) => s.source)).toEqual(["boostcamp", "outlook"]);
+    expect(m?.events.map((e) => e.uid)).toEqual(["a"]);
+    expect(m?.syncedAt).toEqual(new Date("2026-11-23T10:00:00Z"));
+    expect(m?.sources.map((s) => s.source)).toEqual(["boostcamp"]);
+    expect(mergeCalendars([{ source: "outlook", events: [ev("b")], synced_at: "2026-11-23T09:00:00Z" }])).toBeNull();
   });
   it("aucun calendrier lié : null", () => {
     expect(mergeCalendars([])).toBeNull();

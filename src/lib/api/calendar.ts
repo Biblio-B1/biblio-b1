@@ -1,19 +1,20 @@
 // Emploi du temps : lecture de ses propres calendriers (RLS), liaison/synchronisation par l'Edge
 // Function `calendar` (qui seule voit les liens en clair et peut lire les flux .ics).
-// Deux calendriers possibles par membre, affichés ensemble : Boostcamp et Outlook.
+// Un calendrier par membre : l'emploi du temps Boostcamp. (Les anciens liens Outlook sont ignorés.)
 import type { ScheduleEvent } from "@/lib/calendar-view";
 import { getSupabase } from "@/lib/supabase/client";
 
-export type CalendarSource = "boostcamp" | "outlook";
-export const CALENDAR_SOURCES: CalendarSource[] = ["boostcamp", "outlook"];
+export type CalendarSource = "boostcamp";
+export const CALENDAR_SOURCES: CalendarSource[] = ["boostcamp"];
 export type LinkedSource = { source: CalendarSource; syncedAt: Date };
 /** syncedAt : synchronisation la plus ancienne des calendriers liés. */
 export type StoredCalendar = { events: ScheduleEvent[]; syncedAt: Date; sources: LinkedSource[] };
 export type CalendarResult = { ok: true; calendar: StoredCalendar | null } | { ok: false; error: string; reauth: boolean };
 
-type Row = { source: CalendarSource; events: ScheduleEvent[] | null; synced_at: string };
+type Row = { source: string; events: ScheduleEvent[] | null; synced_at: string };
 
-export function mergeCalendars(rows: Row[]): StoredCalendar | null {
+export function mergeCalendars(all: Row[]): StoredCalendar | null {
+  const rows = all.filter((r): r is Row & { source: CalendarSource } => (CALENDAR_SOURCES as string[]).includes(r.source));
   if (rows.length === 0) return null;
   const sources = rows.map((r) => ({ source: r.source, syncedAt: new Date(r.synced_at) }));
   return {
@@ -27,7 +28,7 @@ export async function getMyCalendar(): Promise<StoredCalendar | null> {
   const supabase = getSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return null;
-  const { data, error } = await supabase.from("calendar_links").select("source, events, synced_at").eq("user_id", user.user.id);
+  const { data, error } = await supabase.from("calendar_links").select("source, events, synced_at").eq("user_id", user.user.id).eq("source", "boostcamp");
   if (error) throw new Error(`Emploi du temps : ${error.message}`);
   return mergeCalendars((data ?? []) as Row[]);
 }

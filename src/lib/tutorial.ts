@@ -74,7 +74,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     emoji: "🗓️",
     title: "Votre emploi du temps",
     body: [
-      "Liez votre emploi du temps Boostcamp (et Outlook si vous voulez) dans les Paramètres : vos cours s'affichent avec les devoirs à rendre et les contrôles.",
+      "Liez votre emploi du temps Boostcamp dans les Paramètres : vos cours s'affichent avec les devoirs à rendre et les contrôles.",
       "Cochez « Fait » sur un devoir quand vous l'avez terminé : c'est personnel, les autres ne le voient pas.",
     ],
     target: "/timetable",
@@ -84,7 +84,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     emoji: "✉️",
     title: "Annuaire",
     body: [
-      "Les adresses e-mail des profs (et des élèves qui acceptent d'apparaître) : écrivez-leur en un clic, depuis votre messagerie ou Outlook.",
+      "Les adresses e-mail des profs (et des élèves qui acceptent d'apparaître) : écrivez-leur en un clic avec Outlook, connecté à votre compte @edu.ece.fr (bouton dans l'annuaire et les Paramètres).",
     ],
     target: "/annuaire",
     href: { path: "/annuaire", label: "Ouvrir l'annuaire" },

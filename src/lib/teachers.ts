@@ -37,6 +37,9 @@ export function displayTeacherName(name: string): string {
     .join(" ");
 }
 
+/** Messagerie Outlook en ligne de l'école : la connexion se fait avec le compte @edu.ece.fr. */
+export const SCHOOL_OUTLOOK_URL = "https://outlook.office.com/mail/?realm=edu.ece.fr";
+
 /** Liens d'écriture : mailto (messagerie installée) et brouillon Outlook en ligne (compte de l'école). */
 export function mailLinks(p: { to: string[]; subject?: string; body?: string }): { mailto: string; outlook: string } {
   const to = p.to.join(",");
