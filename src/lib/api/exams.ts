@@ -2,6 +2,7 @@
 // sur le site sont modifiables par leur auteur ou un admin ; ceux de l'emploi du temps (source edt)
 // sont recopiés par l'Edge Function `channel` et ne se modifient pas ici.
 import type { FormState } from "@/components/ActionForm";
+import { publishNow } from "@/lib/api/channel";
 import { getSupabase } from "@/lib/supabase/client";
 import { isEnglishSubject } from "@/lib/homework-rules";
 import {
@@ -195,6 +196,7 @@ export async function createExamAction(_prev: FormState, fd: FormData): Promise<
   if (!(await linkFiles(EXAM_FILES, created.id, uid, uploaded.files))) {
     return { error: "Contrôle enregistré, mais les pièces jointes n'ont pas pu être ajoutées." };
   }
+  publishNow();
   return { message: `Contrôle enregistré : il apparaît sur l'emploi du temps et sera annoncé sur Telegram.` };
 }
 

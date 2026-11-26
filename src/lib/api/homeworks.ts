@@ -17,6 +17,7 @@ import {
   type AttachmentRow,
 } from "@/lib/api/attachments";
 import { validateHomework } from "@/lib/homework-rules";
+import { publishNow } from "@/lib/api/channel";
 import { getSupabase } from "@/lib/supabase/client";
 
 export type HomeworkRow = {
@@ -120,6 +121,7 @@ export async function createHomeworkAction(_prev: FormState, fd: FormData): Prom
   if (!(await linkFiles(HOMEWORK_FILES, created.id, uid, uploaded.files))) {
     return { error: "Devoir enregistré, mais les pièces jointes n'ont pas pu être ajoutées." };
   }
+  publishNow();
   return {
     message: finalProject
       ? "Projet final enregistré : annoncé sur Telegram et rappelé 3, 2 et 1 semaine(s) avant, puis la veille."

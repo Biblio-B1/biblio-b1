@@ -58,7 +58,8 @@ Deno.serve(async (req) => {
   if (req.method !== "POST" || !secret || req.headers.get("x-cron-secret") !== secret) {
     return new Response("Non autorisé", { status: 401 });
   }
-  const body = (await req.json().catch(() => ({}))) as { force?: boolean; test?: boolean };
+  // outboxOnly : publication immédiate demandée par le site après un ajout (channel_flush).
+  const body = (await req.json().catch(() => ({}))) as { force?: boolean; test?: boolean; outboxOnly?: boolean };
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const appUrl = Deno.env.get("APP_URL") ?? "https://biblio-b1.github.io/biblio-b1";
   const token = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
@@ -84,16 +85,11 @@ Deno.serve(async (req) => {
     return Response.json(report);
   }
 
-  // 1. File d'envoi : documents et devoirs ajoutés. On attend une minute après l'ajout : les pièces
-  //    jointes sont envoyées juste après le devoir ou le contrôle et doivent figurer dans l'annonce.
-  const settled = new Date(now.getTime() - 60_000).toISOString();
-  const { data: queue } = await db
-    .from("channel_outbox")
-    .select("id, kind, ref, created_at")
-    .is("sent_at", null)
-    .lt("created_at", settled)
-    .order("id")
-    .limit(1000);
+  // 1. File d'envoi : documents, devoirs et contrôles ajoutés. Les lignes sont réservées
+  //    (channel_claim_outbox) : deux passages simultanés n'envoient pas deux fois le même message.
+  //    Publication immédiate : le site appelle après avoir lié les pièces jointes, tout part de suite.
+  //    Passage planifié : on attend une minute après l'ajout, le temps que les pièces jointes arrivent.
+  const { data: queue } = await db.rpc("channel_claim_outbox", { settle_seconds: body.outboxOnly ? 0 : 60 });
   const rows = (queue ?? []) as { id: number; kind: string; ref: string; created_at: string }[];
   const done: number[] = [];
   // Palier d'alerte en cours au moment de l'annonce : déjà couvert par l'annonce, pas de second message.
@@ -143,6 +139,8 @@ Deno.serve(async (req) => {
     if (covered.length) await db.from("channel_alerts").upsert(covered.map((key) => ({ key })), { onConflict: "key", ignoreDuplicates: true });
     report.outbox = { pending: rows.length, sent: done.length };
   }
+
+  if (body.outboxOnly) return Response.json(report);
 
   // 2. Emploi du temps (toutes les 30 minutes).
   const sweep = await getSetting<{ at: string; owners: string[] }>(db, "timetable_sweep");

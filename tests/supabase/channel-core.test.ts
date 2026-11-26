@@ -49,6 +49,18 @@ describe("snapshot", () => {
   });
 });
 
+describe("titres des messages", () => {
+  it("une icône par type, jamais partagée entre deux types", async () => {
+    const { TITLES } = await import("../../supabase/functions/_shared/channel-core");
+    const icon = (t: string) => t.split(" ")[0];
+    expect(new Set([TITLES.homework, TITLES.exam, TITLES.project, TITLES.document("x"), TITLES.timetable].map(icon)).size).toBe(5);
+    expect(icon(TITLES.examSoon("dans 2 semaines"))).toBe(icon(TITLES.exam));
+    expect(icon(TITLES.projectTomorrow)).toBe(icon(TITLES.project));
+    expect(icon(TITLES.homeworkTomorrow)).toBe(icon(TITLES.homework));
+    expect(TITLES.examTomorrow).toContain("<b>CONTRÔLE DEMAIN</b>");
+  });
+});
+
 describe("diffTimetable", () => {
   it("une séance vue dans plusieurs emplois du temps n'est annoncée qu'une fois", () => {
     const of = (name: string, o: Parameters<typeof ev>[0] = {}) => ({ ...S(o), uid: `Cours-2037424-20-${name}-Index-Education` });
@@ -129,7 +141,7 @@ describe("messages", () => {
 
   it("un document : type, titre, matière et lien", () => {
     const [m] = formatDocuments([{ id: "d1", title: "TD pointeurs", type: "exercise", subject: "Algo C" }], APP);
-    expect(m).toContain("📄 <b>Nouveau document : exercices</b>");
+    expect(m).toContain("📄 <b>NOUVEAU DOCUMENT · EXERCICES</b>");
     expect(m).toContain("<b>TD pointeurs</b>");
     expect(m).toContain(`${APP}/doc/?id=d1`);
   });
@@ -142,7 +154,7 @@ describe("messages", () => {
     ];
     const out = formatDocuments(docs, APP);
     expect(out).toHaveLength(1);
-    expect(out[0]).toContain("📄 <b>3 nouveaux documents</b>");
+    expect(out[0]).toContain("📄 <b>3 NOUVEAUX DOCUMENTS</b>");
     expect(out[0]).toContain("📚 <b>Maths</b>\n  • Cours : ");
     expect(out[0]).toContain("&lt;script&gt;");
   });
@@ -157,14 +169,14 @@ describe("messages", () => {
   it("devoir : matière, date, pièce jointe ; un contrôle est annoncé comme tel", () => {
     const h = { id: "h", title: "Exercices 1 à 5", subject: "Maths", dueDate: "2026-11-26", attachments: ["td.pdf"] };
     const m = formatHomework(h, APP);
-    expect(m).toContain("📝 <b>Nouveau devoir</b>");
+    expect(m).toContain("📝 <b>NOUVEAU DEVOIR</b>");
     expect(m).toContain("📚 Matière : <b>Maths</b>");
     expect(m).toContain("📅 À rendre le : <b>jeudi 26 novembre</b>");
     expect(m).toContain("📎 Pièce jointe : td.pdf");
     expect(formatHomework({ ...h, attachments: ["td.pdf", "corrigé <v1>.pdf"] }, APP)).toContain("📎 2 pièces jointes :\n  • td.pdf\n  • corrigé &lt;v1&gt;.pdf");
     expect(formatHomework({ ...h, attachments: [] }, APP)).not.toContain("📎");
     const c = formatHomework({ ...h, title: "Contrôle chapitre 3" }, APP);
-    expect(c).toContain("📣 <b>Contrôle annoncé</b>");
+    expect(c).toContain("🔴 <b>NOUVEAU CONTRÔLE</b>");
     expect(c).toContain("📚 Matière : <b>Maths</b>");
     expect(c).toContain("📅 Date : <b>jeudi 26 novembre</b>");
   });
@@ -181,7 +193,7 @@ describe("alertes de contrôle", () => {
     expect(daysUntil("2026-11-30", NOW)).toBe(7);
     const a = examAlerts(exam, new Set(), NOW, APP);
     expect(a.map((x) => x.key)).toEqual(["hw:1:semaine"]);
-    expect(a[0].text).toContain("📣 <b>Contrôle dans 1 semaine</b>");
+    expect(a[0].text).toContain("🔴 <b>RAPPEL · CONTRÔLE DANS 1 SEMAINE</b>");
     expect(a[0].text).toContain("📚 Matière : <b>Algorithmique et programmation C</b>");
     expect(a[0].text).toContain("📝 Contrôle pointeurs");
     expect(a[0].text).toContain("📅 Date : <b>lundi 30 novembre</b>");
@@ -230,29 +242,29 @@ describe("alertes de contrôle", () => {
     const exam = [{ key: "exam:1", subject: "Maths", day: "2026-12-14", kind: "controle" as const }];
     const [three] = examAlerts(exam, new Set(), NOW, APP);
     expect(three).toMatchObject({ key: "exam:1:3sem" });
-    expect(three.text).toContain("📣 <b>Contrôle dans 3 semaines</b>");
+    expect(three.text).toContain("🔴 <b>RAPPEL · CONTRÔLE DANS 3 SEMAINES</b>");
     expect(examAlerts(exam, new Set(["exam:1:3sem"]), NOW, APP)).toEqual([]);
     const later = new Date("2026-11-30T10:00:00Z"); // 14 jours avant
     expect(examAlerts(exam, new Set(["exam:1:3sem"]), later, APP)[0]).toMatchObject({ key: "exam:1:2sem" });
     const projet = [{ ...exam[0], kind: "projet" as const, day: "2026-12-03" }]; // 10 jours
-    expect(examAlerts(projet, new Set(), NOW, APP)[0].text).toContain("📣 <b>Projet final à rendre dans 10 jours</b>");
+    expect(examAlerts(projet, new Set(), NOW, APP)[0].text).toContain("🏁 <b>RAPPEL · PROJET FINAL À RENDRE DANS 10 JOURS</b>");
   });
 
   it("devoir coché « projet final » : annoncé comme projet, rappelé comme un contrôle, lien vers les devoirs", () => {
     const hw = { id: "p1", title: "Site web de la promo", subject: "Développement web", dueDate: "2026-12-14", finalProject: true };
     const t = formatHomework(hw, APP);
-    expect(t).toContain("📣 <b>Projet final annoncé</b>");
+    expect(t).toContain("🏁 <b>NOUVEAU PROJET FINAL</b>");
     expect(t).toContain("📝 Projet : Site web de la promo");
     expect(t).toContain("📅 À rendre le : <b>lundi 14 décembre</b>");
     expect(t).toContain(`${APP}/devoirs/`);
     const [alert] = examAlerts([{ key: "hw:p1", subject: hw.subject, title: hw.title, day: hw.dueDate, kind: "projet" }], new Set(), NOW, APP);
     expect(alert.key).toBe("hw:p1:3sem");
-    expect(alert.text).toContain("📣 <b>Projet final à rendre dans 3 semaines</b>");
+    expect(alert.text).toContain("🏁 <b>RAPPEL · PROJET FINAL À RENDRE DANS 3 SEMAINES</b>");
     expect(alert.text).toContain("📅 À rendre le : <b>lundi 14 décembre</b>");
     expect(alert.text).toContain(`<a href="${APP}/devoirs/">Voir les devoirs</a>`);
     const eve = new Date("2026-12-13T17:30:00Z");
     expect(homeworkReminders([{ ...hw }], new Set(), eve, APP)).toEqual([]); // rappel « contrôle », pas « devoir »
-    expect(formatHomework({ ...hw, finalProject: false }, APP)).toContain("📝 <b>Nouveau devoir</b>");
+    expect(formatHomework({ ...hw, finalProject: false }, APP)).toContain("📝 <b>NOUVEAU DEVOIR</b>");
   });
 
   it("devoirs : rappel la veille au soir seulement, sauf ceux qui sont des contrôles", () => {
@@ -265,7 +277,7 @@ describe("alertes de contrôle", () => {
     const eve = new Date("2026-11-23T17:30:00Z"); // 18 h 30 à Paris
     const r = homeworkReminders(hws, new Set(), eve, APP);
     expect(r.map((x) => x.key)).toEqual(["hwr:h1:veille"]);
-    expect(r[0].text).toContain("⏰ <b>Devoir à rendre demain</b>");
+    expect(r[0].text).toContain("📝 <b>RAPPEL · DEVOIR À RENDRE DEMAIN</b>");
     expect(r[0].text).toContain("📝 Devoir : Exercices 1 à 5");
     expect(r[0].text).toContain("📅 À rendre le : <b>mardi 24 novembre</b>");
     expect(homeworkReminders(hws, new Set(["hwr:h1:veille"]), eve, APP)).toEqual([]);
@@ -305,7 +317,7 @@ describe("table des contrôles", () => {
   it("annonce et alertes d'un projet final", () => {
     const e = examFromRow(row);
     const t = formatExamAnnounce({ ...e, details: row.details }, APP);
-    expect(t).toContain("📣 <b>Projet final annoncé</b>");
+    expect(t).toContain("🏁 <b>NOUVEAU PROJET FINAL</b>");
     expect(t).toContain("📝 Projet final &lt;web&gt;");
     expect(t).toContain("📅 À rendre le : <b>vendredi 27 novembre</b>");
     expect(t).toContain("🕒 Horaire : <b>14:00–16:30</b>");
@@ -317,7 +329,7 @@ describe("table des contrôles", () => {
     const two = formatExamAnnounce({ ...e, attachments: ["sujet.pdf", "barème <v2>.pdf"] }, APP);
     expect(two).toContain("📎 2 pièces jointes :\n  • sujet.pdf\n  • barème &lt;v2&gt;.pdf");
     expect(two).toContain("télécharger les pièces jointes</a>");
-    expect(examAlerts([e], new Set(), NOW, APP)[0].text).toContain("Projet final à rendre dans 4 jours");
+    expect(examAlerts([e], new Set(), NOW, APP)[0].text).toContain("PROJET FINAL À RENDRE DANS 4 JOURS");
   });
 
   it("séance EVALUATION → ligne edt ; autres séances ignorées", () => {

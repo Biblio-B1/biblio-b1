@@ -15,6 +15,24 @@ const keyFmt = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-dig
 const hourFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: TZ });
 
 /** « 2026-11-24 » (jour à Paris). */
+/**
+ * Titres des messages : une icône fixe par type (🔴 contrôle, 🏁 projet final, 📝 devoir,
+ * 📄 document, 🗓️ emploi du temps) et un titre en capitales, pour les reconnaître d'un coup d'œil.
+ */
+export const TITLES = {
+  homework: "📝 <b>NOUVEAU DEVOIR</b>",
+  homeworkTomorrow: "📝 <b>RAPPEL · DEVOIR À RENDRE DEMAIN</b>",
+  exam: "🔴 <b>NOUVEAU CONTRÔLE</b>",
+  examSoon: (when: string) => `🔴 <b>RAPPEL · CONTRÔLE ${when.toUpperCase()}</b>`,
+  examTomorrow: "🔴 <b>CONTRÔLE DEMAIN</b> ⚠️",
+  project: "🏁 <b>NOUVEAU PROJET FINAL</b>",
+  projectSoon: (when: string) => `🏁 <b>RAPPEL · PROJET FINAL À RENDRE ${when.toUpperCase()}</b>`,
+  projectTomorrow: "🏁 <b>PROJET FINAL À RENDRE DEMAIN</b> ⚠️",
+  document: (type: string) => `📄 <b>NOUVEAU DOCUMENT · ${type.toUpperCase()}</b>`,
+  documents: (n: number) => `📄 <b>${n} NOUVEAUX DOCUMENTS</b>`,
+  timetable: "🗓️ <b>EMPLOI DU TEMPS MODIFIÉ</b>",
+};
+
 export function parisDay(d: Date): string {
   return keyFmt.format(d);
 }
@@ -209,7 +227,7 @@ export function describeChange(c: Change): string {
 /** Un message (ou plusieurs si trop long) pour une liste de changements. */
 export function formatTimetableChanges(changes: Change[], appUrl: string): string[] {
   if (changes.length === 0) return [];
-  const header = "🗓️ <b>Emploi du temps modifié</b>";
+  const header = TITLES.timetable;
   const footer = `\n<a href="${appUrl}/timetable/">Voir l'emploi du temps</a>`;
   return chunk(header, changes.map(describeChange), footer);
 }
@@ -259,7 +277,7 @@ export function formatDocuments(docs: NewDocument[], appUrl: string): string[] {
     const d = docs[0];
     return [
       [
-        `📄 <b>Nouveau document : ${escapeHtml(docType(d.type).toLowerCase())}</b>`,
+        TITLES.document(escapeHtml(docType(d.type))),
         "",
         `<b>${escapeHtml(d.title)}</b>`,
         `📚 ${escapeHtml(d.subject ?? "Sans matière")}`,
@@ -278,7 +296,7 @@ export function formatDocuments(docs: NewDocument[], appUrl: string): string[] {
       `📚 <b>${escapeHtml(subject)}</b>\n` +
       list.map((d) => `  • ${escapeHtml(docType(d.type))} : <a href="${appUrl}/doc/?id=${d.id}">${escapeHtml(d.title)}</a>`).join("\n"),
   );
-  return chunk(`📄 <b>${docs.length} nouveaux documents</b>`, items, `\n<a href="${appUrl}/library/">Ouvrir la bibliothèque</a>`);
+  return chunk(TITLES.documents(docs.length), items, `\n<a href="${appUrl}/library/">Ouvrir la bibliothèque</a>`);
 }
 
 // Limites de mot Unicode (\b ignore les lettres accentuées comme « É »).
@@ -291,7 +309,7 @@ export function formatHomework(h: NewHomework, appUrl: string): string {
   const projet = h.finalProject === true;
   const exam = !projet && isExamTitle(h.title);
   return [
-    projet ? "📣 <b>Projet final annoncé</b>" : exam ? "📣 <b>Contrôle annoncé</b>" : "📝 <b>Nouveau devoir</b>",
+    projet ? TITLES.project : exam ? TITLES.exam : TITLES.homework,
     "",
     `📚 Matière : <b>${escapeHtml(h.subject)}</b>${h.englishGroup ? ` (groupe ${escapeHtml(h.englishGroup)})` : ""}`,
     `📝 ${projet ? "Projet" : exam ? "Contrôle" : "Devoir"} : ${escapeHtml(h.title)}`,
@@ -372,11 +390,11 @@ export function examAlerts(exams: Exam[], sent: Set<string>, now: Date, appUrl: 
       ? `<a href="${appUrl}/devoirs/">Voir les devoirs</a>`
       : `<a href="${appUrl}/controles/">Voir les contrôles</a>`;
     if (stage === "veille") {
-      const head = projet ? "⚠️ <b>Projet final à rendre demain</b>" : "⚠️ <b>Contrôle demain</b>";
+      const head = projet ? TITLES.projectTomorrow : TITLES.examTomorrow;
       out.push({ key: `${e.key}:veille`, text: examText(head, e, `Bon courage ! ${revise}`) });
     } else {
       const when = inDays(daysUntil(e.day, now));
-      const head = projet ? `📣 <b>Projet final à rendre ${when}</b>` : `📣 <b>Contrôle ${when}</b>`;
+      const head = projet ? TITLES.projectSoon(when) : TITLES.examSoon(when);
       out.push({ key: `${e.key}:${stage}`, text: examText(head, e, revise) });
     }
   }
@@ -390,7 +408,7 @@ export function homeworkReminders(hws: NewHomework[], sent: Set<string>, now: Da
     .map((h) => ({
       key: `hwr:${h.id}:veille`,
       text: [
-        "⏰ <b>Devoir à rendre demain</b>",
+        TITLES.homeworkTomorrow,
         "",
         `📚 Matière : <b>${escapeHtml(h.subject)}</b>${h.englishGroup ? ` (groupe ${escapeHtml(h.englishGroup)})` : ""}`,
         `📝 Devoir : ${escapeHtml(h.title)}`,
@@ -498,7 +516,7 @@ export function formatExamAnnounce(e: Exam & { details?: string | null; attachme
   const files = e.attachments ?? [];
   const projet = e.kind === "projet";
   return [
-    projet ? "📣 <b>Projet final annoncé</b>" : "📣 <b>Contrôle annoncé</b>",
+    projet ? TITLES.project : TITLES.exam,
     "",
     examSubjectLine(e),
     ...(e.title && e.title !== e.subject ? [`📝 ${escapeHtml(e.title)}`] : []),
