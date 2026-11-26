@@ -80,7 +80,19 @@ export async function listExams(): Promise<ExamRow[]> {
     .order("exam_date")
     .order("start_time", { nullsFirst: true });
   if (error) throw new Error(`Contrôles : ${error.message}`);
-  return ((data ?? []) as Joined[]).map(toExam);
+  return uniqueExams(((data ?? []) as Joined[]).map(toExam));
+}
+
+/** Le même contrôle de l'emploi du temps n'apparaît qu'une fois (même matière, groupe, date et heure). */
+export function uniqueExams(exams: ExamRow[]): ExamRow[] {
+  const seen = new Set<string>();
+  return exams.filter((e) => {
+    if (e.source !== "edt") return true;
+    const k = [e.date, e.startTime ?? "", e.subjectName.trim().toLowerCase(), (e.englishGroup ?? "").trim().toLowerCase()].join("|");
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 export type ExamInput = {

@@ -16,6 +16,7 @@ import {
   examAlerts,
   examFromRow,
   examRowFromSnapshot,
+  uniqueExamRows,
   formatExamAnnounce,
   formatDocuments,
   formatHomework,
@@ -175,7 +176,8 @@ Deno.serve(async (req) => {
     }
     // Séances EVALUATION → onglet Contrôles (table exams, source edt).
     if (owners.length > 0) {
-      const examRows = [...current.values()].map(examRowFromSnapshot).filter((x) => x !== null);
+      // Chaque élève a son propre identifiant de séance : on garde une ligne par contrôle.
+      const examRows = uniqueExamRows([...current.values()].map(examRowFromSnapshot).filter((x) => x !== null));
       if (examRows.length) await db.from("exams").upsert(examRows, { onConflict: "edt_uid" });
       if (complete) {
         const keep = new Set(examRows.map((x) => x.edt_uid));

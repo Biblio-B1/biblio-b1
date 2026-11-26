@@ -439,6 +439,31 @@ export function examFromRow(r: ExamDbRow): Exam {
 
 const hmFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: TZ });
 
+/**
+ * Identifiant d'une séance, le même pour tous les élèves : Index-Education ajoute le nom de l'élève
+ * (« Cours-2037424-20-DUPONT_Jean-Index-Education »), on le retire (« Cours-2037424-20 »).
+ */
+export function edtSessionKey(uid: string): string {
+  const m = /^(Cours-\d+-\d+)-.+-Index-Education$/.exec(uid);
+  return m ? m[1] : uid;
+}
+
+/** Une seule ligne par contrôle : même séance, ou même matière (et groupe) à la même date et heure. */
+export function uniqueExamRows<T extends { edt_uid: string; exam_date: string; start_time: string; subject_label: string; english_group: string | null }>(
+  rows: T[],
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const r of rows) {
+    const slot = [r.exam_date, r.start_time, r.subject_label.trim().toLowerCase(), (r.english_group ?? "").trim().toLowerCase()].join("|");
+    if (seen.has(r.edt_uid) || seen.has(slot)) continue;
+    seen.add(r.edt_uid);
+    seen.add(slot);
+    out.push(r);
+  }
+  return out;
+}
+
 /** Séance EVALUATION de l'emploi du temps → ligne « exams » (source edt). Null si sans intérêt. */
 export function examRowFromSnapshot(s: Snapshot) {
   if (s.type !== "EVALUATION" || s.cancelled) return null;
@@ -447,7 +472,7 @@ export function examRowFromSnapshot(s: Snapshot) {
   const sameDay = parisDay(start) === parisDay(end);
   return {
     source: "edt" as const,
-    edt_uid: s.uid,
+    edt_uid: edtSessionKey(s.uid),
     kind: "controle" as const,
     subject_label: s.subject.slice(0, 200) || "Sans matière",
     // Anglais : le groupe vient du champ « TD » de la séance.
