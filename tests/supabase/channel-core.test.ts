@@ -50,6 +50,17 @@ describe("snapshot", () => {
 });
 
 describe("diffTimetable", () => {
+  it("une séance vue dans plusieurs emplois du temps n'est annoncée qu'une fois", () => {
+    const of = (name: string, o: Parameters<typeof ev>[0] = {}) => ({ ...S(o), uid: `Cours-2037424-20-${name}-Index-Education` });
+    const before = [of("DUPONT_Jean"), of("MARTIN_Lea"), of("DURAND_Ali")];
+    const after = [of("DUPONT_Jean", { location: "Salle G017- E4" }), of("MARTIN_Lea", { location: "Salle G017- E4" }), of("DURAND_Ali", { location: "Salle G017- E4" })];
+    expect(diffTimetable(before, after, opts).map((c) => c.kind)).toEqual(["room"]);
+    expect(diffTimetable(before, before, opts)).toEqual([]);
+    // Un élève de plus qui lie son emploi du temps : rien à annoncer.
+    expect(diffTimetable(before.slice(0, 2), before, opts)).toEqual([]);
+    expect(diffTimetable([], before, opts).map((c) => c.kind)).toEqual(["added"]);
+  });
+
   it("salle, visio, présentiel, horaire, annulation", () => {
     expect(diffTimetable([S()], [S({ location: "Salle G017- E4" })], opts).map((c) => c.kind)).toEqual(["room"]);
     expect(diffTimetable([S()], [S({ type: "CRS-CV", location: "" })], opts).map((c) => c.kind)).toEqual(["toVisio"]);

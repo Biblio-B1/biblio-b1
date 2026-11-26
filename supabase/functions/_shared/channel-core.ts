@@ -109,6 +109,7 @@ function compare(before: Snapshot, now: Snapshot): Change[] {
  * relevé actuel (toutes sources réunies). Seules les séances des `horizonDays` prochains jours sont
  * annoncées. Une séance disparue n'est annoncée que si le relevé est complet (tous les calendriers
  * lus). Un identifiant changé (même matière, même début) compte comme une modification.
+ * Une séance vue dans plusieurs emplois du temps (un identifiant par élève) ne compte qu'une fois.
  */
 export function diffTimetable(
   before: Snapshot[],
@@ -121,19 +122,19 @@ export function diffTimetable(
     const t = Date.parse(s.start);
     return t >= from && t < to;
   };
-  const prev = new Map(before.map((s) => [s.uid, s]));
-  const next = new Map(after.map((s) => [s.uid, s]));
+  const prev = new Map(before.map((s) => [edtSessionKey(s.uid), s]));
+  const next = new Map(after.map((s) => [edtSessionKey(s.uid), s]));
   const changes: Change[] = [];
   const added: Snapshot[] = [];
-  for (const s of next.values()) {
-    const old = prev.get(s.uid);
+  for (const [key, s] of next) {
+    const old = prev.get(key);
     if (old) {
       if (inWindow(s) || inWindow(old)) changes.push(...compare(old, s));
     } else if (inWindow(s) && !s.cancelled) {
       added.push(s);
     }
   }
-  const removed = opts.complete ? [...prev.values()].filter((s) => !next.has(s.uid) && inWindow(s) && !s.cancelled) : [];
+  const removed = opts.complete ? [...prev].filter(([key, s]) => !next.has(key) && inWindow(s) && !s.cancelled).map(([, s]) => s) : [];
   for (const r of removed) {
     const twin = added.findIndex((a) => a.subject === r.subject && a.start === r.start && a.groups === r.groups);
     if (twin >= 0) {

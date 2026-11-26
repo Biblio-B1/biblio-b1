@@ -66,18 +66,34 @@ Deno.serve(async (req) => {
   const now = new Date();
   const report: Record<string, unknown> = { channel: Boolean(channel) };
 
-  const post = async (text: string) =>
-    channel
-      ? (await telegramApi("sendMessage", { chat_id: channel, text, parse_mode: "HTML", disable_web_page_preview: true }, { token, fetchImpl: fetch })).ok
-      : false;
+  const post = async (text: string) => {
+    if (!channel) return false;
+    const send = () => telegramApi("sendMessage", { chat_id: channel, text, parse_mode: "HTML", disable_web_page_preview: true }, { token, fetchImpl: fetch });
+    let r = await send();
+    // Trop de messages d'un coup (limite de Telegram) : on patiente un peu et on réessaie une fois.
+    if (r.status === 429) {
+      await new Promise((ok) => setTimeout(ok, 5_000));
+      r = await send();
+    }
+    if (!r.ok) console.error("telegram", r.status ?? r.error);
+    return r.ok;
+  };
 
   if (body.test) {
     report.test = await post("✅ <b>Biblio B1</b> : le canal est bien relié. Vous recevrez ici les nouveaux documents, devoirs, contrôles et changements d'emploi du temps.");
     return Response.json(report);
   }
 
-  // 1. File d'envoi : documents et devoirs ajoutés.
-  const { data: queue } = await db.from("channel_outbox").select("id, kind, ref, created_at").is("sent_at", null).order("id").limit(1000);
+  // 1. File d'envoi : documents et devoirs ajoutés. On attend une minute après l'ajout : les pièces
+  //    jointes sont envoyées juste après le devoir ou le contrôle et doivent figurer dans l'annonce.
+  const settled = new Date(now.getTime() - 60_000).toISOString();
+  const { data: queue } = await db
+    .from("channel_outbox")
+    .select("id, kind, ref, created_at")
+    .is("sent_at", null)
+    .lt("created_at", settled)
+    .order("id")
+    .limit(1000);
   const rows = (queue ?? []) as { id: number; kind: string; ref: string; created_at: string }[];
   const done: number[] = [];
   // Palier d'alerte en cours au moment de l'annonce : déjà couvert par l'annonce, pas de second message.
