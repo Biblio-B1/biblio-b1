@@ -58,7 +58,7 @@ function SubjectView() {
         empty={
           <>
             Rien ici pour l&apos;instant.{" "}
-            <Link href="/upload" className="text-ink underline underline-offset-2">
+            <Link href="/upload" data-write className="text-ink underline underline-offset-2">
               Déposer des fichiers
             </Link>
             .

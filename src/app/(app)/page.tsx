@@ -45,14 +45,14 @@ export default function Dashboard() {
     <div className="flex flex-col gap-10">
       <section className="flex flex-col gap-4">
         <h1 className="page-title">{profile?.role === "guest" ? "Bienvenue" : `Bonjour ${profile?.name ?? ""}`}</h1>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/upload" className="btn btn-primary">
+        <div data-write className="flex flex-wrap gap-2">
+          <Link href="/upload" data-write className="btn btn-primary">
             <IconUpload size={16} /> Déposer des fichiers
           </Link>
           <Link href="/upload#photo" className="btn sm:hidden">
             <IconCamera size={16} /> Prendre une photo
           </Link>
-          <Link href="/notes/new" className="btn">
+          <Link href="/notes/new" data-write className="btn">
             <IconPen size={16} /> Écrire une fiche
           </Link>
         </div>
@@ -97,7 +97,7 @@ export default function Dashboard() {
           empty={
             <>
               La bibliothèque est vide.{" "}
-              <Link href="/upload" className="text-ink underline underline-offset-2">
+              <Link href="/upload" data-write className="text-ink underline underline-offset-2">
                 Déposez un premier cours
               </Link>
               .

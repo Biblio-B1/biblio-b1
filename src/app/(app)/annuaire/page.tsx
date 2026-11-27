@@ -358,7 +358,7 @@ function StudentsTab() {
         {me && !me.email ? (
           <>
             {" "}: le vôtre est masqué,{" "}
-            <Link href="/settings" className="underline underline-offset-2">
+            <Link href="/settings" data-write className="underline underline-offset-2">
               l&apos;afficher dans les paramètres
             </Link>
             .

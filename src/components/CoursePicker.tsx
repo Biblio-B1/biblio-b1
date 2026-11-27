@@ -100,7 +100,7 @@ export function CoursePicker({
       {!events ? (
         <p className="text-sm text-ink-2">
           Aucun emploi du temps lié. Liez-le dans les{" "}
-          <Link href="/settings" className="text-ink underline underline-offset-2">
+          <Link href="/settings" data-write className="text-ink underline underline-offset-2">
             paramètres
           </Link>{" "}
           pour choisir directement le cours, ou tapez la date dans le champ.

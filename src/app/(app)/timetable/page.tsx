@@ -80,12 +80,12 @@ export default function TimetablePage() {
         </p>
       )}
       {!calendar ? (
-        <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+        <section data-write className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
           <h2 className="text-base font-semibold">Aucun calendrier lié</h2>
           <p className="text-sm text-ink-2">
             Liez votre emploi du temps Boostcamp (iCal) : vos cours s&apos;afficheront ici, avec les devoirs et les contrôles.
           </p>
-          <Link href="/settings" className="btn btn-primary self-start">
+          <Link href="/settings" data-write className="btn btn-primary self-start">
             Lier un calendrier dans les paramètres
           </Link>
         </section>
@@ -99,7 +99,7 @@ export default function TimetablePage() {
             <p role="alert" className="rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger">
               {reauthRequired ? "Un lien de calendrier a expiré. " : "Synchronisation impossible : "}
               {syncError} Les événements affichés sont ceux de la dernière synchronisation.{" "}
-              <Link href="/settings" className="underline underline-offset-2">
+              <Link href="/settings" data-write className="underline underline-offset-2">
                 Gérer les calendriers
               </Link>
             </p>
@@ -112,7 +112,7 @@ export default function TimetablePage() {
               <ActionForm action={sync} submitLabel="Synchroniser maintenant">
                 <span className="sr-only">Actualiser les événements depuis le flux Boostcamp.</span>
               </ActionForm>
-              <Link href="/settings" className="btn h-10">
+              <Link href="/settings" data-write className="btn h-10">
                 Gérer les calendriers
               </Link>
             </div>
