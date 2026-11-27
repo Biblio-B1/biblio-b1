@@ -25,7 +25,7 @@ export function MoveCategory({
   const autoLabel = DOC_CATEGORIES.find((c) => c.id === auto)?.label ?? "";
 
   return (
-    <span className="inline-flex flex-col gap-1">
+    <span data-write className="inline-flex flex-col gap-1">
       <label className={`flex items-center gap-1.5 text-ink-3 ${compact ? "text-[12px]" : "text-[13px]"}`}>
         <span className={compact ? "sr-only" : ""}>Catégorie</span>
         <select

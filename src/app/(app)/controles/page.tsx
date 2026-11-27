@@ -67,7 +67,7 @@ function ExamItem({ exam, onDeleted }: { exam: ExamRow; onDeleted: () => void })
                   else onDeleted();
                 });
               }}
-              className="btn btn-ghost h-7 px-2 text-xs text-danger"
+              data-write className="btn btn-ghost h-7 px-2 text-xs text-danger"
             >
               {pending ? "…" : "Supprimer"}
             </button>

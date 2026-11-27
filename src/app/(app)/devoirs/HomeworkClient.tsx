@@ -71,7 +71,7 @@ function HomeworkItem({ hw, highlighted, onChanged }: { hw: HomeworkRow; highlig
                 else onChanged();
               });
             }}
-            className="btn btn-ghost h-7 px-2 text-xs text-danger"
+            data-write className="btn btn-ghost h-7 px-2 text-xs text-danger"
           >
             {pending ? "…" : "Supprimer"}
           </button>

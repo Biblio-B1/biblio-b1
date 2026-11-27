@@ -33,6 +33,7 @@ function SmallForm({ action, id, revalidate, children }: { action: (fd: FormData
   const { refresh } = usePageRefresh();
   return (
     <form
+      data-write
       action={async (fd) => {
         await action(fd);
         refresh();

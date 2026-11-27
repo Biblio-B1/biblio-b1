@@ -7,7 +7,7 @@ export function DeleteDocumentButton({ id, action }: { id: string; action: (fd: 
   const dialog = useRef<HTMLDialogElement>(null);
   return (
     <>
-      <button type="button" className="btn shrink-0 text-danger" onClick={() => dialog.current?.showModal()}>
+      <button type="button" data-write className="btn shrink-0 text-danger" onClick={() => dialog.current?.showModal()}>
         Supprimer
       </button>
       <dialog

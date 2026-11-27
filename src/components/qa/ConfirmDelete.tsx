@@ -21,7 +21,7 @@ export function ConfirmDelete({
   const dialog = useRef<HTMLDialogElement>(null);
   return (
     <>
-      <button type="button" className="btn btn-ghost h-8 px-2 text-[13px] text-danger" onClick={() => dialog.current?.showModal()}>
+      <button type="button" data-write className="btn btn-ghost h-8 px-2 text-[13px] text-danger" onClick={() => dialog.current?.showModal()}>
         {label}
       </button>
       <dialog

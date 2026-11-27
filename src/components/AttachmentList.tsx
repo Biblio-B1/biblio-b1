@@ -73,6 +73,7 @@ export function AttachmentList({
                   onClick={() => run(() => deleteAttachment(target, a.id))}
                   aria-label={`Retirer ${a.name}`}
                   title="Retirer la pièce jointe"
+                  data-write
                   className="border-l border-line px-1.5 py-1 text-ink-3 hover:bg-surface hover:text-danger"
                 >
                   <IconClose size={12} />
