@@ -176,7 +176,7 @@ export function HomeworkClient({
 
   return (
     <div className="flex flex-col gap-8">
-      <section aria-labelledby="new-homework" className="rounded-lg border border-line bg-surface p-5">
+      <section aria-labelledby="new-homework" data-write className="rounded-lg border border-line bg-surface p-5">
         <div className="mb-4 flex items-center gap-2">
           <IconHomework size={18} className="text-ink-2" />
           <h2 id="new-homework" className="text-base font-semibold">

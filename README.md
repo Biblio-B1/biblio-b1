@@ -36,11 +36,19 @@ PC de l'administrateur (clé secrète dans .env, jamais publiée)
   fonctions Supabase sortent par des IP partagées (quota épuisé, erreur 429).
 - **Session** : reste ouverte jusqu'à ce qu'on se déconnecte (pas de délai d'inactivité).
 - Connexion par e-mail (pas par nom).
+- **Mode invité** : bouton « Visiter en invité » sur la page de connexion (connexion anonyme
+  Supabase). L'invité consulte tout le contenu partagé (bibliothèque, devoirs, contrôles,
+  entraînement, questions) mais **n'ajoute, ne modifie et ne supprime rien** : politiques RLS
+  restrictives sur toutes les tables et sur les fichiers (`20261127000000_guest_read_only.sql`),
+  boutons d'ajout masqués (attribut `data-write`), écritures refusées par le client. Il n'apparaît
+  pas dans l'annuaire et n'a ni paramètres ni emploi du temps personnel. **Toute nouvelle table
+  doit recevoir les politiques `guest_no_*`** (voir la migration).
 
 ## Installer Supabase (une fois)
 
 1. Projet Supabase gratuit ; **Authentication → Providers → Email : désactiver « Confirm email »**
-   (la validation par l'administrateur la remplace).
+   (la validation par l'administrateur la remplace). Pour le mode invité : **Authentication →
+   Sign In / Providers → activer « Allow anonymous sign-ins »**.
 2. Outil Supabase (dans ce dossier) : `npx supabase login`, puis
    `npx supabase link --project-ref <ref>`.
 3. Base : appliquer les migrations dans l'ordre (`npx supabase db push`, ou si la connexion directe à

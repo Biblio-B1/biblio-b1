@@ -103,6 +103,7 @@ export function AttachmentList({
             disabled={pending}
             onClick={() => inputRef.current?.click()}
             aria-label={addLabel}
+            data-write
             className="btn btn-ghost h-7 px-2 text-xs"
           >
             {pending ? "Envoi…" : "+ Ajouter des pièces jointes"}

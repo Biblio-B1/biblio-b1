@@ -68,7 +68,7 @@ export function TopBar({ signedIn }: { signedIn: boolean }) {
       )}
       <div className="ml-auto flex items-center gap-1">
         {signedIn ? (
-          <Link href="/upload" className="btn btn-primary" aria-label="Déposer des fichiers">
+          <Link href="/upload" className="btn btn-primary" aria-label="Déposer des fichiers" data-write>
             <IconUpload size={16} />
             <span className="hidden sm:inline">Déposer</span>
           </Link>
@@ -79,7 +79,7 @@ export function TopBar({ signedIn }: { signedIn: boolean }) {
         )}
         <ThemeToggle />
         {signedIn && (
-          <Link href="/settings" className="btn btn-ghost btn-icon" aria-label="Paramètres" title="Paramètres">
+          <Link href="/settings" className="btn btn-ghost btn-icon" aria-label="Paramètres" title="Paramètres" data-write>
             <IconSettings size={18} />
           </Link>
         )}

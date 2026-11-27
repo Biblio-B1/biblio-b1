@@ -319,3 +319,8 @@ body {
   border-radius: 2px;
   padding: 0 1px;
 }
+
+/* Mode invité : les commandes d'ajout, de modification et de suppression sont masquées. */
+html.guest [data-write] {
+  display: none !important;
+}

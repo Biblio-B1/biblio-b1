@@ -80,12 +80,16 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
             <NavLink href="/annuaire" active={is("/annuaire")}>
               <IconMail /> Annuaire
             </NavLink>
-            <NavLink href="/upload" active={is("/upload")}>
-              <IconUpload /> Déposer des fichiers
-            </NavLink>
-            <NavLink href="/notes/new" active={is("/notes/new")}>
-              <IconPen /> Nouvelle fiche
-            </NavLink>
+            {user.role !== "guest" && (
+              <>
+                <NavLink href="/upload" active={is("/upload")}>
+                  <IconUpload /> Déposer des fichiers
+                </NavLink>
+                <NavLink href="/notes/new" active={is("/notes/new")}>
+                  <IconPen /> Nouvelle fiche
+                </NavLink>
+              </>
+            )}
           </>
         )}
       </nav>
@@ -142,16 +146,20 @@ function SidebarContent({ subjects, unclassified, user, pendingUsers = 0 }: Prop
 
       {user ? (
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-line px-2 pt-3 text-sm">
-        <Link href="/settings" className="flex min-w-0 items-center gap-1.5 text-ink-2 hover:text-ink" title="Paramètres du compte">
-          <IconSettings size={16} />
-          <span className="truncate">{user.name}</span>
-        </Link>
+        {user.role === "guest" ? (
+          <span className="truncate text-ink-2">Invité</span>
+        ) : (
+          <Link href="/settings" className="flex min-w-0 items-center gap-1.5 text-ink-2 hover:text-ink" title="Paramètres du compte">
+            <IconSettings size={16} />
+            <span className="truncate">{user.name}</span>
+          </Link>
+        )}
         <button
           type="button"
           onClick={() => void signOut()}
           className="text-[13px] text-ink-3 underline-offset-2 hover:text-ink hover:underline"
         >
-          Se déconnecter
+          {user.role === "guest" ? "Quitter" : "Se déconnecter"}
         </button>
       </div>
       ) : (

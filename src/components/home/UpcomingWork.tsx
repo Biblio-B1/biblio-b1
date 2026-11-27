@@ -97,7 +97,7 @@ export function UpcomingWork({ homeworks, exams, today }: { homeworks: HomeworkR
         {items.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line-strong p-4 text-[14px] text-ink-2">
             Aucun devoir à venir.{" "}
-            <Link href="/devoirs" className="text-ink underline underline-offset-2">
+            <Link href="/devoirs" data-write className="text-ink underline underline-offset-2">
               Ajouter un devoir
             </Link>
           </p>

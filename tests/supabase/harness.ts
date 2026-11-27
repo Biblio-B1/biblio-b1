@@ -18,7 +18,8 @@ create schema auth;
 create table auth.users (
   id uuid primary key default gen_random_uuid(),
   email text unique,
-  raw_user_meta_data jsonb not null default '{}'::jsonb
+  raw_user_meta_data jsonb not null default '{}'::jsonb,
+  is_anonymous boolean not null default false
 );
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
@@ -50,6 +51,8 @@ export type RlsDb = {
   as(user: string | null | "service"): Promise<void>;
   /** Crée un compte (comme Supabase Auth) et renvoie son id ; le profil est créé par trigger. */
   signUp(email: string, name: string): Promise<string>;
+  /** Connexion anonyme (bouton « Visiter en invité ») ; renvoie l'id du compte invité. */
+  signInAnonymously(): Promise<string>;
   /** Exécute en superutilisateur (préparation des données), puis revient à l'identité courante. */
   admin<T>(fn: () => Promise<T>): Promise<T>;
   count(sql: string, params?: unknown[]): Promise<number>;
@@ -88,9 +91,14 @@ export async function createRlsDb(): Promise<RlsDb> {
       );
       return r.rows[0].id;
     });
+  const signInAnonymously = () =>
+    admin(async () => {
+      const r = await db.query<{ id: string }>("insert into auth.users (is_anonymous) values (true) returning id");
+      return r.rows[0].id;
+    });
   const count = async (sql: string, params: unknown[] = []) => {
     const r = await db.query<{ n: number }>(`select count(*)::int as n from (${sql}) t`, params);
     return r.rows[0].n;
   };
-  return { db, as, signUp, admin, count };
+  return { db, as, signUp, signInAnonymously, admin, count };
 }

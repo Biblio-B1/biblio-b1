@@ -38,7 +38,7 @@ export function QAPanel({
             ))}
           </div>
         )}
-        <details className="rounded-lg border border-line-strong bg-surface">
+        <details data-write className="rounded-lg border border-line-strong bg-surface">
           <summary className="cursor-pointer px-4 py-3 text-[15px] font-medium">Poser une question ou ajouter une note</summary>
           <div className="p-4 pt-1">
             <PostEditor

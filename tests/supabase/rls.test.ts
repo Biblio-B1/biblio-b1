@@ -470,3 +470,63 @@ describe("compte Outlook lié", () => {
     await t.db.query("delete from public.outlook_links where user_id = $1", [activeId]);
   });
 });
+
+describe("invité (lecture seule)", () => {
+  let guestId: string;
+
+  beforeAll(async () => {
+    guestId = await t.signInAnonymously();
+  });
+
+  it("reçoit un profil invité actif", async () => {
+    await t.as("service");
+    const r = await t.db.query<{ role: string; status: string }>("select role, status from public.profiles where id = $1", [guestId]);
+    expect(r.rows[0]).toEqual({ role: "guest", status: "active" });
+  });
+
+  it("lit le contenu partagé et les fichiers", async () => {
+    await t.as(guestId);
+    expect(await t.count("select 1 from public.documents")).toBeGreaterThan(0);
+    expect(await t.count("select 1 from public.subjects")).toBeGreaterThan(0);
+    expect(await t.count("select 1 from storage.objects")).toBeGreaterThan(0);
+  });
+
+  it("n'ajoute rien", async () => {
+    await t.as(guestId);
+    await expect(
+      t.db.query("insert into public.homeworks (subject_id, title, due_date) values ($1, 'Devoir invité', current_date)", [subjectId]),
+    ).rejects.toThrow();
+    await expect(
+      t.db.query("insert into public.threads (target_type, target_id, question) values ('document', $1, 'Question ?')", [docId]),
+    ).rejects.toThrow();
+    await expect(t.db.query("insert into public.teachers (name) values ('Prof Invité')")).rejects.toThrow();
+    await expect(
+      t.db.query("insert into storage.objects (bucket_id, name) values ('files', $1)", [`uploads/${guestId}/x.pdf`]),
+    ).rejects.toThrow();
+  });
+
+  it("ne modifie ni ne supprime rien, même son profil", async () => {
+    await t.as(guestId);
+    const del = await t.db.query("delete from public.documents where id = $1", [docId]);
+    expect(del.affectedRows ?? 0).toBe(0);
+    const upd = await t.db.query("update public.profiles set name = 'Pirate' where id = $1", [guestId]);
+    expect(upd.affectedRows ?? 0).toBe(0);
+    const obj = await t.db.query("delete from storage.objects where name = 'uploads/imported/pointeurs.pdf'");
+    expect(obj.affectedRows ?? 0).toBe(0);
+    await t.as("service");
+    expect(await t.count("select 1 from public.documents where id = $1", [docId])).toBe(1);
+  });
+
+  it("n'apparaît pas dans l'annuaire", async () => {
+    await t.as(activeId);
+    const r = await t.db.query<{ id: string }>("select id from public.directory_students()");
+    expect(r.rows.map((x) => x.id)).not.toContain(guestId);
+  });
+
+  it("un vrai compte reste en attente à l'inscription", async () => {
+    const id = await t.signUp("autre@example.com", "Autre Personne");
+    await t.as("service");
+    const r = await t.db.query<{ role: string; status: string }>("select role, status from public.profiles where id = $1", [id]);
+    expect(r.rows[0]).toEqual({ role: "member", status: "pending" });
+  });
+});

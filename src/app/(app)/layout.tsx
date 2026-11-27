@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import { PendingBanner, usePendingRequests } from "@/components/admin/PendingRequests";
 import { RequireAuth } from "@/components/auth/RequireAuth";
+import { GuestBanner } from "@/components/GuestBanner";
 import { Tutorial } from "@/components/Tutorial";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -46,6 +47,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </Suspense>
         {/* Téléphone : marge en bas pour la barre de navigation fixe (et la zone de sécurité de l'iPhone). */}
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-8">
+          <GuestBanner />
           <PendingBanner requests={pending} />
           {children}
         </main>

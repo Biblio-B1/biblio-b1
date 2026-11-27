@@ -4,9 +4,12 @@
 // pour un non-admin → accueil. Confort d'affichage uniquement : la vraie barrière est la RLS.
 import { PageSkeleton } from "@/components/Skeleton";
 import { isModerator } from "@/lib/roles";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "./AuthProvider";
+
+/** Pages d'ajout ou de réglages personnels : inutiles en mode invité (lecture seule). */
+const GUEST_BLOCKED = ["/upload", "/notes/new", "/settings", "/admin"];
 
 export function RequireAuth({
   admin = false,
@@ -18,15 +21,18 @@ export function RequireAuth({
   moderator?: boolean;
   children: React.ReactNode;
 }) {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, isGuest } = useAuth();
   const router = useRouter();
+  const pathname = (usePathname() || "/").replace(/\/$/, "") || "/";
   const target = loading
     ? null
     : !session
       ? "/login"
       : profile && profile.status !== "active"
         ? "/pending"
-        : admin && profile && profile.role !== "admin"
+        : isGuest && GUEST_BLOCKED.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+          ? "/"
+          : admin && profile && profile.role !== "admin"
           ? "/"
           : moderator && profile && !isModerator(profile.role)
             ? "/"

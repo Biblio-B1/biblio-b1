@@ -37,7 +37,7 @@ export function Tutorial() {
 
   // Première connexion (compte validé) : on ouvre le tutoriel une fois.
   useEffect(() => {
-    if (profile?.status === "active" && profile.tutorial_done_at === null) {
+    if (profile?.status === "active" && profile.role !== "guest" && profile.tutorial_done_at === null) {
       setStep(0);
       setOpen(true);
     }

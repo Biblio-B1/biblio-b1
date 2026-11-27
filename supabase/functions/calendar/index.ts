@@ -37,8 +37,9 @@ Deno.serve(async (req) => {
   const { data: userData } = await userClient.auth.getUser();
   const user = userData.user;
   if (!user) return json({ error: "Non authentifié" }, 401, origin);
-  const { data: profile } = await userClient.from("profiles").select("status").eq("id", user.id).maybeSingle();
+  const { data: profile } = await userClient.from("profiles").select("status, role").eq("id", user.id).maybeSingle();
   if (profile?.status !== "active") return json({ error: "Compte en attente de validation" }, 403, origin);
+  if (profile.role === "guest" || user.is_anonymous) return json({ error: "Mode invité : consultation uniquement" }, 403, origin);
 
   const key = Deno.env.get("CALENDAR_ENCRYPTION_KEY") ?? "";
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);

@@ -3,6 +3,7 @@
 // Téléphone : barre de navigation fixée en bas de l'écran (pouce), en plus du menu ☰ du haut.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { IconBooks, IconCalendar, IconHome, IconMail, IconUpload } from "./Icons";
 
 type Item = { href: string; label: string; icon: typeof IconHome; active: (path: string) => boolean };
@@ -18,13 +19,16 @@ const ITEMS: Item[] = [
 export function BottomNav() {
   const raw = usePathname() || "/";
   const path = raw.length > 1 ? raw.replace(/\/$/, "") : raw;
+  const { isGuest } = useAuth();
+  // Invité : pas de « Déposer » (lecture seule).
+  const items = isGuest ? ITEMS.filter((i) => i.href !== "/upload") : ITEMS;
   return (
     <nav
       aria-label="Navigation rapide"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
-      <ul className="grid h-16 grid-cols-5">
-        {ITEMS.map(({ href, label, icon: Icon, active }) => {
+      <ul className={`grid h-16 ${items.length === 4 ? "grid-cols-4" : "grid-cols-5"}`}>
+        {items.map(({ href, label, icon: Icon, active }) => {
           const on = active(path);
           return (
             <li key={href} className="min-w-0">

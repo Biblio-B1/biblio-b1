@@ -21,9 +21,13 @@ type AuthState = {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  /** Visite en invité (connexion anonyme) : consultation seule. */
+  isGuest: boolean;
   /** Relit le profil (après validation d'un compte, changement de nom…). */
   refreshProfile(): Promise<void>;
   signOut(): Promise<void>;
+  /** Ouvre une session invité (connexion anonyme Supabase). Renvoie un message d'erreur ou null. */
+  signInAsGuest(): Promise<string | null>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -45,6 +49,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
     router.replace("/login");
   }, [router]);
+
+  const signInAsGuest = useCallback(async () => {
+    const { error } = await getSupabase().auth.signInAnonymously();
+    if (!error) return null;
+    return /anonymous.*disabled/i.test(error.message)
+      ? "Le mode invité n'est pas encore activé sur ce site."
+      : /rate limit/i.test(error.message)
+        ? "Trop de visites invité depuis cette connexion. Réessayez plus tard."
+        : "Visite en invité impossible pour le moment.";
+  }, []);
+
+  const isGuest = profile?.role === "guest" || session?.user.is_anonymous === true;
+
+  // Marque la page pour masquer les boutons d'ajout et de suppression ([data-write], globals.css).
+  useEffect(() => {
+    document.documentElement.classList.toggle("guest", isGuest);
+  }, [isGuest]);
 
   useEffect(() => {
     // Ancienne minuterie d'inactivité (retirée) : on efface sa trace.
@@ -77,12 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       profile,
       loading,
+      isGuest,
       signOut,
+      signInAsGuest,
       refreshProfile: async () => {
         if (session) setProfile(await loadProfile(session.user.id));
       },
     }),
-    [session, profile, loading, signOut],
+    [session, profile, loading, isGuest, signOut, signInAsGuest],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

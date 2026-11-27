@@ -48,6 +48,7 @@ export function HomeworkDoneToggle({
   return (
     <button
       type="button"
+      data-write
       role="checkbox"
       aria-checked={value}
       aria-label={`${label} : ${value ? "fait" : "à faire"}`}

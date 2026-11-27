@@ -128,7 +128,7 @@ export function ThreadView({ item, viewer, revalidate }: { item: ThreadItem; vie
         })}
       </ul>
 
-      <details className="rounded-md border border-line">
+      <details data-write className="rounded-md border border-line">
         <summary className="cursor-pointer px-3 py-2 text-[14px] font-medium">Répondre</summary>
         <div className="p-3 pt-1">
           <PostEditor

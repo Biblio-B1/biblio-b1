@@ -25,7 +25,7 @@ export function StatusPicker({ exerciseId, status }: { exerciseId: string; statu
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div data-write className="flex flex-col gap-1">
       <div role="group" aria-label="Statut" aria-busy={pending} className="flex gap-1">
         {PROGRESS_STATUS_VALUES.map((s) => (
           <button

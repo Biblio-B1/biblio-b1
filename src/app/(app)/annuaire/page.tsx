@@ -42,7 +42,7 @@ function EmailEditor({ teacher, onSaved }: { teacher: Teacher; onSaved: () => vo
 
   if (!editing) {
     return (
-      <button type="button" className="text-[13px] text-ink-3 underline-offset-2 hover:text-ink hover:underline" onClick={() => setEditing(true)}>
+      <button type="button" data-write className="text-[13px] text-ink-3 underline-offset-2 hover:text-ink hover:underline" onClick={() => setEditing(true)}>
         {teacher.email ? "Corriger l'e-mail" : "Ajouter l'e-mail"}
       </button>
     );
@@ -185,7 +185,7 @@ function AddTeacher({ onAdded }: { onAdded: () => void }) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   return (
-    <details className="rounded-lg border border-line bg-surface p-4">
+    <details data-write className="rounded-lg border border-line bg-surface p-4">
       <summary className="cursor-pointer text-sm font-medium">Ajouter un professeur absent de la liste</summary>
       <form
         className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end"

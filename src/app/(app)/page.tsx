@@ -44,7 +44,7 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-10">
       <section className="flex flex-col gap-4">
-        <h1 className="page-title">Bonjour {profile?.name}</h1>
+        <h1 className="page-title">{profile?.role === "guest" ? "Bienvenue" : `Bonjour ${profile?.name ?? ""}`}</h1>
         <div className="flex flex-wrap gap-2">
           <Link href="/upload" className="btn btn-primary">
             <IconUpload size={16} /> Déposer des fichiers

@@ -538,6 +538,7 @@ function ReportButton({ exerciseId }: { exerciseId: string }) {
     <div className="flex flex-col gap-1">
       <button
         type="button"
+        data-write
         className="btn btn-ghost self-start px-2 text-[13px] text-ink-2"
         onClick={() => {
           setResult(null);
